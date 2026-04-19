@@ -1,0 +1,83 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Disponibilidad | Anna Salon{% endblock %}
+
+{% block panel_title %}Disponibilidad{% endblock %}
+{% block panel_subtitle %}Búsqueda de huecos libres por servicio, empleado y zona.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'bookings:calendar_day' %}">Calendario</a>
+  <a class="btn" href="{% url 'bookings:create' %}">+ Nueva reserva</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <div class="field-inline">
+      <label for="id_service">Servicio</label>
+      <select id="id_service" name="service" class="input">
+        <option value="">---------</option>
+        {% for item in services %}
+          <option value="{{ item.pk }}" {% if service_id == item.pk|stringformat:"s" %}selected{% endif %}>{{ item.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field-inline">
+      <label for="id_employee">Empleado</label>
+      <select id="id_employee" name="employee" class="input">
+        <option value="">---------</option>
+        {% for item in employees %}
+          <option value="{{ item.pk }}" {% if employee_id == item.pk|stringformat:"s" %}selected{% endif %}>{{ item.full_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field-inline">
+      <label for="id_zone">Zona</label>
+      <select id="id_zone" name="zone" class="input">
+        <option value="">---------</option>
+        {% for item in zones %}
+          <option value="{{ item.pk }}" {% if zone_id == item.pk|stringformat:"s" %}selected{% endif %}>{{ item.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field-inline">
+      <label for="id_date">Fecha base</label>
+      <input id="id_date" type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}" class="input">
+    </div>
+
+    <button type="submit" class="btn">Buscar huecos</button>
+  </form>
+</section>
+
+<section class="panel-card">
+  {% if availability %}
+    <div class="availability-grid">
+      {% for day in availability %}
+        <article class="availability-day-card">
+          <h3>{{ day.date|date:"l, d/m/Y" }}</h3>
+
+          {% if day.slots %}
+            <div class="slot-list">
+              {% for slot in day.slots %}
+                <div class="slot-pill">
+                  {{ slot.start_at|date:"H:i" }} – {{ slot.end_at|date:"H:i" }}
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="muted-text">Sin huecos disponibles.</p>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>Selecciona filtros para buscar huecos</h2>
+      <p>Elige servicio, empleado y opcionalmente zona para ver los espacios libres.</p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

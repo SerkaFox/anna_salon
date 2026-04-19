@@ -1,0 +1,97 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Reservas | Anna Salon{% endblock %}
+
+{% block panel_title %}Reservas{% endblock %}
+{% block panel_subtitle %}Listado general de reservas del salón.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn" href="{% url 'bookings:create' %}">+ Nueva reserva</a>
+  <a class="btn btn-light" href="{% url 'bookings:calendar_day' %}">Calendario</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <div class="field-inline">
+      <label for="q">Buscar</label>
+      <input class="input" type="text" name="q" id="q" value="{{ query }}" placeholder="Cliente, empleado o servicio">
+    </div>
+
+    <div class="field-inline">
+      <label for="status">Estado</label>
+      <select class="input" name="status" id="status">
+        <option value="">Todos</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">Filtrar</button>
+      <a href="{% url 'bookings:list' %}" class="btn btn-light">Limpiar</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel-card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Servicio</th>
+          <th>Empleado</th>
+          <th>Zona</th>
+          <th>Estado</th>
+          <th>Cliente €</th>
+          <th>Empleado €</th>
+          <th>Salón €</th>
+          <th class="actions-cell">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for booking in bookings %}
+          <tr>
+            <td>{{ booking.start_at|date:"d/m/Y H:i" }}</td>
+                            <td>
+                  <a href="{% url 'clients:detail' booking.client.id %}">
+                    {{ booking.client }}
+                  </a>
+                </td>
+            <td>{{ booking.service }}</td>
+            <td>{{ booking.employee }}</td>
+            <td>{% if booking.zone %}{{ booking.zone }}{% else %}—{% endif %}</td>
+            <td>{{ booking.get_status_display }}</td>
+			<td>
+			  {{ booking.client_price_snapshot }} €
+			  {% if booking.referral_reward_applied %}
+				<div class="muted-text">Premio aplicado</div>
+			  {% endif %}
+			</td>
+			<td>{{ booking.employee_amount_snapshot }} €</td>
+			<td>{{ booking.salon_amount_snapshot }} €</td>
+            <td class="actions-cell">
+              <div class="actions-inline">
+                <a class="btn btn-light btn-small" href="{% url 'bookings:update' booking.id %}">Editar</a>
+                <a class="btn btn-light btn-small" href="{% url 'bookings:delete' booking.id %}">Eliminar</a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="10">
+              <div class="empty-state">
+                <h2>No hay reservas</h2>
+                <p>No se encontraron reservas con los filtros actuales.</p>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

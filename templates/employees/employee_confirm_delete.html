@@ -1,0 +1,22 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Eliminar empleado | Anna Salon{% endblock %}
+
+{% block panel_title %}Eliminar empleado{% endblock %}
+{% block panel_subtitle %}Esta acción no se puede deshacer.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'employees:list' %}">← Volver</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <p>¿Seguro que quieres eliminar a <strong>{{ employee.full_name }}</strong>?</p>
+
+  <form method="post" class="form-actions">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+    <a href="{% url 'employees:list' %}" class="btn btn-light">Cancelar</a>
+  </form>
+</section>
+{% endblock %}

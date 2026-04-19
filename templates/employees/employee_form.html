@@ -1,0 +1,258 @@
+{% extends "panel_base.html" %}
+
+{% block title %}
+  {% if is_edit %}Editar empleado{% else %}Nuevo empleado{% endif %} | Anna Salon
+{% endblock %}
+
+{% block panel_title %}
+  {% if is_edit %}Editar empleado{% else %}Nuevo empleado{% endif %}
+{% endblock %}
+
+{% block panel_subtitle %}Completa la ficha del miembro del equipo.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'employees:list' %}">← Volver</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.user.id_for_label }}">Usuario del sistema</label>
+        {{ form.user }}
+        {{ form.user.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.first_name.id_for_label }}">Nombre</label>
+        {{ form.first_name }}
+        {{ form.first_name.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.last_name.id_for_label }}">Apellidos</label>
+        {{ form.last_name }}
+        {{ form.last_name.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.phone.id_for_label }}">Teléfono</label>
+        {{ form.phone }}
+        {{ form.phone.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.email.id_for_label }}">Email</label>
+        {{ form.email }}
+        {{ form.email.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.calendar_color.id_for_label }}">Color del calendario</label>
+        {{ form.calendar_color }}
+        {{ form.calendar_color.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.commission_percent.id_for_label }}">Comisión</label>
+        {{ form.commission_percent }}
+        {{ form.commission_percent.errors }}
+      </div>
+
+      <div class="field field-checkbox">
+        <label for="{{ form.is_active.id_for_label }}">Empleado activo</label>
+        <div class="checkbox-row">
+          {{ form.is_active }}
+          <span>Activo</span>
+        </div>
+        {{ form.is_active.errors }}
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="{{ form.services.id_for_label }}">Servicios que realiza</label>
+      {{ form.services }}
+      {{ form.services.errors }}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.notes.id_for_label }}">Notas</label>
+      {{ form.notes }}
+      {{ form.notes.errors }}
+    </div>
+
+    <section class="schedule-editor">
+      <div class="schedule-editor__head">
+        <div>
+          <h2>Semana base</h2>
+          <p>Define el turno normal de cada día, incluyendo pausa y días libres.</p>
+        </div>
+        <a class="btn btn-light btn-small" href="{% url 'bookings:calendar_day' %}">Ver calendario</a>
+      </div>
+
+      {{ weekly_formset.management_form }}
+      <div class="weekly-shift-grid">
+        {% for shift_form in weekly_formset %}
+          <article class="weekly-shift-card">
+            {{ shift_form.id }}
+            {{ shift_form.weekday }}
+            <div class="weekly-shift-card__top">
+              <strong>{{ shift_form.weekday_label }}</strong>
+              <label class="switch-row">
+                {{ shift_form.is_day_off }}
+                <span>Día libre</span>
+              </label>
+            </div>
+
+            <div class="weekly-shift-card__times">
+              <div class="field-inline">
+                <label>Inicio</label>
+                {{ shift_form.start_time }}
+              </div>
+              <div class="field-inline">
+                <label>Fin</label>
+                {{ shift_form.end_time }}
+              </div>
+              <div class="field-inline">
+                <label>Pausa inicio</label>
+                {{ shift_form.break_start }}
+              </div>
+              <div class="field-inline">
+                <label>Pausa fin</label>
+                {{ shift_form.break_end }}
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Nota</label>
+              {{ shift_form.note }}
+            </div>
+
+            {% if shift_form.non_field_errors %}
+              <div class="form-errors">
+                {% for error in shift_form.non_field_errors %}
+                  <div>{{ error }}</div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="schedule-editor">
+      <div class="schedule-editor__head">
+        <div>
+          <h2>Excepciones</h2>
+          <p>Usa esta tabla para vacaciones, festivos, cambios de turno o días con horario especial.</p>
+        </div>
+      </div>
+
+      {{ override_formset.management_form }}
+      <div class="override-table-wrap">
+        <table class="override-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Libre</th>
+              <th>Inicio</th>
+              <th>Fin</th>
+              <th>Pausa</th>
+              <th>Motivo</th>
+              <th>Eliminar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for override_form in override_formset %}
+              <tr>
+                {{ override_form.id }}
+                <td>
+                  {{ override_form.date }}
+                  {{ override_form.date.errors }}
+                </td>
+                <td class="override-check-cell">
+                  {{ override_form.is_day_off }}
+                </td>
+                <td>
+                  {{ override_form.start_time }}
+                  {{ override_form.start_time.errors }}
+                </td>
+                <td>
+                  {{ override_form.end_time }}
+                  {{ override_form.end_time.errors }}
+                </td>
+                <td>
+                  <div class="override-break">
+                    {{ override_form.break_start }}
+                    {{ override_form.break_end }}
+                  </div>
+                </td>
+                <td>
+                  {{ override_form.label }}
+                  {{ override_form.label.errors }}
+                </td>
+                <td class="override-check-cell">
+                  {% if override_formset.can_delete %}
+                    {{ override_form.DELETE }}
+                  {% endif %}
+                </td>
+              </tr>
+              {% if override_form.non_field_errors %}
+                <tr>
+                  <td colspan="7">
+                    <div class="form-errors">
+                      {% for error in override_form.non_field_errors %}
+                        <div>{{ error }}</div>
+                      {% endfor %}
+                    </div>
+                  </td>
+                </tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">
+        {% if is_edit %}Guardar cambios{% else %}Crear empleado{% endif %}
+      </button>
+      <a href="{% url 'employees:list' %}" class="btn btn-light">Cancelar</a>
+    </div>
+  </form>
+</section>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".weekly-shift-card, .override-table tbody tr").forEach((row) => {
+    const checkbox = row.querySelector(".js-day-off");
+    if (!checkbox) return;
+
+    const timeInputs = row.querySelectorAll('input[type="time"]');
+
+    function syncDisabledState() {
+      const disabled = checkbox.checked;
+      timeInputs.forEach((input) => {
+        input.disabled = disabled;
+      });
+      row.classList.toggle("is-day-off", disabled);
+    }
+
+    checkbox.addEventListener("change", syncDisabledState);
+    syncDisabledState();
+  });
+});
+</script>
+{% endblock %}

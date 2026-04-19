@@ -1,0 +1,89 @@
+{% extends "layout.html" %}
+
+{% block body %}
+<div class="mobile-topbar">
+  <button class="mobile-menu-btn" type="button" aria-label="Abrir menú" aria-controls="mobileSidebar" aria-expanded="false">
+    ☰
+  </button>
+  <div class="mobile-topbar__brand">
+    <div class="logo">A</div>
+    <div>
+      <strong>Anna Salon</strong>
+      <span>Gestión interna</span>
+    </div>
+  </div>
+</div>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<div class="dashboard-shell">
+  <aside class="sidebar" id="mobileSidebar">
+    {% include "includes/sidebar.html" %}
+  </aside>
+
+  <main class="main-panel">
+    <header class="panel-header">
+      <div>
+        <h1>{% block panel_title %}{% endblock %}</h1>
+        <p>{% block panel_subtitle %}{% endblock %}</p>
+      </div>
+      <div class="panel-actions">
+        {% block panel_actions %}{% endblock %}
+      </div>
+    </header>
+
+    {% if messages %}
+      <div class="messages-stack">
+        {% for message in messages %}
+          <div class="message-box {% if message.tags == 'error' %}is-error{% endif %}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% block panel_content %}{% endblock %}
+  </main>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const body = document.body;
+  const sidebar = document.getElementById("mobileSidebar");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  const openBtn = document.querySelector(".mobile-menu-btn");
+  const closeBtn = document.querySelector(".sidebar-close");
+  const navLinks = document.querySelectorAll(".sidebar .nav-link");
+
+  function openSidebar() {
+    body.classList.add("sidebar-open");
+    if (openBtn) openBtn.setAttribute("aria-expanded", "true");
+  }
+
+  function closeSidebar() {
+    body.classList.remove("sidebar-open");
+    if (openBtn) openBtn.setAttribute("aria-expanded", "false");
+  }
+
+  if (openBtn) {
+    openBtn.addEventListener("click", openSidebar);
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", closeSidebar);
+  }
+
+  if (backdrop) {
+    backdrop.addEventListener("click", closeSidebar);
+  }
+
+  navLinks.forEach(link => {
+    link.addEventListener("click", closeSidebar);
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      closeSidebar();
+    }
+  });
+});
+</script>
+{% endblock %}

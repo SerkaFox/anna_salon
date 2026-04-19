@@ -1,0 +1,100 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Empleados | Anna Salon{% endblock %}
+
+{% block panel_title %}Empleados{% endblock %}
+{% block panel_subtitle %}Equipo del salón. Total: {{ employees_count }}{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn" href="{% url 'employees:create' %}">+ Nuevo empleado</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <input
+      type="text"
+      name="q"
+      value="{{ query }}"
+      class="input"
+      placeholder="Buscar por nombre, teléfono, email, especialidad o servicio"
+    >
+
+    <select name="status" class="input">
+      <option value="">Todos</option>
+      <option value="active" {% if status == "active" %}selected{% endif %}>Solo activos</option>
+      <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Solo inactivos</option>
+    </select>
+
+    <button type="submit" class="btn">Buscar</button>
+    <a href="{% url 'employees:list' %}" class="btn btn-light">Limpiar</a>
+  </form>
+</section>
+
+<section class="panel-card">
+  {% if employees %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Servicios</th>
+            <th>Teléfono</th>
+            <th>Usuario</th>
+            <th>Color</th>
+            <th>Activo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for employee in employees %}
+            <tr>
+              <td>{{ employee.full_name }}</td>
+              <td>
+                {% with emp_services=employee.services.all %}
+                  {% if emp_services %}
+                    {% for service in emp_services %}
+                      {{ service.name }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                  {% else %}
+                    —
+                  {% endif %}
+                {% endwith %}
+              </td>
+              <td>{{ employee.phone|default:"—" }}</td>
+              <td>
+                {% if employee.user %}
+                  {{ employee.user.username }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                <span class="color-chip" style="background: {{ employee.calendar_color }};"></span>
+                {{ employee.calendar_color }}
+              </td>
+              <td>
+                {% if employee.is_active %}
+                  <span class="status-pill is-active">Sí</span>
+                {% else %}
+                  <span class="status-pill is-inactive">No</span>
+                {% endif %}
+              </td>
+              <td class="actions-cell actions-inline">
+                <a class="btn btn-light btn-small" href="{% url 'employees:update' employee.pk %}">Editar</a>
+                <a class="btn btn-danger btn-small" href="{% url 'employees:delete' employee.pk %}">Eliminar</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>No hay empleados todavía</h2>
+      <p>Crea la primera ficha del equipo.</p>
+      <a class="btn" href="{% url 'employees:create' %}">Crear empleado</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

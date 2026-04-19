@@ -1,0 +1,150 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Panel | Anna Salon{% endblock %}
+
+{% block panel_title %}Panel{% endblock %}
+{% block panel_subtitle %}Resumen operativo del día.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn" href="{% url 'bookings:create' %}">+ Nueva reserva</a>
+  <a class="btn btn-light" href="{% url 'bookings:calendar_day' %}">Calendario</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="stats-grid">
+  {% for item in stats %}
+    <article class="stat-card">
+      <span class="stat-label">{{ item.label }}</span>
+      <strong class="stat-value">{{ item.value }}</strong>
+    </article>
+  {% endfor %}
+</section>
+
+<section class="stats-grid">
+  {% for item in money_stats %}
+    <article class="stat-card">
+      <span class="stat-label">{{ item.label }}</span>
+      <strong class="stat-value">{{ item.value }} €</strong>
+    </article>
+  {% endfor %}
+</section>
+
+<section class="content-grid">
+  <article class="panel-card">
+    <h2>Próxima cita</h2>
+
+    {% if next_booking %}
+      <div class="dashboard-booking-card">
+        <strong>
+          {{ next_booking.start_at|time:"H:i" }} ·
+          <a href="{% url 'clients:detail' next_booking.client.id %}">
+            {{ next_booking.client }}
+          </a>
+        </strong>
+        <p>{{ next_booking.service }} · {{ next_booking.employee }}</p>
+        <p class="muted-text">
+          {% if next_booking.zone %}{{ next_booking.zone }} · {% endif %}
+          {{ next_booking.get_status_display }}
+        </p>
+        <p class="muted-text">
+          Cliente: {{ next_booking.client_price_snapshot }} € ·
+          Empleado: {{ next_booking.employee_amount_snapshot }} € ·
+          Salón: {{ next_booking.salon_amount_snapshot }} €
+        </p>
+        <div class="form-actions">
+          <a class="btn btn-light btn-small" href="{% url 'bookings:update' next_booking.id %}">Editar</a>
+          <a class="btn btn-light btn-small" href="{% url 'bookings:calendar_day' %}">Abrir calendario</a>
+        </div>
+      </div>
+    {% else %}
+      <p class="muted-text">No hay próximas reservas para hoy.</p>
+    {% endif %}
+  </article>
+
+  <article class="panel-card">
+    <h2>Alertas del día</h2>
+    <ul class="todo-list">
+      <li>Pendientes de confirmar: <strong>{{ alerts.pending_count }}</strong></li>
+      <li>Canceladas hoy: <strong>{{ alerts.cancelled_count }}</strong></li>
+      <li>No asistió: <strong>{{ alerts.no_show_count }}</strong></li>
+      <li>Zonas activas: <strong>{{ zones_count }}</strong></li>
+    </ul>
+  </article>
+</section>
+
+<section class="content-grid">
+  <article class="panel-card">
+    <h2>Agenda de hoy</h2>
+
+    {% if today_bookings %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Cliente</th>
+              <th>Servicio</th>
+              <th>Empleado</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for booking in today_bookings|slice:":8" %}
+              <tr>
+                <td>{{ booking.start_at|time:"H:i" }}</td>
+                <td>
+                  <a href="{% url 'clients:detail' booking.client.id %}">
+                    {{ booking.client }}
+                  </a>
+                </td>
+                <td>{{ booking.service }}</td>
+                <td>{{ booking.employee }}</td>
+                <td>{{ booking.get_status_display }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted-text">No hay reservas para hoy.</p>
+    {% endif %}
+  </article>
+
+  <article class="panel-card">
+    <h2>Últimas reservas</h2>
+
+    {% if recent_bookings %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Servicio</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for booking in recent_bookings %}
+              <tr>
+                <td>{{ booking.start_at|date:"d/m H:i" }}</td>
+                <td>
+                  <a href="{% url 'clients:detail' booking.client.id %}">
+                    {{ booking.client }}
+                  </a>
+                </td>
+                <td>{{ booking.service }}</td>
+                <td class="actions-cell">
+                  <a class="btn btn-light btn-small" href="{% url 'bookings:update' booking.id %}">Abrir</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted-text">Todavía no hay reservas.</p>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

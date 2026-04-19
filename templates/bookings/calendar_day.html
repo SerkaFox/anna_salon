@@ -1,0 +1,346 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Horario | Anna Salon{% endblock %}
+
+{% block panel_title %}Horario{% endblock %}
+{% block panel_subtitle %}Tres días en una sola vista, con salto rápido por reserva y arrastre entre días.{% endblock %}
+
+{% block panel_actions %}
+  <div class="calendar-toolbar-inline">
+    <div class="calendar-toolbar-inline__nav">
+      <a class="btn btn-light btn-small btn-icon" href="?date={{ prev_date|date:'Y-m-d' }}">←</a>
+      <a class="btn btn-light btn-small" href="?date={{ today|date:'Y-m-d' }}">Hoy</a>
+      <a class="btn btn-light btn-small btn-icon" href="?date={{ next_date|date:'Y-m-d' }}">→</a>
+    </div>
+
+    <div class="calendar-toolbar-inline__date">
+      <span class="calendar-toolbar-inline__label">Vista</span>
+      <strong>{{ current_date|date:"l, d/m/Y" }}</strong>
+    </div>
+
+    <div class="calendar-toolbar-inline__actions">
+      <a class="btn btn-small" href="{% url 'bookings:create' %}">+ Reserva</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card calendar-hero calendar-hero--compact">
+  <div class="calendar-hero__summary">
+    <span class="badge">Vista {{ day_columns|length }} días</span>
+    <p>{{ total_bookings }} reservas visibles en esta vista.</p>
+  </div>
+
+  <form method="get" class="calendar-filters calendar-filters--inline">
+    <div class="field-inline field-inline--compact">
+      <label for="id_date">Fecha</label>
+      <input
+        id="id_date"
+        type="date"
+        name="date"
+        value="{{ current_date|date:'Y-m-d' }}"
+        class="input"
+      >
+    </div>
+    <button type="submit" class="btn btn-small">Ir</button>
+  </form>
+</section>
+
+<section class="calendar-workspace">
+  <section class="panel-card calendar-agenda calendar-agenda--compact">
+    <div class="calendar-agenda__head">
+      <h2>Reservas por empleado</h2>
+      <span class="muted-text">{{ employee_agenda|length }} en vista</span>
+    </div>
+
+    <div class="agenda-employee-grid">
+      {% for agenda in employee_agenda %}
+        <article
+          class="employee-agenda-card"
+          style="--employee-color: {{ agenda.employee.calendar_color|default:'#c75c8b' }};"
+        >
+          <div class="employee-agenda-card__head">
+            <strong>{{ agenda.employee.full_name }}</strong>
+            <a
+              class="employee-agenda-card__edit"
+              href="{% url 'employees:update' agenda.employee.pk %}"
+            >
+              Perfil
+            </a>
+          </div>
+
+          <div class="employee-agenda-card__items">
+            {% for item in agenda.bookings %}
+              <button
+                type="button"
+                class="employee-booking-chip"
+                data-target-id="{{ item.target_id }}"
+              >
+                <span class="employee-booking-chip__time">{{ item.time_label }}</span>
+                <span class="employee-booking-chip__main">{{ item.client }}</span>
+                <span class="employee-booking-chip__meta">{{ item.date|date:"D d" }} · {{ item.service }}</span>
+              </button>
+            {% empty %}
+              <div class="employee-booking-empty">Sin reservas</div>
+            {% endfor %}
+          </div>
+        </article>
+      {% empty %}
+        <div class="empty-state">
+          <h2>No hay reservas</h2>
+          <p>No hay reservas visibles en este tramo.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+	<section class="panel-card calendar-shell calendar-shell--wide">
+	  <div class="calendar-grid-frame days-count-{{ day_columns|length }}">
+		<div class="calendar-grid-frame__header">
+		  <div class="calendar-grid-frame__time-head"></div>
+
+		  {% for day in day_columns %}
+			<div class="calendar-grid-frame__day-head {% if day.is_today %}is-today{% endif %} {% if day.is_selected %}is-selected{% endif %}">
+			  <span>{{ day.date|date:"D" }}</span>
+			  <strong>{{ day.date|date:"d/m" }}</strong>
+			</div>
+		  {% endfor %}
+		</div>
+
+      <div class="calendar-grid-frame__body">
+        <div class="calendar-time-rail">
+          {% for line in hour_lines %}
+            <div class="calendar-time-rail__label" style="top: {{ line.top }}px;">
+              {{ line.label }}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="calendar-days-area days-count-{{ day_columns|length }}">
+          {% for day in day_columns %}
+            <section class="calendar-day-panel">
+              <div class="calendar-grid" data-date="{{ day.date|date:'Y-m-d' }}">
+                {% for line in hour_lines %}
+                  <div class="calendar-hour-line" style="top: {{ line.top }}px;"></div>
+                {% endfor %}
+
+                {% for card in day.cards %}
+                  <a
+                    href="{% url 'bookings:update' card.id %}"
+                    class="booking-card"
+                    draggable="true"
+                    style="
+                      top: {{ card.top }}px;
+                      height: {{ card.height }}px;
+                      --employee-color: {{ card.employee_color|default:'#c75c8b' }};
+                    "
+                    data-booking-id="{{ card.id }}"
+                    data-employee-id="{{ card.employee_id }}"
+                    data-service-id="{{ card.service_id }}"
+                    data-zone-id="{{ card.zone_id|default:'' }}"
+                    data-client="{{ card.client }}"
+                    data-target-id="{{ card.target_id }}"
+                    data-start-at="{{ card.start_at|date:'Y-m-d\\TH:i' }}"
+                    data-end-at="{{ card.end_at|date:'Y-m-d\\TH:i' }}"
+                    id="{{ card.target_id }}"
+                  >
+                    <div class="booking-card__color-strip"></div>
+
+                    <div class="booking-card__time">
+                      {{ card.start_at|time:"H:i" }} – {{ card.end_at|time:"H:i" }}
+                    </div>
+
+                    <div class="booking-card__client">{{ card.client }}</div>
+
+                    <div class="booking-card__service">{{ card.service }}</div>
+
+                    <div class="booking-card__meta">
+                      <span>{{ card.employee }}</span>
+                      {% if card.zone %}
+                        <span>{{ card.zone }}</span>
+                      {% endif %}
+                    </div>
+                  </a>
+                {% empty %}
+                  <div class="calendar-empty">Sin reservas</div>
+                {% endfor %}
+              </div>
+            </section>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+</section>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const grids = document.querySelectorAll(".calendar-grid[data-date]");
+  const cards = document.querySelectorAll(".booking-card[data-booking-id]");
+  const jumpButtons = document.querySelectorAll(".employee-booking-chip[data-target-id]");
+  const rescheduleBase = "{% url 'bookings:reschedule_api' 0 %}".replace("/0/", "/__ID__/");
+  const workStartHour = 9;
+  const stepMinutes = 30;
+  let draggedCard = null;
+  let previewNode = null;
+
+  function getCookie(name) {
+    const cookies = document.cookie ? document.cookie.split(";") : [];
+    for (const cookie of cookies) {
+      const trimmed = cookie.trim();
+      if (trimmed.startsWith(name + "=")) {
+        return decodeURIComponent(trimmed.slice(name.length + 1));
+      }
+    }
+    return "";
+  }
+
+  function snapDateTime(dateString, minutesFromTop) {
+    const snappedMinutes = Math.max(0, Math.round(minutesFromTop / stepMinutes) * stepMinutes);
+    const [year, month, day] = dateString.split("-").map(Number);
+    const hours = workStartHour + Math.floor(snappedMinutes / 60);
+    const minutes = snappedMinutes % 60;
+    const date = new Date(year, month - 1, day, hours, minutes);
+    const pad = (value) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function minutesFromGridTop(grid, clientY) {
+    const rect = grid.getBoundingClientRect();
+    return clientY - rect.top;
+  }
+
+  function formatPreviewLabel(dateTimeString, durationMinutes) {
+    const start = new Date(dateTimeString);
+    const end = new Date(start.getTime() + durationMinutes * 60000);
+    const pad = (value) => String(value).padStart(2, "0");
+    return `${pad(start.getHours())}:${pad(start.getMinutes())} - ${pad(end.getHours())}:${pad(end.getMinutes())}`;
+  }
+
+  function ensurePreviewNode() {
+    if (previewNode) return previewNode;
+    previewNode = document.createElement("div");
+    previewNode.className = "calendar-drop-preview";
+    return previewNode;
+  }
+
+  function showPreview(grid, card, clientY) {
+    const preview = ensurePreviewNode();
+    const snappedMinutes = Math.max(0, Math.round(minutesFromGridTop(grid, clientY) / stepMinutes) * stepMinutes);
+    const startAt = snapDateTime(grid.dataset.date, snappedMinutes);
+    const startDate = new Date(card.dataset.startAt);
+    const endDate = new Date(card.dataset.endAt);
+    const durationMinutes = Math.max(30, Math.round((endDate - startDate) / 60000));
+
+    preview.style.top = `${snappedMinutes}px`;
+    preview.style.height = `${durationMinutes}px`;
+    preview.innerHTML = `
+      <strong>${card.dataset.client}</strong>
+      <span>${formatPreviewLabel(startAt, durationMinutes)}</span>
+    `;
+
+    if (preview.parentElement !== grid) {
+      preview.parentElement?.removeChild(preview);
+      grid.appendChild(preview);
+    }
+  }
+
+  function hidePreview() {
+    if (previewNode?.parentElement) {
+      previewNode.parentElement.removeChild(previewNode);
+    }
+  }
+
+  async function moveBooking(card, grid, clientY) {
+    const minutesFromTop = minutesFromGridTop(grid, clientY);
+    const startAt = snapDateTime(grid.dataset.date, minutesFromTop);
+    const employeeId = card.dataset.employeeId;
+    const bookingId = card.dataset.bookingId;
+    const clientLabel = card.dataset.client;
+
+    const confirmed = window.confirm(`¿Mover la reserva de ${clientLabel} a ${startAt.replace("T", " ")}?`);
+    if (!confirmed) return;
+
+    card.classList.add("is-dragging");
+
+    try {
+      const response = await fetch(rescheduleBase.replace("__ID__", bookingId), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken"),
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: JSON.stringify({
+          employee_id: employeeId,
+          start_at: startAt
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "No se pudo mover la reserva.");
+      }
+
+      window.location.reload();
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      card.classList.remove("is-dragging");
+    }
+  }
+
+  cards.forEach((card) => {
+    card.addEventListener("dragstart", function (event) {
+      draggedCard = card;
+      card.classList.add("is-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", card.dataset.bookingId);
+    });
+
+    card.addEventListener("dragend", function () {
+      card.classList.remove("is-dragging");
+      draggedCard = null;
+      grids.forEach((grid) => grid.classList.remove("is-drop-target"));
+      hidePreview();
+    });
+  });
+
+  grids.forEach((grid) => {
+    grid.addEventListener("dragover", function (event) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      grid.classList.add("is-drop-target");
+      if (draggedCard) {
+        showPreview(grid, draggedCard, event.clientY);
+      }
+    });
+
+    grid.addEventListener("dragleave", function () {
+      grid.classList.remove("is-drop-target");
+      if (event.currentTarget === previewNode?.parentElement) {
+        hidePreview();
+      }
+    });
+
+    grid.addEventListener("drop", function (event) {
+      event.preventDefault();
+      grid.classList.remove("is-drop-target");
+      hidePreview();
+      if (!draggedCard) return;
+      moveBooking(draggedCard, grid, event.clientY);
+    });
+  });
+
+  jumpButtons.forEach((button) => {
+    button.addEventListener("click", function () {
+      const target = document.getElementById(button.dataset.targetId);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      target.classList.add("is-focused");
+      window.setTimeout(() => target.classList.remove("is-focused"), 1400);
+    });
+  });
+});
+</script>
+{% endblock %}

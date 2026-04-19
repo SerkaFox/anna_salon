@@ -1,0 +1,82 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Zonas | Anna Salon{% endblock %}
+
+{% block panel_title %}Zonas{% endblock %}
+{% block panel_subtitle %}Recursos y espacios del salón. Total: {{ zones_count }}{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn" href="{% url 'salon:create' %}">+ Nueva zona</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <input
+      type="text"
+      name="q"
+      value="{{ query }}"
+      class="input"
+      placeholder="Buscar por nombre, tipo o notas"
+    >
+
+    <select name="status" class="input">
+      <option value="">Todas</option>
+      <option value="active" {% if status == "active" %}selected{% endif %}>Solo activas</option>
+      <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Solo inactivas</option>
+    </select>
+
+    <button type="submit" class="btn">Buscar</button>
+    <a href="{% url 'salon:list' %}" class="btn btn-light">Limpiar</a>
+  </form>
+</section>
+
+<section class="panel-card">
+  {% if zones %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Zona</th>
+            <th>Tipo</th>
+            <th>Capacidad</th>
+            <th>Color</th>
+            <th>Activa</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for zone in zones %}
+            <tr>
+              <td>{{ zone.name }}</td>
+              <td>{{ zone.get_zone_type_display }}</td>
+              <td>{{ zone.capacity }}</td>
+              <td>
+                <span class="color-chip" style="background: {{ zone.color }};"></span>
+                {{ zone.color }}
+              </td>
+              <td>
+                {% if zone.is_active %}
+                  <span class="status-pill is-active">Sí</span>
+                {% else %}
+                  <span class="status-pill is-inactive">No</span>
+                {% endif %}
+              </td>
+              <td class="actions-cell actions-inline">
+                <a class="btn btn-light btn-small" href="{% url 'salon:update' zone.pk %}">Editar</a>
+                <a class="btn btn-danger btn-small" href="{% url 'salon:delete' zone.pk %}">Eliminar</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>No hay zonas todavía</h2>
+      <p>Crea la primera zona o recurso del salón.</p>
+      <a class="btn" href="{% url 'salon:create' %}">Crear zona</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

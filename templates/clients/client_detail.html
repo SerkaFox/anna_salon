@@ -1,0 +1,202 @@
+{% extends "panel_base.html" %}
+
+{% block title %}{{ client.full_name }} | Cliente{% endblock %}
+
+{% block panel_title %}{{ client.full_name }}{% endblock %}
+{% block panel_subtitle %}Ficha completa del cliente{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'clients:list' %}">← Volver</a>
+  <a class="btn btn-light" href="{% url 'clients:update' client.pk %}">Editar cliente</a>
+  <a class="btn" href="{% url 'clients:create' %}?referred_by={{ client.id }}">+ Añadir cliente referido</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="stats-grid">
+  <article class="stat-card">
+    <span class="stat-label">Visitas hechas</span>
+    <strong class="stat-value">{{ stats.total_visits }}</strong>
+  </article>
+
+  <article class="stat-card">
+    <span class="stat-label">Gastado total</span>
+    <strong class="stat-value">{{ stats.total_spent }} €</strong>
+  </article>
+
+  <article class="stat-card">
+    <span class="stat-label">Ticket medio</span>
+    <strong class="stat-value">{{ stats.avg_ticket|floatformat:2 }} €</strong>
+  </article>
+
+  <article class="stat-card">
+    <span class="stat-label">Clientes traídos</span>
+    <strong class="stat-value">{{ successful_referrals_count }}</strong>
+  </article>
+
+  <article class="stat-card">
+		{% if available_rewards > 0 %}
+		<section class="panel-card">
+		  <h2>Premio disponible</h2>
+		  <p class="muted-text">
+			Este cliente tiene {{ available_rewards }} premio(s) disponible(s).
+		  </p>
+		  <div class="form-actions">
+			<a class="btn btn-danger" href="{% url 'clients:use_reward' client.pk %}">
+			  Usar premio ahora
+			</a>
+		  </div>
+		</section>
+		{% endif %}
+  </article>
+</section>
+
+<section class="content-grid">
+  <article class="panel-card">
+    <h2>Información</h2>
+    <p><strong>Nombre:</strong> {{ client.full_name }}</p>
+    <p><strong>Teléfono:</strong> {{ client.phone|default:"—" }}</p>
+    <p><strong>Email:</strong> {{ client.email|default:"—" }}</p>
+    <p><strong>Fecha de nacimiento:</strong> {{ client.birth_date|default:"—" }}</p>
+    <p><strong>Recomendado por:</strong>
+      {% if client.referred_by %}
+        <a href="{% url 'clients:detail' client.referred_by.id %}">{{ client.referred_by.full_name }}</a>
+      {% else %}
+        —
+      {% endif %}
+    </p>
+  </article>
+
+  <article class="panel-card">
+    <h2>Actividad</h2>
+    <p>
+      <strong>Última visita:</strong>
+      {% if last_visit %}
+        {{ last_visit.start_at|date:"d/m/Y H:i" }}
+      {% else %}
+        —
+      {% endif %}
+    </p>
+    <p>
+      <strong>Próxima cita:</strong>
+      {% if next_booking %}
+        {{ next_booking.start_at|date:"d/m/Y H:i" }}
+      {% else %}
+        —
+      {% endif %}
+    </p>
+    <p>
+      <strong>Para próximo premio:</strong>
+      {% if remaining_for_next_reward == 0 %}
+        Ya disponible
+      {% else %}
+        Faltan {{ remaining_for_next_reward }} clientes
+      {% endif %}
+	  
+    </p>
+  </article>
+</section>
+
+<section class="content-grid">
+  <article class="panel-card">
+    <h2>Servicios favoritos</h2>
+    {% if top_services %}
+      <ul class="todo-list">
+        {% for row in top_services %}
+          <li>{{ row.service__name }} ({{ row.total }})</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted-text">Todavía no hay servicios terminados para este cliente.</p>
+    {% endif %}
+  </article>
+
+  <article class="panel-card">
+    <h2>Empleados habituales</h2>
+    {% if top_employees %}
+      <ul class="todo-list">
+        {% for row in top_employees %}
+          <li>{{ row.employee__first_name }} {{ row.employee__last_name }} ({{ row.total }})</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted-text">Todavía no hay historial suficiente.</p>
+    {% endif %}
+  </article>
+</section>
+
+<section class="panel-card">
+  <h2>Clientes referidos</h2>
+
+  {% if referred_clients %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Teléfono</th>
+            <th>Email</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ref_client in referred_clients %}
+            <tr>
+              <td>
+                <a href="{% url 'clients:detail' ref_client.id %}">
+                  {{ ref_client.full_name }}
+                </a>
+              </td>
+              <td>{{ ref_client.phone|default:"—" }}</td>
+              <td>{{ ref_client.email|default:"—" }}</td>
+              <td class="actions-cell">
+                <a class="btn btn-light btn-small" href="{% url 'clients:detail' ref_client.id %}">Abrir</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted-text">Este cliente todavía no ha traído a nadie.</p>
+  {% endif %}
+</section>
+
+<section class="panel-card">
+  <h2>Historial de reservas</h2>
+
+  {% if bookings %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Servicio</th>
+            <th>Empleado</th>
+            <th>Zona</th>
+            <th>Estado</th>
+            <th>Cliente €</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for booking in bookings %}
+            <tr>
+              <td>{{ booking.start_at|date:"d/m/Y H:i" }}</td>
+              <td>{{ booking.service }}</td>
+              <td>{{ booking.employee }}</td>
+              <td>{% if booking.zone %}{{ booking.zone }}{% else %}—{% endif %}</td>
+              <td>{{ booking.get_status_display }}</td>
+              <td>{{ booking.client_price_snapshot }} €</td>
+              <td class="actions-cell">
+                <a class="btn btn-light btn-small" href="{% url 'bookings:update' booking.id %}">Abrir</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted-text">No hay reservas para este cliente.</p>
+  {% endif %}
+</section>
+{% endblock %}

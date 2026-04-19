@@ -1,0 +1,92 @@
+{% extends "panel_base.html" %}
+
+{% block title %}
+  {% if is_edit %}Editar cliente{% else %}Nuevo cliente{% endif %} | Anna Salon
+{% endblock %}
+
+{% block panel_title %}
+  {% if is_edit %}Editar cliente{% else %}Nuevo cliente{% endif %}
+{% endblock %}
+
+{% block panel_subtitle %}Completa la ficha del cliente.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'clients:list' %}">← Volver</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.first_name.id_for_label }}">Nombre</label>
+        {{ form.first_name }}
+        {{ form.first_name.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.last_name.id_for_label }}">Apellidos</label>
+        {{ form.last_name }}
+        {{ form.last_name.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.phone.id_for_label }}">Teléfono</label>
+        {{ form.phone }}
+        {{ form.phone.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.email.id_for_label }}">Email</label>
+        {{ form.email }}
+        {{ form.email.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.birth_date.id_for_label }}">Fecha de nacimiento</label>
+        {{ form.birth_date }}
+        {{ form.birth_date.errors }}
+      </div>
+<div class="field">
+    <label for="{{ form.referred_by.id_for_label }}">
+        Recomendado por
+    </label>
+    {{ form.referred_by }}
+    {{ form.referred_by.errors }}
+</div>
+
+      <div class="field field-checkbox">
+        <label for="{{ form.is_active.id_for_label }}">Cliente activo</label>
+        <div class="checkbox-row">
+          {{ form.is_active }}
+          <span>Activo</span>
+        </div>
+        {{ form.is_active.errors }}
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="{{ form.notes.id_for_label }}">Notas</label>
+      {{ form.notes }}
+      {{ form.notes.errors }}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">
+        {% if is_edit %}Guardar cambios{% else %}Crear cliente{% endif %}
+      </button>
+      <a href="{% url 'clients:list' %}" class="btn btn-light">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

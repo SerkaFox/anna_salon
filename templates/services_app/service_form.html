@@ -1,0 +1,88 @@
+{% extends "panel_base.html" %}
+
+{% block title %}
+  {% if is_edit %}Editar servicio{% else %}Nuevo servicio{% endif %} | Anna Salon
+{% endblock %}
+
+{% block panel_title %}
+  {% if is_edit %}Editar servicio{% else %}Nuevo servicio{% endif %}
+{% endblock %}
+
+{% block panel_subtitle %}Configura precio, duración y zonas permitidas.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'services_app:list' %}">← Volver</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.name.id_for_label }}">Nombre</label>
+        {{ form.name }}
+        {{ form.name.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.duration_minutes.id_for_label }}">Duración (minutos)</label>
+        {{ form.duration_minutes }}
+        {{ form.duration_minutes.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.price.id_for_label }}">Precio</label>
+        {{ form.price }}
+        {{ form.price.errors }}
+      </div>
+
+      <div class="field field-checkbox">
+        <label for="{{ form.requires_zone.id_for_label }}">Requiere zona/recurso</label>
+        <div class="checkbox-row">
+          {{ form.requires_zone }}
+          <span>Requiere zona</span>
+        </div>
+        {{ form.requires_zone.errors }}
+      </div>
+
+      <div class="field field-checkbox">
+        <label for="{{ form.is_active.id_for_label }}">Servicio activo</label>
+        <div class="checkbox-row">
+          {{ form.is_active }}
+          <span>Activo</span>
+        </div>
+        {{ form.is_active.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.allowed_zones.id_for_label }}">Zonas permitidas</label>
+        {{ form.allowed_zones }}
+        {{ form.allowed_zones.errors }}
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="{{ form.description.id_for_label }}">Descripción</label>
+      {{ form.description }}
+      {{ form.description.errors }}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">
+        {% if is_edit %}Guardar cambios{% else %}Crear servicio{% endif %}
+      </button>
+      <a href="{% url 'services_app:list' %}" class="btn btn-light">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

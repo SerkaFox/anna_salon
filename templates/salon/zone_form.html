@@ -1,0 +1,79 @@
+{% extends "panel_base.html" %}
+
+{% block title %}
+  {% if is_edit %}Editar zona{% else %}Nueva zona{% endif %} | Anna Salon
+{% endblock %}
+
+{% block panel_title %}
+  {% if is_edit %}Editar zona{% else %}Nueva zona{% endif %}
+{% endblock %}
+
+{% block panel_subtitle %}Configura el recurso o espacio del salón.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'salon:list' %}">← Volver</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.name.id_for_label }}">Nombre</label>
+        {{ form.name }}
+        {{ form.name.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.zone_type.id_for_label }}">Tipo</label>
+        {{ form.zone_type }}
+        {{ form.zone_type.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.capacity.id_for_label }}">Capacidad</label>
+        {{ form.capacity }}
+        {{ form.capacity.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.color.id_for_label }}">Color</label>
+        {{ form.color }}
+        {{ form.color.errors }}
+      </div>
+
+      <div class="field field-checkbox">
+        <label for="{{ form.is_active.id_for_label }}">Zona activa</label>
+        <div class="checkbox-row">
+          {{ form.is_active }}
+          <span>Activa</span>
+        </div>
+        {{ form.is_active.errors }}
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="{{ form.notes.id_for_label }}">Notas</label>
+      {{ form.notes }}
+      {{ form.notes.errors }}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">
+        {% if is_edit %}Guardar cambios{% else %}Crear zona{% endif %}
+      </button>
+      <a href="{% url 'salon:list' %}" class="btn btn-light">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

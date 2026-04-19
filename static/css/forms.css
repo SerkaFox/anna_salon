@@ -1,0 +1,275 @@
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.field-inline {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+
+.textarea {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.entity-form {
+  display: grid;
+  gap: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.field-checkbox {
+  align-content: start;
+}
+
+.checkbox-row {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.errorlist {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #a03f59;
+  font-size: 0.92rem;
+}
+
+.booking-hint {
+  margin-top: -6px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.availability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.availability-day-card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.86);
+  padding: 18px;
+}
+
+.availability-day-card h3 {
+  margin-top: 0;
+  margin-bottom: 14px;
+}
+
+.slot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.slot-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(199, 92, 139, 0.1);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.schedule-editor {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,244,247,0.92));
+  border: 1px solid var(--line);
+}
+
+.schedule-editor__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.schedule-editor__head h2 {
+  margin: 0 0 6px;
+}
+
+.schedule-editor__head p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.weekly-shift-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.weekly-shift-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.82);
+}
+
+.weekly-shift-card.is-day-off {
+  opacity: 0.78;
+  background: rgba(250, 243, 246, 0.9);
+}
+
+.weekly-shift-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.weekly-shift-card__times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.switch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.override-table-wrap {
+  overflow-x: auto;
+}
+
+.override-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.override-table th,
+.override-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.override-table th {
+  text-align: left;
+  font-size: 0.84rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.override-table .input {
+  min-width: 120px;
+}
+
+.override-break {
+  display: grid;
+  gap: 8px;
+}
+
+.override-check-cell {
+  text-align: center;
+}
+
+@media (max-width: 980px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .weekly-shift-card__times {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions .btn,
+  .form-actions a.btn {
+    width: 100%;
+  }
+
+  .field-inline {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .entity-form {
+    gap: 14px;
+  }
+
+  .field label {
+    font-size: 0.92rem;
+  }
+
+  .input,
+  .textarea {
+    font-size: 16px;
+  }
+
+  .checkbox-row {
+    min-height: 42px;
+  }
+
+  .field-checkbox {
+    padding-top: 4px;
+  }
+
+  .checkbox-row span {
+    font-size: 0.95rem;
+  }
+}

@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+
+{% block title %}Acceso | Anna Salon{% endblock %}
+
+{% block body %}
+<div class="login-shell">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="logo">A</div>
+      <div>
+        <strong>Anna Salon</strong>
+        <span>Panel interno</span>
+      </div>
+    </div>
+
+    <h1>Iniciar sesión</h1>
+    <p class="login-text">Accede al panel de gestión del salón.</p>
+
+    <form method="post" class="login-form">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="form-errors">
+          {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="field">
+        <label for="{{ form.username.id_for_label }}">Usuario</label>
+        {{ form.username }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.password.id_for_label }}">Contraseña</label>
+        {{ form.password }}
+      </div>
+
+      <button type="submit" class="btn login-btn">Entrar</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

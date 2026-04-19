@@ -1,0 +1,432 @@
+{% extends "panel_base.html" %}
+
+{% block title %}
+  {% if is_edit %}Editar reserva{% else %}Nueva reserva{% endif %} | Anna Salon
+{% endblock %}
+
+{% block panel_title %}
+  {% if is_edit %}Editar reserva{% else %}Nueva reserva{% endif %}
+{% endblock %}
+
+{% block panel_subtitle %}Selecciona cliente, empleado, servicio y horario.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'bookings:list' %}">← Volver</a>
+  {% if is_edit and booking %}
+    <a class="btn btn-light" href="{% url 'bookings:create' %}?from_booking={{ booking.id }}">+ Añadir otro servicio</a>
+  {% endif %}
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="post" class="entity-form" id="booking-form">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.client.id_for_label }}">Cliente</label>
+        {{ form.client }}
+        {{ form.client.errors }}
+      </div>
+<div class="field field-checkbox">
+  <label for="{{ form.apply_referral_reward.id_for_label }}">Premio de referido</label>
+  <div class="checkbox-row">
+    {{ form.apply_referral_reward }}
+    <span>Aplicar descuento de referido</span>
+  </div>
+  {% if form.apply_referral_reward.help_text %}
+    <div class="booking-hint" id="client-reward-hint">{{ form.apply_referral_reward.help_text }}</div>
+  {% else %}
+    <div class="booking-hint" id="client-reward-hint"></div>
+  {% endif %}
+  {{ form.apply_referral_reward.errors }}
+</div>
+      <div class="field">
+        <label for="{{ form.employee.id_for_label }}">Empleado</label>
+        {{ form.employee }}
+        {{ form.employee.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.service.id_for_label }}">Servicio</label>
+        {{ form.service }}
+        {{ form.service.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.zone.id_for_label }}">Zona</label>
+        {{ form.zone }}
+        {{ form.zone.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.start_at.id_for_label }}">Inicio</label>
+        {{ form.start_at }}
+        {{ form.start_at.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.end_at.id_for_label }}">Fin</label>
+        {{ form.end_at }}
+        {{ form.end_at.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.status.id_for_label }}">Estado</label>
+        {{ form.status }}
+        {{ form.status.errors }}
+      </div>
+    </div>
+
+    <div class="booking-hint" id="service-duration-hint"></div>
+<div class="booking-hint" id="slot-availability-hint"></div>
+    <div class="field">
+      <label for="{{ form.notes.id_for_label }}">Notas</label>
+      {{ form.notes }}
+      {{ form.notes.errors }}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">
+        {% if is_edit %}Guardar cambios{% else %}Crear reserva{% endif %}
+      </button>
+      <a href="{% url 'bookings:list' %}" class="btn btn-light">Cancelar</a>
+    </div>
+  </form>
+</section>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const clientSelect = document.getElementById("id_client");
+  const serviceSelect = document.getElementById("id_service");
+  const employeeSelect = document.getElementById("id_employee");
+  const zoneSelect = document.getElementById("id_zone");
+  const startInput = document.getElementById("id_start_at");
+  const endInput = document.getElementById("id_end_at");
+  const hintBox = document.getElementById("service-duration-hint");
+  const slotHint = document.getElementById("slot-availability-hint");
+  const rewardCheckbox = document.getElementById("id_apply_referral_reward");
+  const rewardHint = document.getElementById("client-reward-hint");
+
+  if (
+    !clientSelect ||
+    !serviceSelect ||
+    !employeeSelect ||
+    !zoneSelect ||
+    !startInput ||
+    !endInput ||
+    !hintBox ||
+    !slotHint
+  ) {
+    return;
+  }
+
+  const serviceDataUrl = "{% url 'bookings:service_data_api' %}";
+  const clientRewardApiUrl = "{% url 'bookings:client_reward_api' %}";
+  const slotCheckApiUrl = "{% url 'bookings:slot_check_api' %}";
+  const bookingId = {% if is_edit and booking %}{{ booking.id }}{% else %}null{% endif %};
+
+  const initialEmployeeValue = employeeSelect.value;
+  const initialZoneValue = zoneSelect.value;
+  const initialStartValue = startInput.value;
+  const initialEndValue = endInput.value;
+  const isEdit = {{ is_edit|yesno:"true,false" }};
+  const rewardAlreadyApplied = {% if is_edit and booking and booking.referral_reward_applied %}true{% else %}false{% endif %};
+
+  let lastDuration = null;
+  let userTouchedEnd = !!initialEndValue;
+  let slotCheckTimer = null;
+
+  function formatDateTimeLocal(date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return (
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+      `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+    );
+  }
+
+  function updateHint(duration) {
+    if (!duration) {
+      hintBox.textContent = "";
+      return;
+    }
+    hintBox.textContent = `Duración del servicio: ${duration} min.`;
+  }
+
+  function recalculateEndAt(duration, forceUpdate = false) {
+    const startValue = startInput.value;
+
+    if (!duration || !startValue) {
+      updateHint(duration);
+      return;
+    }
+
+    const startDate = new Date(startValue);
+    if (isNaN(startDate.getTime())) {
+      updateHint(duration);
+      return;
+    }
+
+    if (forceUpdate || !endInput.value || !userTouchedEnd) {
+      const endDate = new Date(startDate.getTime() + duration * 60000);
+      endInput.value = formatDateTimeLocal(endDate);
+    }
+
+    updateHint(duration);
+  }
+
+  function rebuildSelect(select, items, placeholder, valueKey, labelBuilder, preferredValue = "") {
+    const previousValue = preferredValue ? String(preferredValue) : String(select.value || "");
+    select.innerHTML = "";
+
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = placeholder;
+    select.appendChild(emptyOption);
+
+    let matched = false;
+
+    items.forEach(item => {
+      const option = document.createElement("option");
+      option.value = String(item[valueKey]);
+      option.textContent = labelBuilder(item);
+
+      if (String(item[valueKey]) === previousValue) {
+        option.selected = true;
+        matched = true;
+      }
+
+      select.appendChild(option);
+    });
+
+    if (!matched) {
+      select.value = "";
+    }
+  }
+
+  async function loadClientRewardData() {
+    if (!rewardCheckbox || !rewardHint || !clientSelect) return;
+
+    if (rewardAlreadyApplied) {
+      rewardCheckbox.checked = true;
+      rewardCheckbox.disabled = true;
+      rewardHint.textContent = "Este premio ya fue aplicado a esta reserva.";
+      return;
+    }
+
+    const clientId = clientSelect.value;
+
+    if (!clientId) {
+      rewardCheckbox.checked = false;
+      rewardCheckbox.disabled = true;
+      rewardHint.textContent = "Selecciona un cliente.";
+      return;
+    }
+
+    try {
+      const response = await fetch(`${clientRewardApiUrl}?client_id=${encodeURIComponent(clientId)}`, {
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo cargar la información del premio.");
+      }
+
+      const data = await response.json();
+
+      rewardHint.textContent = data.message || "";
+
+      if (data.can_apply) {
+        rewardCheckbox.disabled = false;
+      } else {
+        rewardCheckbox.checked = false;
+        rewardCheckbox.disabled = true;
+      }
+    } catch (error) {
+      console.error("Error loading client reward data:", error);
+      rewardHint.textContent = "No se pudo cargar la información del premio.";
+    }
+  }
+
+  async function checkSlotAvailability() {
+    const serviceId = serviceSelect.value;
+    const employeeId = employeeSelect.value;
+    const zoneId = zoneSelect.value;
+    const startAt = startInput.value;
+
+    if (!serviceId || !employeeId || !startAt) {
+      slotHint.textContent = "";
+      slotHint.classList.remove("is-error");
+      return;
+    }
+
+    const params = new URLSearchParams({
+      service: serviceId,
+      employee: employeeId,
+      start_at: startAt
+    });
+
+    if (zoneId) {
+      params.append("zone", zoneId);
+    }
+
+    if (bookingId) {
+      params.append("exclude_booking_id", bookingId);
+    }
+
+    try {
+      const response = await fetch(`${slotCheckApiUrl}?${params.toString()}`, {
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo comprobar el horario.");
+      }
+
+      const data = await response.json();
+
+      if (data.end_at && (!endInput.value || !userTouchedEnd)) {
+        endInput.value = data.end_at;
+      }
+
+      slotHint.textContent = data.message || "";
+
+      if (data.ok) {
+        slotHint.classList.remove("is-error");
+      } else {
+        slotHint.classList.add("is-error");
+      }
+    } catch (error) {
+      console.error("Error checking slot:", error);
+      slotHint.textContent = "No se pudo comprobar la disponibilidad.";
+      slotHint.classList.add("is-error");
+    }
+  }
+
+  function debounceSlotCheck() {
+    clearTimeout(slotCheckTimer);
+    slotCheckTimer = setTimeout(checkSlotAvailability, 250);
+  }
+
+  async function loadServiceData({ preserveInitial = false, forceEndUpdate = false } = {}) {
+    const serviceId = serviceSelect.value;
+
+    if (!serviceId) {
+      employeeSelect.innerHTML = '<option value="">---------</option>';
+      zoneSelect.innerHTML = '<option value="">---------</option>';
+      employeeSelect.disabled = false;
+      zoneSelect.disabled = false;
+      hintBox.textContent = "";
+      slotHint.textContent = "";
+      slotHint.classList.remove("is-error");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${serviceDataUrl}?service_id=${encodeURIComponent(serviceId)}`, {
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo cargar la información del servicio.");
+      }
+
+      const data = await response.json();
+
+      const preferredEmployeeValue = preserveInitial ? initialEmployeeValue : employeeSelect.value;
+      const preferredZoneValue = preserveInitial ? initialZoneValue : zoneSelect.value;
+
+      rebuildSelect(
+        employeeSelect,
+        data.employees || [],
+        "Selecciona empleado",
+        "id",
+        (emp) => `${emp.first_name || ""} ${emp.last_name || ""}`.trim(),
+        preferredEmployeeValue
+      );
+
+      if (data.requires_zone) {
+        zoneSelect.disabled = false;
+        rebuildSelect(
+          zoneSelect,
+          data.zones || [],
+          "Selecciona zona",
+          "id",
+          (zone) => zone.name,
+          preferredZoneValue
+        );
+      } else {
+        zoneSelect.innerHTML = '<option value="">No requerida</option>';
+        zoneSelect.value = "";
+        zoneSelect.disabled = true;
+      }
+
+      lastDuration = data.duration_minutes || null;
+
+      if (preserveInitial && isEdit && initialStartValue && initialEndValue) {
+        startInput.value = initialStartValue;
+        endInput.value = initialEndValue;
+        updateHint(lastDuration);
+      } else {
+        recalculateEndAt(lastDuration, forceEndUpdate);
+      }
+    } catch (error) {
+      console.error("Error loading service data:", error);
+    }
+  }
+
+  serviceSelect.addEventListener("change", async function () {
+    userTouchedEnd = false;
+    await loadServiceData({ preserveInitial: false, forceEndUpdate: true });
+    debounceSlotCheck();
+  });
+
+  clientSelect.addEventListener("change", function () {
+    loadClientRewardData();
+  });
+
+  employeeSelect.addEventListener("change", debounceSlotCheck);
+  employeeSelect.addEventListener("input", debounceSlotCheck);
+
+  zoneSelect.addEventListener("change", debounceSlotCheck);
+  zoneSelect.addEventListener("input", debounceSlotCheck);
+
+  startInput.addEventListener("change", function () {
+    userTouchedEnd = false;
+    if (lastDuration) {
+      recalculateEndAt(lastDuration, true);
+    }
+    debounceSlotCheck();
+  });
+
+  startInput.addEventListener("input", function () {
+    userTouchedEnd = false;
+    if (lastDuration) {
+      recalculateEndAt(lastDuration, true);
+    }
+    debounceSlotCheck();
+  });
+
+  endInput.addEventListener("input", function () {
+    userTouchedEnd = true;
+  });
+
+  async function initForm() {
+    if (serviceSelect.value) {
+      await loadServiceData({ preserveInitial: true, forceEndUpdate: false });
+    }
+    await loadClientRewardData();
+    await checkSlotAvailability();
+  }
+
+  initForm();
+});
+</script>
+{% endblock %}

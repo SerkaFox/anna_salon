@@ -1,0 +1,76 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Clientes | Anna Salon{% endblock %}
+
+{% block panel_title %}Clientes{% endblock %}
+{% block panel_subtitle %}Base de clientes del salón. Total: {{ clients_count }}{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn" href="{% url 'clients:create' %}">+ Nuevo cliente</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <input
+      type="text"
+      name="q"
+      value="{{ query }}"
+      class="input"
+      placeholder="Buscar por nombre, teléfono o email"
+    >
+    <button type="submit" class="btn">Buscar</button>
+    <a href="{% url 'clients:list' %}" class="btn btn-light">Limpiar</a>
+  </form>
+</section>
+
+<section class="panel-card">
+  {% if clients %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Teléfono</th>
+            <th>Email</th>
+            <th>Activo</th>
+            <th>Creado</th>
+            <th></th>
+          </tr>
+        </thead>
+			<tbody>
+			  {% for client in clients %}
+				<tr>
+				  <td data-label="Nombre">
+					<a href="{% url 'clients:detail' client.pk %}">
+					  {{ client.full_name }}
+					</a>
+				  </td>
+				  <td data-label="Teléfono">{{ client.phone|default:"—" }}</td>
+				  <td data-label="Email">{{ client.email|default:"—" }}</td>
+				  <td data-label="Activo">
+					{% if client.is_active %}
+					  <span class="status-pill is-active">Sí</span>
+					{% else %}
+					  <span class="status-pill is-inactive">No</span>
+					{% endif %}
+				  </td>
+				  <td data-label="Creado">{{ client.created_at|date:"d/m/Y H:i" }}</td>
+				  <td data-label="Acciones" class="actions-cell actions-inline">
+					<a class="btn btn-light btn-small" href="{% url 'clients:update' client.pk %}">Editar</a>
+					<a class="btn btn-danger btn-small" href="{% url 'clients:delete' client.pk %}">Eliminar</a>
+				  </td>
+				</tr>
+			  {% endfor %}
+			</tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>No hay clientes todavía</h2>
+      <p>Empieza creando la primera ficha de cliente.</p>
+      <a class="btn" href="{% url 'clients:create' %}">Crear cliente</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

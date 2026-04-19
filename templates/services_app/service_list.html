@@ -1,0 +1,101 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Servicios | Anna Salon{% endblock %}
+
+{% block panel_title %}Servicios{% endblock %}
+{% block panel_subtitle %}Servicios del salón. Total: {{ services_count }}{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn" href="{% url 'services_app:create' %}">+ Nuevo servicio</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <input
+      type="text"
+      name="q"
+      value="{{ query }}"
+      class="input"
+      placeholder="Buscar por nombre o descripción"
+    >
+
+    <select name="status" class="input">
+      <option value="">Todos</option>
+      <option value="active" {% if status == "active" %}selected{% endif %}>Solo activos</option>
+      <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Solo inactivos</option>
+    </select>
+
+    <button type="submit" class="btn">Buscar</button>
+    <a href="{% url 'services_app:list' %}" class="btn btn-light">Limpiar</a>
+  </form>
+</section>
+
+<section class="panel-card">
+  {% if services %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Servicio</th>
+            <th>Duración</th>
+            <th>Precio</th>
+            <th>Zona</th>
+            <th>Zonas permitidas</th>
+            <th>Activo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for service in services %}
+            <tr>
+              <td>{{ service.name }}</td>
+              <td>{{ service.duration_minutes }} min</td>
+              <td>{{ service.price }} €</td>
+              <td>
+                {% if service.requires_zone %}
+                  <span class="status-pill is-active">Sí</span>
+                {% else %}
+                  <span class="status-pill is-inactive">No</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if service.requires_zone %}
+                  {% with zones=service.allowed_zones.all %}
+                    {% if zones %}
+                      {% for zone in zones %}
+                        {{ zone.name }}{% if not forloop.last %}, {% endif %}
+                      {% endfor %}
+                    {% else %}
+                      —
+                    {% endif %}
+                  {% endwith %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                {% if service.is_active %}
+                  <span class="status-pill is-active">Sí</span>
+                {% else %}
+                  <span class="status-pill is-inactive">No</span>
+                {% endif %}
+              </td>
+              <td class="actions-cell actions-inline">
+                <a class="btn btn-light btn-small" href="{% url 'services_app:update' service.pk %}">Editar</a>
+                <a class="btn btn-danger btn-small" href="{% url 'services_app:delete' service.pk %}">Eliminar</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>No hay servicios todavía</h2>
+      <p>Crea el primer servicio del salón.</p>
+      <a class="btn" href="{% url 'services_app:create' %}">Crear servicio</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

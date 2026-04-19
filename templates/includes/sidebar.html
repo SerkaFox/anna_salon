@@ -1,0 +1,31 @@
+<div class="sidebar-inner">
+  <div class="sidebar-head">
+    <div class="sidebar-brand">
+      <div class="logo">A</div>
+      <div>
+        <strong>Anna Salon</strong>
+        <span>Gestión interna</span>
+      </div>
+    </div>
+
+    <button class="sidebar-close" type="button" aria-label="Cerrar menú">✕</button>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a class="nav-link {% if active_section == 'dashboard' %}active{% endif %}" href="{% url 'dashboard:home' %}">Panel</a>
+    <a class="nav-link {% if active_section == 'clients' %}active{% endif %}" href="{% url 'clients:list' %}">Clientes</a>
+    <a class="nav-link {% if active_section == 'employees' %}active{% endif %}" href="{% url 'employees:list' %}">Empleados</a>
+    <a class="nav-link {% if active_section == 'services' %}active{% endif %}" href="{% url 'services_app:list' %}">Servicios</a>
+    <a class="nav-link {% if active_section == 'zones' %}active{% endif %}" href="{% url 'salon:list' %}">Zonas</a>
+    <a class="nav-link {% if active_section == 'bookings' %}active{% endif %}" href="{% url 'bookings:list' %}">Reservas</a>
+    <a class="nav-link {% if active_section == 'calendar' %}active{% endif %}" href="{% url 'bookings:calendar_day' %}">Calendario</a>
+  </nav>
+
+  <div class="sidebar-bottom">
+    <div class="user-box">
+      <strong>{{ request.user }}</strong>
+      <span>{{ request.user.role }}</span>
+    </div>
+    <a class="btn btn-light btn-full" href="{% url 'accounts:logout' %}">Salir</a>
+  </div>
+</div>

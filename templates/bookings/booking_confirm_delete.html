@@ -1,0 +1,58 @@
+{% extends "layout.html" %}
+
+{% block title %}Eliminar reserva | Anna Salon{% endblock %}
+
+{% block body %}
+<div class="dashboard-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">A</div>
+      <div>
+        <strong>Anna Salon</strong>
+        <span>Gestión interna</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a class="nav-link" href="{% url 'dashboard:home' %}">Panel</a>
+      <a class="nav-link" href="{% url 'clients:list' %}">Clientes</a>
+      <a class="nav-link" href="{% url 'employees:list' %}">Empleados</a>
+      <a class="nav-link" href="{% url 'services_app:list' %}">Servicios</a>
+      <a class="nav-link" href="{% url 'salon:list' %}">Zonas</a>
+      <a class="nav-link active" href="{% url 'bookings:list' %}">Reservas</a>
+      <a class="nav-link" href="#">Calendario</a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="user-box">
+        <strong>{{ request.user }}</strong>
+        <span>{{ request.user.role }}</span>
+      </div>
+      <a class="btn btn-light btn-full" href="{% url 'accounts:logout' %}">Salir</a>
+    </div>
+  </aside>
+
+  <main class="main-panel">
+    <header class="panel-header">
+      <div>
+        <h1>Eliminar reserva</h1>
+        <p>Esta acción no se puede deshacer.</p>
+      </div>
+      <div class="panel-actions">
+        <a class="btn btn-light" href="{% url 'bookings:list' %}">← Volver</a>
+      </div>
+    </header>
+
+    <section class="panel-card">
+      <p>¿Seguro que quieres eliminar esta reserva?</p>
+      <p><strong>{{ booking }}</strong></p>
+
+      <form method="post" class="form-actions">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <a href="{% url 'bookings:list' %}" class="btn btn-light">Cancelar</a>
+      </form>
+    </section>
+  </main>
+</div>
+{% endblock %}
