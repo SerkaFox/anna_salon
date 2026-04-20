@@ -1,0 +1,151 @@
+<section class="stats-grid employee-summary-grid">
+  {% for item in stats %}
+    <article class="stat-card">
+      <span class="stat-label">{{ item.label }}</span>
+      <strong class="stat-value">{{ item.value }}</strong>
+    </article>
+  {% endfor %}
+</section>
+
+<section class="stats-grid employee-summary-grid">
+  {% for item in money_stats %}
+    <article class="stat-card">
+      <span class="stat-label">{{ item.label }}</span>
+      <strong class="stat-value">{{ item.value }} €</strong>
+    </article>
+  {% endfor %}
+</section>
+
+<section class="panel-card">
+  {% if employees %}
+    <div class="employee-analytics-list">
+      {% for employee in employees %}
+        <article class="employee-analytics-card">
+          <div class="employee-analytics-card__head">
+            <div class="employee-analytics-card__actions">
+              <a
+                class="icon-action"
+                href="{% url 'employees:update' employee.pk %}"
+                aria-label="Editar {{ employee.full_name }}"
+                title="Editar"
+              >✎</a>
+              <a
+                class="icon-action icon-action-danger"
+                href="{% url 'employees:delete' employee.pk %}"
+                aria-label="Eliminar {{ employee.full_name }}"
+                title="Eliminar"
+              >🗑</a>
+            </div>
+
+            <div>
+              <div class="employee-analytics-card__title">
+                <span class="color-chip" style="background: {{ employee.calendar_color }};"></span>
+                <strong>{{ employee.full_name }}</strong>
+              </div>
+              <div class="employee-analytics-card__meta">
+                <span>{{ employee.phone|default:"Sin teléfono" }}</span>
+                <span>·</span>
+                <span>
+                  {% if employee.user %}
+                    @{{ employee.user.username }}
+                  {% else %}
+                    Sin usuario
+                  {% endif %}
+                </span>
+                <span>·</span>
+                {% if employee.is_active %}
+                  <span class="status-pill is-active">Activo</span>
+                {% else %}
+                  <span class="status-pill is-inactive">Inactivo</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="employee-rank-row">
+            <span class="employee-rank-pill">Ingresos #{{ employee.revenue_rank }}</span>
+            <span class="employee-rank-pill">Clientes #{{ employee.clients_rank }}</span>
+          </div>
+
+          <div class="employee-kpi-grid">
+            <div class="employee-kpi-card">
+              <span>Ganado</span>
+              <strong>{{ employee.employee_earnings }} €</strong>
+            </div>
+            <div class="employee-kpi-card">
+              <span>Aporta al salón</span>
+              <strong>{{ employee.salon_revenue }} €</strong>
+            </div>
+            <div class="employee-kpi-card">
+              <span>Facturación cliente</span>
+              <strong>{{ employee.client_revenue }} €</strong>
+            </div>
+            <div class="employee-kpi-card">
+              <span>Clientes únicos</span>
+              <strong>{{ employee.clients_count }}</strong>
+            </div>
+            <div class="employee-kpi-card">
+              <span>Clientes recurrentes</span>
+              <strong>{{ employee.repeat_clients_count }}</strong>
+            </div>
+            <div class="employee-kpi-card">
+              <span>Ticket medio</span>
+              <strong>{{ employee.avg_ticket }} €</strong>
+            </div>
+          </div>
+
+          <div class="employee-analytics-card__body">
+            <section>
+              <h3>Servicios asignados</h3>
+              <p class="muted-text">
+                {% with emp_services=employee.services.all %}
+                  {% if emp_services %}
+                    {% for service in emp_services %}
+                      {{ service.name }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                  {% else %}
+                    No definidos
+                  {% endif %}
+                {% endwith %}
+              </p>
+            </section>
+
+            <section>
+              <h3>Clientes frecuentes</h3>
+              {% if employee.top_clients %}
+                <div class="analytics-chip-list">
+                  {% for client in employee.top_clients %}
+                    <a class="analytics-chip" href="{% url 'clients:detail' client.id %}">
+                      {{ client.name }} · {{ client.count }}
+                    </a>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="muted-text">Todavía no hay visitas completadas.</p>
+              {% endif %}
+            </section>
+
+            <section>
+              <h3>Servicios más demandados</h3>
+              {% if employee.top_services %}
+                <div class="analytics-chip-list">
+                  {% for service in employee.top_services %}
+                    <span class="analytics-chip">{{ service.name }} · {{ service.count }}</span>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="muted-text">Todavía no hay estadísticas de servicios.</p>
+              {% endif %}
+            </section>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>No hay empleados todavía</h2>
+      <p>Crea la primera ficha del equipo.</p>
+      <a class="btn" href="{% url 'employees:create' %}">Crear empleado</a>
+    </div>
+  {% endif %}
+</section>

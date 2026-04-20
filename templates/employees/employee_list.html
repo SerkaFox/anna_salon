@@ -3,7 +3,7 @@
 {% block title %}Empleados | Anna Salon{% endblock %}
 
 {% block panel_title %}Empleados{% endblock %}
-{% block panel_subtitle %}Equipo del salón. Total: {{ employees_count }}{% endblock %}
+{% block panel_subtitle %}Equipo del salón y su rendimiento. Toda la analítica se calcula sobre visitas completadas.{% endblock %}
 
 {% block panel_actions %}
   <a class="btn" href="{% url 'employees:create' %}">+ Nuevo empleado</a>
@@ -11,90 +11,117 @@
 
 {% block panel_content %}
 <section class="panel-card">
-  <form method="get" class="search-bar">
+  <form method="get" class="search-bar employee-search-bar" id="employeeSearchForm">
     <input
       type="text"
       name="q"
       value="{{ query }}"
       class="input"
       placeholder="Buscar por nombre, teléfono, email, especialidad o servicio"
+      autocomplete="off"
+      id="employeeSearchInput"
     >
-
-    <select name="status" class="input">
-      <option value="">Todos</option>
-      <option value="active" {% if status == "active" %}selected{% endif %}>Solo activos</option>
-      <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Solo inactivos</option>
-    </select>
-
-    <button type="submit" class="btn">Buscar</button>
-    <a href="{% url 'employees:list' %}" class="btn btn-light">Limpiar</a>
+    <input type="hidden" name="sort" value="{{ sort }}">
   </form>
+
+  <div class="filter-chip-row">
+    {% for sort_key, option in sort_options.items %}
+      <a
+        href="{% url 'employees:list' %}?sort={{ sort_key }}{% if query %}&q={{ query|urlencode }}{% endif %}"
+        class="filter-chip {% if sort == sort_key %}is-active{% endif %}"
+        data-sort-chip
+        data-sort-value="{{ sort_key }}"
+      >
+        {{ option.label }}
+      </a>
+    {% endfor %}
+  </div>
 </section>
 
-<section class="panel-card">
-  {% if employees %}
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Servicios</th>
-            <th>Teléfono</th>
-            <th>Usuario</th>
-            <th>Color</th>
-            <th>Activo</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for employee in employees %}
-            <tr>
-              <td>{{ employee.full_name }}</td>
-              <td>
-                {% with emp_services=employee.services.all %}
-                  {% if emp_services %}
-                    {% for service in emp_services %}
-                      {{ service.name }}{% if not forloop.last %}, {% endif %}
-                    {% endfor %}
-                  {% else %}
-                    —
-                  {% endif %}
-                {% endwith %}
-              </td>
-              <td>{{ employee.phone|default:"—" }}</td>
-              <td>
-                {% if employee.user %}
-                  {{ employee.user.username }}
-                {% else %}
-                  —
-                {% endif %}
-              </td>
-              <td>
-                <span class="color-chip" style="background: {{ employee.calendar_color }};"></span>
-                {{ employee.calendar_color }}
-              </td>
-              <td>
-                {% if employee.is_active %}
-                  <span class="status-pill is-active">Sí</span>
-                {% else %}
-                  <span class="status-pill is-inactive">No</span>
-                {% endif %}
-              </td>
-              <td class="actions-cell actions-inline">
-                <a class="btn btn-light btn-small" href="{% url 'employees:update' employee.pk %}">Editar</a>
-                <a class="btn btn-danger btn-small" href="{% url 'employees:delete' employee.pk %}">Eliminar</a>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% else %}
-    <div class="empty-state">
-      <h2>No hay empleados todavía</h2>
-      <p>Crea la primera ficha del equipo.</p>
-      <a class="btn" href="{% url 'employees:create' %}">Crear empleado</a>
-    </div>
-  {% endif %}
-</section>
+<div id="employeeAnalyticsContent">
+  {% include "employees/_employee_analytics_content.html" %}
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("employeeSearchForm");
+  const input = document.getElementById("employeeSearchInput");
+  const content = document.getElementById("employeeAnalyticsContent");
+  const sortInput = form ? form.querySelector('input[name="sort"]') : null;
+  const sortChips = Array.from(document.querySelectorAll("[data-sort-chip]"));
+
+  if (!form || !input || !content || !sortInput) return;
+
+  let debounceTimer = null;
+  let requestCounter = 0;
+
+  function setActiveSortChip(activeSort) {
+    sortChips.forEach(function (chip) {
+      chip.classList.toggle("is-active", chip.dataset.sortValue === activeSort);
+    });
+  }
+
+  async function loadEmployees() {
+    requestCounter += 1;
+    const currentRequest = requestCounter;
+    const params = new URLSearchParams({
+      q: input.value,
+      sort: sortInput.value,
+    });
+    const requestUrl = new URL(form.action || window.location.href, window.location.origin);
+    requestUrl.search = params.toString();
+
+    try {
+      const response = await fetch(requestUrl, {
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Request failed");
+      }
+
+      const html = await response.text();
+      if (currentRequest !== requestCounter) return;
+
+      content.innerHTML = html;
+
+      const nextUrl = new URL(window.location.href);
+      if (input.value) {
+        nextUrl.searchParams.set("q", input.value);
+      } else {
+        nextUrl.searchParams.delete("q");
+      }
+      nextUrl.searchParams.set("sort", sortInput.value);
+      window.history.replaceState({}, "", nextUrl);
+
+      input.focus();
+      const caretPosition = input.value.length;
+      input.setSelectionRange(caretPosition, caretPosition);
+      setActiveSortChip(sortInput.value);
+    } catch (_error) {
+      form.submit();
+    }
+  }
+
+  input.addEventListener("input", function () {
+    window.clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(function () {
+      loadEmployees();
+    }, 250);
+  });
+
+  sortChips.forEach(function (chip) {
+    chip.addEventListener("click", function (event) {
+      event.preventDefault();
+      const nextSort = chip.dataset.sortValue;
+      if (!nextSort || nextSort === sortInput.value) return;
+      sortInput.value = nextSort;
+      setActiveSortChip(nextSort);
+      loadEmployees();
+    });
+  });
+});
+</script>
 {% endblock %}
