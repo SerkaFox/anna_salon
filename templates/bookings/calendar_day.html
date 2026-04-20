@@ -3,54 +3,14 @@
 {% block title %}Horario | Anna Salon{% endblock %}
 
 {% block panel_title %}Horario{% endblock %}
-{% block panel_subtitle %}Tres días en una sola vista, con salto rápido por reserva y arrastre entre días.{% endblock %}
-
-{% block panel_actions %}
-  <div class="calendar-toolbar-inline">
-    <div class="calendar-toolbar-inline__nav">
-      <a class="btn btn-light btn-small btn-icon" href="?date={{ prev_date|date:'Y-m-d' }}">←</a>
-      <a class="btn btn-light btn-small" href="?date={{ today|date:'Y-m-d' }}">Hoy</a>
-      <a class="btn btn-light btn-small btn-icon" href="?date={{ next_date|date:'Y-m-d' }}">→</a>
-    </div>
-
-    <div class="calendar-toolbar-inline__date">
-      <span class="calendar-toolbar-inline__label">Vista</span>
-      <strong>{{ current_date|date:"l, d/m/Y" }}</strong>
-    </div>
-
-    <div class="calendar-toolbar-inline__actions">
-      <a class="btn btn-small" href="{% url 'bookings:create' %}">+ Reserva</a>
-    </div>
-  </div>
-{% endblock %}
+{% block panel_subtitle %}{% endblock %}
 
 {% block panel_content %}
-<section class="panel-card calendar-hero calendar-hero--compact">
-  <div class="calendar-hero__summary">
-    <span class="badge">Vista {{ day_columns|length }} días</span>
-    <p>{{ total_bookings }} reservas visibles en esta vista.</p>
-  </div>
-
-  <form method="get" class="calendar-filters calendar-filters--inline">
-    <div class="field-inline field-inline--compact">
-      <label for="id_date">Fecha</label>
-      <input
-        id="id_date"
-        type="date"
-        name="date"
-        value="{{ current_date|date:'Y-m-d' }}"
-        class="input"
-      >
-    </div>
-    <button type="submit" class="btn btn-small">Ir</button>
-  </form>
-</section>
-
 <section class="calendar-workspace">
   <section class="panel-card calendar-agenda calendar-agenda--compact">
     <div class="calendar-agenda__head">
       <h2>Reservas por empleado</h2>
-      <span class="muted-text">{{ employee_agenda|length }} en vista</span>
+      <span class="calendar-agenda__count">{{ total_bookings }}</span>
     </div>
 
     <div class="agenda-employee-grid">
@@ -60,11 +20,11 @@
           style="--employee-color: {{ agenda.employee.calendar_color|default:'#c75c8b' }};"
         >
           <div class="employee-agenda-card__head">
-            <strong>{{ agenda.employee.full_name }}</strong>
-            <a
-              class="employee-agenda-card__edit"
-              href="{% url 'employees:update' agenda.employee.pk %}"
-            >
+            <div class="employee-agenda-card__title">
+              <strong>{{ agenda.employee.full_name }}</strong>
+              <span class="employee-agenda-card__count">{{ agenda.bookings_count }}</span>
+            </div>
+            <a class="employee-agenda-card__edit" href="{% url 'employees:update' agenda.employee.pk %}">
               Perfil
             </a>
           </div>
@@ -76,9 +36,15 @@
                 class="employee-booking-chip"
                 data-target-id="{{ item.target_id }}"
               >
-                <span class="employee-booking-chip__time">{{ item.time_label }}</span>
+                <span class="employee-booking-chip__time-row">
+                  <span class="employee-booking-chip__time">{{ item.time_label }}</span>
+                  <span class="booking-status-dot" data-status="{{ item.status }}" title="{{ item.status_label }}">
+                    {% if item.status == "done" %}✓{% elif item.status == "in_progress" %}▶{% elif item.status == "confirmed" %}✓{% elif item.status == "pending" %}⏱{% elif item.status == "cancelled" %}×{% elif item.status == "no_show" %}!{% else %}•{% endif %}
+                  </span>
+                </span>
                 <span class="employee-booking-chip__main">{{ item.client }}</span>
-                <span class="employee-booking-chip__meta">{{ item.date|date:"D d" }} · {{ item.service }}</span>
+                <span class="employee-booking-chip__service">{{ item.service }}</span>
+                <span class="employee-booking-chip__meta">{{ item.date|date:"D d" }}</span>
               </button>
             {% empty %}
               <div class="employee-booking-empty">Sin reservas</div>
@@ -94,18 +60,25 @@
     </div>
   </section>
 
-	<section class="panel-card calendar-shell calendar-shell--wide">
-	  <div class="calendar-grid-frame days-count-{{ day_columns|length }}">
-		<div class="calendar-grid-frame__header">
-		  <div class="calendar-grid-frame__time-head"></div>
+  <section class="panel-card calendar-shell calendar-shell--wide">
+    <div class="calendar-grid-frame days-count-{{ day_columns|length }}">
+      <div class="calendar-grid-frame__header">
+        <div class="calendar-grid-frame__time-head calendar-grid-frame__time-head--nav">
+          <a href="?date={{ prev_date|date:'Y-m-d' }}" class="calendar-nav-shortcut" aria-label="Dia anterior">←</a>
+          <a href="?date={{ today|date:'Y-m-d' }}" class="calendar-today-shortcut">Hoy</a>
+          <a href="?date={{ next_date|date:'Y-m-d' }}" class="calendar-nav-shortcut" aria-label="Dia siguiente">→</a>
+        </div>
 
-		  {% for day in day_columns %}
-			<div class="calendar-grid-frame__day-head {% if day.is_today %}is-today{% endif %} {% if day.is_selected %}is-selected{% endif %}">
-			  <span>{{ day.date|date:"D" }}</span>
-			  <strong>{{ day.date|date:"d/m" }}</strong>
-			</div>
-		  {% endfor %}
-		</div>
+        {% for day in day_columns %}
+          <a
+            href="?date={{ day.query_date }}"
+            class="calendar-grid-frame__day-head calendar-grid-frame__day-link {% if day.is_today %}is-today{% endif %} {% if day.is_selected %}is-selected{% endif %}"
+          >
+            <span>{{ day.date|date:"D" }}</span>
+            <strong>{{ day.date|date:"d/m" }}</strong>
+          </a>
+        {% endfor %}
+      </div>
 
       <div class="calendar-grid-frame__body">
         <div class="calendar-time-rail">
@@ -139,12 +112,26 @@
                     data-service-id="{{ card.service_id }}"
                     data-zone-id="{{ card.zone_id|default:'' }}"
                     data-client="{{ card.client }}"
+                    data-client-id="{{ card.client_id }}"
+                    data-employee="{{ card.employee }}"
+                    data-service="{{ card.service }}"
+                    data-zone="{{ card.zone }}"
+                    data-status="{{ card.status }}"
+                    data-status-label="{{ card.status_label }}"
+                    data-notes="{{ card.notes|default_if_none:''|escape }}"
                     data-target-id="{{ card.target_id }}"
                     data-start-at="{{ card.start_at|date:'Y-m-d\\TH:i' }}"
                     data-end-at="{{ card.end_at|date:'Y-m-d\\TH:i' }}"
+                    data-reschedule-date="{{ card.reschedule_date }}"
+                    data-reschedule-time="{{ card.reschedule_time }}"
+                    data-edit-url="{% url 'bookings:update' card.id %}"
+                    data-create-from-url="{% url 'bookings:create' %}?from_booking={{ card.id }}"
                     id="{{ card.target_id }}"
                   >
                     <div class="booking-card__color-strip"></div>
+                    <span class="booking-card__status-mark" data-status="{{ card.status }}" title="{{ card.status_label }}">
+                      {% if card.status == "done" %}✓{% elif card.status == "in_progress" %}▶{% elif card.status == "confirmed" %}✓{% elif card.status == "pending" %}⏱{% elif card.status == "cancelled" %}×{% elif card.status == "no_show" %}!{% else %}•{% endif %}
+                    </span>
 
                     <div class="booking-card__time">
                       {{ card.start_at|time:"H:i" }} – {{ card.end_at|time:"H:i" }}
@@ -156,7 +143,7 @@
 
                     <div class="booking-card__meta">
                       <span>{{ card.employee }}</span>
-                      {% if card.zone %}
+                      {% if card.zone and card.zone != "—" %}
                         <span>{{ card.zone }}</span>
                       {% endif %}
                     </div>
@@ -173,16 +160,119 @@
   </section>
 </section>
 
+<div class="booking-modal" data-booking-modal hidden>
+  <div class="booking-modal__backdrop" data-modal-close></div>
+  <div class="booking-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
+    <div class="booking-modal__head">
+      <div>
+        <span class="booking-modal__eyebrow">Reserva</span>
+        <h2 id="booking-modal-title">Detalles</h2>
+      </div>
+      <button type="button" class="booking-modal__close" aria-label="Cerrar" data-modal-close>×</button>
+    </div>
+
+    <div class="booking-modal__body">
+      <section class="booking-modal__section">
+        <div class="booking-modal__summary">
+          <div>
+            <span class="booking-modal__label">Cliente</span>
+            <strong data-modal-client></strong>
+          </div>
+          <span class="booking-status-badge" data-modal-status-badge>
+            <span class="booking-status-badge__icon" data-modal-status-icon></span>
+            <span data-modal-status-text></span>
+          </span>
+        </div>
+
+        <div class="booking-modal__details">
+          <div>
+            <span class="booking-modal__label">Horario</span>
+            <strong data-modal-time></strong>
+          </div>
+          <div>
+            <span class="booking-modal__label">Servicio</span>
+            <strong data-modal-service></strong>
+          </div>
+          <div>
+            <span class="booking-modal__label">Empleado</span>
+            <strong data-modal-employee></strong>
+          </div>
+        </div>
+
+        <div class="booking-modal__notes" data-modal-notes-wrap hidden>
+          <span class="booking-modal__label">Notas</span>
+          <p data-modal-notes></p>
+        </div>
+      </section>
+
+      <section class="booking-modal__section">
+        <div class="booking-modal__section-head">
+          <h3>Cambiar estado</h3>
+        </div>
+        <div class="booking-status-actions">
+          {% for status_value, status_label in status_choices %}
+            <button type="button" class="booking-status-action" data-status-option="{{ status_value }}">
+              {{ status_label }}
+            </button>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="booking-modal__section">
+        <div class="booking-modal__section-head">
+          <h3>Mover cita</h3>
+        </div>
+        <form class="booking-reschedule-form" data-reschedule-form>
+          <label class="booking-reschedule-form__field">
+            <span>Fecha</span>
+            <input type="date" class="input" name="date" required>
+          </label>
+          <label class="booking-reschedule-form__field">
+            <span>Hora</span>
+            <input type="time" class="input" name="time" step="1800" required>
+          </label>
+          <div class="booking-reschedule-form__actions">
+            <button type="submit" class="btn btn-small">Mover reserva</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="booking-modal__footer">
+      <a href="#" class="btn btn-light btn-small" data-modal-create-next>+ Cita siguiente</a>
+      <a href="#" class="btn btn-light btn-small" data-modal-edit>Editar</a>
+    </div>
+  </div>
+</div>
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   const grids = document.querySelectorAll(".calendar-grid[data-date]");
   const cards = document.querySelectorAll(".booking-card[data-booking-id]");
   const jumpButtons = document.querySelectorAll(".employee-booking-chip[data-target-id]");
+  const modal = document.querySelector("[data-booking-modal]");
+  const modalCloseButtons = document.querySelectorAll("[data-modal-close]");
+  const rescheduleForm = document.querySelector("[data-reschedule-form]");
+  const modalClient = document.querySelector("[data-modal-client]");
+  const modalTime = document.querySelector("[data-modal-time]");
+  const modalService = document.querySelector("[data-modal-service]");
+  const modalEmployee = document.querySelector("[data-modal-employee]");
+  const modalNotes = document.querySelector("[data-modal-notes]");
+  const modalNotesWrap = document.querySelector("[data-modal-notes-wrap]");
+  const modalStatusBadge = document.querySelector("[data-modal-status-badge]");
+  const modalStatusIcon = document.querySelector("[data-modal-status-icon]");
+  const modalStatusText = document.querySelector("[data-modal-status-text]");
+  const modalEdit = document.querySelector("[data-modal-edit]");
+  const modalCreateNext = document.querySelector("[data-modal-create-next]");
+  const statusButtons = document.querySelectorAll("[data-status-option]");
   const rescheduleBase = "{% url 'bookings:reschedule_api' 0 %}".replace("/0/", "/__ID__/");
+  const statusBase = "{% url 'bookings:status_api' 0 %}".replace("/0/", "/__ID__/");
+  const createBase = "{% url 'bookings:create' %}";
   const workStartHour = 9;
   const stepMinutes = 30;
   let draggedCard = null;
   let previewNode = null;
+  let activeCard = null;
 
   function getCookie(name) {
     const cookies = document.cookie ? document.cookie.split(";") : [];
@@ -195,13 +285,22 @@ document.addEventListener("DOMContentLoaded", function () {
     return "";
   }
 
+  function pad(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  function formatDateTimeRange(startValue, endValue) {
+    const start = new Date(startValue);
+    const end = new Date(endValue);
+    return `${pad(start.getDate())}/${pad(start.getMonth() + 1)} ${pad(start.getHours())}:${pad(start.getMinutes())} – ${pad(end.getHours())}:${pad(end.getMinutes())}`;
+  }
+
   function snapDateTime(dateString, minutesFromTop) {
     const snappedMinutes = Math.max(0, Math.round(minutesFromTop / stepMinutes) * stepMinutes);
     const [year, month, day] = dateString.split("-").map(Number);
     const hours = workStartHour + Math.floor(snappedMinutes / 60);
     const minutes = snappedMinutes % 60;
     const date = new Date(year, month - 1, day, hours, minutes);
-    const pad = (value) => String(value).padStart(2, "0");
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
@@ -213,7 +312,6 @@ document.addEventListener("DOMContentLoaded", function () {
   function formatPreviewLabel(dateTimeString, durationMinutes) {
     const start = new Date(dateTimeString);
     const end = new Date(start.getTime() + durationMinutes * 60000);
-    const pad = (value) => String(value).padStart(2, "0");
     return `${pad(start.getHours())}:${pad(start.getMinutes())} - ${pad(end.getHours())}:${pad(end.getMinutes())}`;
   }
 
@@ -251,37 +349,128 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  function openCreateBooking(grid, clientY) {
+    const startAt = snapDateTime(grid.dataset.date, minutesFromGridTop(grid, clientY));
+    const createUrl = new URL(createBase, window.location.origin);
+    createUrl.searchParams.set("start_at", startAt);
+    window.location.href = createUrl.toString();
+  }
+
+  function updateStatusButtons(statusValue) {
+    statusButtons.forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.statusOption === statusValue);
+    });
+  }
+
+  function getStatusSymbol(statusValue) {
+    const symbols = {
+      pending: "⏱",
+      confirmed: "✓",
+      in_progress: "▶",
+      done: "✓",
+      cancelled: "×",
+      no_show: "!"
+    };
+    return symbols[statusValue] || "•";
+  }
+
+  function updateStatusPresentation(card, statusValue, statusLabel) {
+    card.dataset.status = statusValue;
+    card.dataset.statusLabel = statusLabel;
+
+    const cardStatus = card.querySelector(".booking-card__status-mark");
+    if (cardStatus) {
+      cardStatus.dataset.status = statusValue;
+      cardStatus.title = statusLabel;
+      cardStatus.textContent = getStatusSymbol(statusValue);
+    }
+
+    const chip = document.querySelector(`.employee-booking-chip[data-target-id="${card.id}"]`);
+    if (chip) {
+      const chipStatus = chip.querySelector(".booking-status-dot");
+      if (chipStatus) {
+        chipStatus.dataset.status = statusValue;
+        chipStatus.title = statusLabel;
+        chipStatus.textContent = getStatusSymbol(statusValue);
+      }
+    }
+
+    if (activeCard === card) {
+      modalStatusBadge.dataset.status = statusValue;
+      modalStatusIcon.textContent = getStatusSymbol(statusValue);
+      modalStatusText.textContent = statusLabel;
+    }
+  }
+
+  function openBookingModal(card) {
+    activeCard = card;
+    modal.hidden = false;
+    document.body.classList.add("has-booking-modal");
+
+    modalClient.textContent = card.dataset.client;
+    modalTime.textContent = formatDateTimeRange(card.dataset.startAt, card.dataset.endAt);
+    modalService.textContent = card.dataset.service;
+    modalEmployee.textContent = card.dataset.employee;
+    modalStatusBadge.dataset.status = card.dataset.status;
+    modalStatusIcon.textContent = getStatusSymbol(card.dataset.status);
+    modalStatusText.textContent = card.dataset.statusLabel;
+    modalEdit.href = card.dataset.editUrl;
+    modalCreateNext.href = card.dataset.createFromUrl;
+
+    if (card.dataset.notes && card.dataset.notes.trim()) {
+      modalNotes.textContent = card.dataset.notes;
+      modalNotesWrap.hidden = false;
+    } else {
+      modalNotes.textContent = "";
+      modalNotesWrap.hidden = true;
+    }
+
+    rescheduleForm.elements.date.value = card.dataset.rescheduleDate;
+    rescheduleForm.elements.time.value = card.dataset.rescheduleTime;
+    updateStatusButtons(card.dataset.status);
+  }
+
+  function closeBookingModal() {
+    modal.hidden = true;
+    document.body.classList.remove("has-booking-modal");
+    activeCard = null;
+  }
+
+  async function sendJson(url, payload) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCookie("csrftoken"),
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.message || "No se pudo completar la acción.");
+    }
+    return data;
+  }
+
   async function moveBooking(card, grid, clientY) {
     const minutesFromTop = minutesFromGridTop(grid, clientY);
     const startAt = snapDateTime(grid.dataset.date, minutesFromTop);
     const employeeId = card.dataset.employeeId;
     const bookingId = card.dataset.bookingId;
     const clientLabel = card.dataset.client;
-
     const confirmed = window.confirm(`¿Mover la reserva de ${clientLabel} a ${startAt.replace("T", " ")}?`);
+
     if (!confirmed) return;
 
     card.classList.add("is-dragging");
 
     try {
-      const response = await fetch(rescheduleBase.replace("__ID__", bookingId), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": getCookie("csrftoken"),
-          "X-Requested-With": "XMLHttpRequest"
-        },
-        body: JSON.stringify({
-          employee_id: employeeId,
-          start_at: startAt
-        })
+      await sendJson(rescheduleBase.replace("__ID__", bookingId), {
+        employee_id: employeeId,
+        start_at: startAt
       });
-
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.message || "No se pudo mover la reserva.");
-      }
-
       window.location.reload();
     } catch (error) {
       window.alert(error.message);
@@ -291,6 +480,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   cards.forEach((card) => {
+    card.addEventListener("click", function (event) {
+      event.preventDefault();
+      openBookingModal(card);
+    });
+
     card.addEventListener("dragstart", function (event) {
       draggedCard = card;
       card.classList.add("is-dragging");
@@ -307,6 +501,11 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   grids.forEach((grid) => {
+    grid.addEventListener("click", function (event) {
+      if (event.target.closest(".booking-card")) return;
+      openCreateBooking(grid, event.clientY);
+    });
+
     grid.addEventListener("dragover", function (event) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
@@ -316,7 +515,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
-    grid.addEventListener("dragleave", function () {
+    grid.addEventListener("dragleave", function (event) {
       grid.classList.remove("is-drop-target");
       if (event.currentTarget === previewNode?.parentElement) {
         hidePreview();
@@ -339,7 +538,61 @@ document.addEventListener("DOMContentLoaded", function () {
       target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       target.classList.add("is-focused");
       window.setTimeout(() => target.classList.remove("is-focused"), 1400);
+      window.setTimeout(() => openBookingModal(target), 220);
     });
+  });
+
+  statusButtons.forEach((button) => {
+    button.addEventListener("click", async function () {
+      if (!activeCard) return;
+      button.disabled = true;
+      try {
+        const data = await sendJson(
+          statusBase.replace("__ID__", activeCard.dataset.bookingId),
+          { status: button.dataset.statusOption }
+        );
+        updateStatusPresentation(activeCard, data.status, data.status_label);
+        updateStatusButtons(data.status);
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  rescheduleForm.addEventListener("submit", async function (event) {
+    event.preventDefault();
+    if (!activeCard) return;
+
+    const dateValue = rescheduleForm.elements.date.value;
+    const timeValue = rescheduleForm.elements.time.value;
+    if (!dateValue || !timeValue) return;
+
+    const submitButton = rescheduleForm.querySelector("button[type='submit']");
+    submitButton.disabled = true;
+
+    try {
+      await sendJson(rescheduleBase.replace("__ID__", activeCard.dataset.bookingId), {
+        employee_id: activeCard.dataset.employeeId,
+        start_at: `${dateValue}T${timeValue}`
+      });
+      window.location.reload();
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  modalCloseButtons.forEach((button) => {
+    button.addEventListener("click", closeBookingModal);
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !modal.hidden) {
+      closeBookingModal();
+    }
   });
 });
 </script>

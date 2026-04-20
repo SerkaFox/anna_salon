@@ -22,6 +22,7 @@ from .utils import (
     fits_employee_schedule,
     get_bookings_for_day,
     find_available_slots_nearby,
+    is_slot_available,
 )
 
 @login_required
@@ -99,6 +100,8 @@ def client_reward_api(request):
 @login_required
 def booking_create(request):
     from_booking_id = request.GET.get("from_booking")
+    start_at_param = request.GET.get("start_at", "").strip()
+    employee_param = request.GET.get("employee", "").strip()
 
     initial = {}
 
@@ -115,6 +118,23 @@ def booking_create(request):
             "status": Booking.Statuses.CONFIRMED,
             "notes": "",
         }
+
+    if request.method == "GET" and start_at_param:
+        try:
+            start_at = datetime.strptime(start_at_param, "%Y-%m-%dT%H:%M")
+            end_at = start_at + timedelta(minutes=60)
+            initial.update({
+                "start_at": start_at.strftime("%Y-%m-%dT%H:%M"),
+                "end_at": end_at.strftime("%Y-%m-%dT%H:%M"),
+            })
+        except ValueError:
+            pass
+
+    if request.method == "GET" and employee_param:
+        try:
+            initial["employee"] = Employee.objects.get(pk=employee_param, is_active=True)
+        except (Employee.DoesNotExist, ValueError):
+            pass
 
     if request.method == "POST":
         form = BookingForm(request.POST)
@@ -300,7 +320,7 @@ def booking_calendar_day(request):
     except ValueError:
         current_date = today
 
-    visible_days = [current_date - timedelta(days=1), current_date, current_date + timedelta(days=1)]
+    visible_days = [current_date, current_date + timedelta(days=1), current_date + timedelta(days=2)]
     bookings_by_day = {day: list(get_bookings_for_day(day)) for day in visible_days}
     all_bookings = [booking for day in visible_days for booking in bookings_by_day[day]]
     employees_by_id = {}
@@ -313,6 +333,8 @@ def booking_calendar_day(request):
         for booking in bookings_by_day[day]:
             card = booking_layout_data(booking)
             card["target_id"] = f"booking-card-{booking.pk}"
+            card["reschedule_date"] = timezone.localtime(booking.start_at).strftime("%Y-%m-%d")
+            card["reschedule_time"] = timezone.localtime(booking.start_at).strftime("%H:%M")
             day_cards.append(card)
             total_bookings += 1
 
@@ -329,6 +351,8 @@ def booking_calendar_day(request):
                 "time_label": f"{card['start_at'].strftime('%H:%M')} - {card['end_at'].strftime('%H:%M')}",
                 "client": card["client"],
                 "service": card["service"],
+                "status": card["status"],
+                "status_label": card["status_label"],
             })
 
         zone_map = {}
@@ -348,6 +372,7 @@ def booking_calendar_day(request):
             "date": day,
             "is_today": day == today,
             "is_selected": day == current_date,
+            "query_date": day.strftime("%Y-%m-%d"),
             "cards": day_cards,
             "zones": sorted(zone_map.values(), key=lambda item: item["name"]),
         })
@@ -356,6 +381,8 @@ def booking_calendar_day(request):
         employee_agenda_map.values(),
         key=lambda item: (item["employee"].first_name, item["employee"].last_name),
     )
+    for item in employee_agenda:
+        item["bookings_count"] = len(item["bookings"])
 
     context = {
         "active_section": "calendar",
@@ -368,6 +395,7 @@ def booking_calendar_day(request):
         "day_columns": day_columns,
         "employee_agenda": employee_agenda,
         "total_bookings": total_bookings,
+        "status_choices": Booking.Statuses.choices,
     }
     return render(request, "bookings/calendar_day.html", context)
     
@@ -534,4 +562,31 @@ def booking_reschedule_api(request, pk):
             "start_at": card["start_at"].strftime("%Y-%m-%dT%H:%M"),
             "end_at": card["end_at"].strftime("%Y-%m-%dT%H:%M"),
         },
+    })
+
+
+@login_required
+@require_POST
+def booking_status_api(request, pk):
+    booking = get_object_or_404(Booking, pk=pk)
+
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"ok": False, "message": "Payload inválido."}, status=400)
+
+    status_value = payload.get("status")
+    valid_statuses = {value for value, _label in Booking.Statuses.choices}
+
+    if status_value not in valid_statuses:
+        return JsonResponse({"ok": False, "message": "Estado inválido."}, status=400)
+
+    booking.status = status_value
+    booking.save(update_fields=["status", "updated_at"])
+
+    return JsonResponse({
+        "ok": True,
+        "message": "Estado actualizado.",
+        "status": booking.status,
+        "status_label": booking.get_status_display(),
     })
