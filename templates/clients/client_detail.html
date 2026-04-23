@@ -30,7 +30,7 @@
 
   <article class="stat-card">
     <span class="stat-label">Clientes traídos</span>
-    <strong class="stat-value">{{ successful_referrals_count }}</strong>
+    <strong class="stat-value">{{ referred_clients_count }}</strong>
   </article>
 
   <article class="stat-card">
@@ -71,7 +71,10 @@
     <p>
       <strong>Última visita:</strong>
       {% if last_visit %}
-        {{ last_visit.start_at|date:"d/m/Y H:i" }}
+        <a href="{% url 'bookings:update' last_visit.id %}">
+          {{ last_visit.start_at|date:"d/m/Y H:i" }}
+        </a><br>
+        <span class="muted-text">{{ last_visit.service }} · {{ last_visit.employee }}</span>
       {% else %}
         —
       {% endif %}
@@ -79,7 +82,10 @@
     <p>
       <strong>Próxima cita:</strong>
       {% if next_booking %}
-        {{ next_booking.start_at|date:"d/m/Y H:i" }}
+        <a href="{% url 'bookings:update' next_booking.id %}">
+          {{ next_booking.start_at|date:"d/m/Y H:i" }}
+        </a><br>
+        <span class="muted-text">{{ next_booking.service }} · {{ next_booking.employee }}</span>
       {% else %}
         —
       {% endif %}
@@ -122,6 +128,262 @@
       <p class="muted-text">Todavía no hay historial suficiente.</p>
     {% endif %}
   </article>
+</section>
+
+<section class="panel-card">
+  <div class="dashboard-section-head">
+    <div>
+      <h2>Historial visual</h2>
+      <p class="muted-text">Fotos base, antes, después e incidencias guardadas por visita.</p>
+    </div>
+  </div>
+
+  {% if photo_history %}
+    <div class="photo-grid">
+      {% for photo in photo_history %}
+        <article class="photo-card">
+          <button
+            type="button"
+            class="photo-thumb-button"
+            data-photo-open
+            data-photo-url="{% url 'bookings:photo_image' photo.id %}"
+            data-photo-alt="{{ photo.get_photo_type_display }} de {{ client.full_name }}"
+          >
+            <img src="{% url 'bookings:photo_image' photo.id %}" alt="{{ photo.get_photo_type_display }} de {{ client.full_name }}" class="photo-card__image">
+          </button>
+          <div class="photo-card__body">
+            <div class="photo-card__head">
+              <span class="dashboard-badge">{{ photo.get_photo_type_display }}</span>
+              {% if photo.is_key_reference %}
+                <span class="dashboard-badge dashboard-badge--score">Clave</span>
+              {% endif %}
+            </div>
+            <p class="muted-text">
+              <a href="{% url 'bookings:update' photo.booking.id %}">{{ photo.booking.start_at|date:"d/m/Y H:i" }}</a>
+              · {{ photo.booking.service }} · {{ photo.booking.employee }}
+            </p>
+            {% if photo.notes %}
+              <p>{{ photo.notes }}</p>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted-text">Todavía no hay fotos guardadas para este cliente.</p>
+  {% endif %}
+</section>
+
+{% if photo_comparisons %}
+<section class="panel-card">
+  <div class="dashboard-section-head">
+    <div>
+      <h2>Comparativa antes y después</h2>
+      <p class="muted-text">Comparación rápida de la evolución del servicio por visita.</p>
+    </div>
+  </div>
+
+  <div class="dashboard-stack">
+    {% for item in photo_comparisons %}
+      <article class="photo-compare-card">
+        <div class="photo-compare-card__head">
+          <strong><a href="{% url 'bookings:update' item.booking.id %}">{{ item.booking.start_at|date:"d/m/Y H:i" }}</a></strong>
+          <span class="muted-text">{{ item.booking.service }} · {{ item.booking.employee }}</span>
+        </div>
+        <div
+          class="photo-compare photo-compare--clickable"
+          data-compare-open
+          {% if item.before_photo %}data-before-url="{% url 'bookings:photo_image' item.before_photo.id %}" data-before-alt="Antes de {{ client.full_name }}"{% endif %}
+          {% if item.after_photo %}data-after-url="{% url 'bookings:photo_image' item.after_photo.id %}" data-after-alt="Después de {{ client.full_name }}"{% endif %}
+        >
+          <article class="photo-compare__item">
+            <span class="booking-modal__label">Antes</span>
+            {% if item.before_photo %}
+              <img src="{% url 'bookings:photo_image' item.before_photo.id %}" alt="Antes de {{ client.full_name }}" class="photo-compare__image">
+            {% else %}
+              <div class="photo-compare__empty">Sin foto antes</div>
+            {% endif %}
+          </article>
+          <article class="photo-compare__item">
+            <span class="booking-modal__label">Después</span>
+            {% if item.after_photo %}
+              <img src="{% url 'bookings:photo_image' item.after_photo.id %}" alt="Después de {{ client.full_name }}" class="photo-compare__image">
+            {% else %}
+              <div class="photo-compare__empty">Sin foto después</div>
+            {% endif %}
+          </article>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<div class="photo-lightbox" id="client-photo-lightbox" hidden>
+  <div class="photo-lightbox__backdrop" data-photo-lightbox-close></div>
+  <div class="photo-lightbox__dialog">
+    <button type="button" class="photo-lightbox__close" aria-label="Cerrar" data-photo-lightbox-close>×</button>
+    <div class="photo-lightbox__single" data-photo-lightbox-single hidden>
+      <img src="" alt="" data-photo-lightbox-image>
+    </div>
+    <div class="photo-lightbox__compare" data-photo-lightbox-compare hidden>
+      <figure>
+        <figcaption>Antes</figcaption>
+        <img src="" alt="" data-photo-lightbox-before>
+      </figure>
+      <figure>
+        <figcaption>Después</figcaption>
+        <img src="" alt="" data-photo-lightbox-after>
+      </figure>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const lightbox = document.getElementById("client-photo-lightbox");
+  if (!lightbox) return;
+
+  const singleWrap = lightbox.querySelector("[data-photo-lightbox-single]");
+  const compareWrap = lightbox.querySelector("[data-photo-lightbox-compare]");
+  const singleImage = lightbox.querySelector("[data-photo-lightbox-image]");
+  const beforeImage = lightbox.querySelector("[data-photo-lightbox-before]");
+  const afterImage = lightbox.querySelector("[data-photo-lightbox-after]");
+  const closeButtons = lightbox.querySelectorAll("[data-photo-lightbox-close]");
+  let singlePhotoItems = [];
+  let singlePhotoIndex = -1;
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  function closeLightbox() {
+    lightbox.hidden = true;
+    document.body.classList.remove("has-booking-modal");
+    singleWrap.hidden = true;
+    compareWrap.hidden = true;
+    singleImage.src = "";
+    beforeImage.src = "";
+    afterImage.src = "";
+    singlePhotoIndex = -1;
+  }
+
+  function refreshSinglePhoto() {
+    if (singlePhotoIndex < 0 || singlePhotoIndex >= singlePhotoItems.length) {
+      return;
+    }
+    const item = singlePhotoItems[singlePhotoIndex];
+    singleImage.src = item.url;
+    singleImage.alt = item.alt || "";
+  }
+
+  function openSingle(url, altText) {
+    singleImage.src = url;
+    singleImage.alt = altText || "";
+    singleWrap.hidden = false;
+    compareWrap.hidden = true;
+    lightbox.hidden = false;
+    document.body.classList.add("has-booking-modal");
+  }
+
+  function openSingleAt(index) {
+    singlePhotoIndex = index;
+    refreshSinglePhoto();
+    singleWrap.hidden = false;
+    compareWrap.hidden = true;
+    lightbox.hidden = false;
+    document.body.classList.add("has-booking-modal");
+  }
+
+  function openCompare(beforeUrl, beforeAlt, afterUrl, afterAlt) {
+    beforeImage.src = beforeUrl || "";
+    beforeImage.alt = beforeAlt || "Antes";
+    afterImage.src = afterUrl || "";
+    afterImage.alt = afterAlt || "Después";
+    singleWrap.hidden = true;
+    compareWrap.hidden = false;
+    lightbox.hidden = false;
+    document.body.classList.add("has-booking-modal");
+  }
+
+  document.addEventListener("click", function (event) {
+    const singleTrigger = event.target.closest("[data-photo-open]");
+    if (singleTrigger) {
+      singlePhotoItems = Array.from(document.querySelectorAll("[data-photo-open]")).map((node) => ({
+        url: node.dataset.photoUrl,
+        alt: node.dataset.photoAlt || "",
+      }));
+      const triggerIndex = Array.from(document.querySelectorAll("[data-photo-open]")).indexOf(singleTrigger);
+      if (triggerIndex >= 0) {
+        openSingleAt(triggerIndex);
+      } else {
+        openSingle(singleTrigger.dataset.photoUrl, singleTrigger.dataset.photoAlt);
+      }
+      return;
+    }
+
+    const compareTrigger = event.target.closest("[data-compare-open]");
+    if (compareTrigger) {
+      openCompare(
+        compareTrigger.dataset.beforeUrl,
+        compareTrigger.dataset.beforeAlt,
+        compareTrigger.dataset.afterUrl,
+        compareTrigger.dataset.afterAlt
+      );
+    }
+  });
+
+  closeButtons.forEach((button) => button.addEventListener("click", closeLightbox));
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !lightbox.hidden) {
+      closeLightbox();
+    } else if (event.key === "ArrowRight" && !lightbox.hidden && !singleWrap.hidden && singlePhotoItems.length > 1) {
+      singlePhotoIndex = (singlePhotoIndex + 1) % singlePhotoItems.length;
+      refreshSinglePhoto();
+    } else if (event.key === "ArrowLeft" && !lightbox.hidden && !singleWrap.hidden && singlePhotoItems.length > 1) {
+      singlePhotoIndex = (singlePhotoIndex - 1 + singlePhotoItems.length) % singlePhotoItems.length;
+      refreshSinglePhoto();
+    }
+  });
+
+  lightbox.addEventListener("touchstart", function (event) {
+    if (lightbox.hidden || singleWrap.hidden || event.touches.length !== 1) {
+      return;
+    }
+    touchStartX = event.touches[0].clientX;
+    touchStartY = event.touches[0].clientY;
+  }, { passive: true });
+
+  lightbox.addEventListener("touchend", function (event) {
+    if (lightbox.hidden || singleWrap.hidden || event.changedTouches.length !== 1 || singlePhotoItems.length <= 1) {
+      return;
+    }
+    const deltaX = event.changedTouches[0].clientX - touchStartX;
+    const deltaY = event.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(deltaX) < 45 || Math.abs(deltaX) < Math.abs(deltaY)) {
+      return;
+    }
+    if (deltaX < 0) {
+      singlePhotoIndex = (singlePhotoIndex + 1) % singlePhotoItems.length;
+    } else {
+      singlePhotoIndex = (singlePhotoIndex - 1 + singlePhotoItems.length) % singlePhotoItems.length;
+    }
+    refreshSinglePhoto();
+  }, { passive: true });
+});
+</script>
+
+<section class="panel-card referral-tree-card">
+  <div class="referral-tree-card__head">
+    <div>
+      <h2>Pirámide de recomendaciones</h2>
+      <p class="muted-text">Cadena completa de clientes traídos a partir de {{ client.full_name }}.</p>
+    </div>
+  </div>
+
+  <div class="referral-tree">
+    <ul class="referral-tree__root">
+      {% include "clients/_referral_tree_node.html" with node=referral_tree client=client is_root=True %}
+    </ul>
+  </div>
 </section>
 
 <section class="panel-card">

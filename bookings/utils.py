@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, time
 
 from django.utils import timezone
 
+from employees.models import EmployeeTimeBlock
+
 from .models import Booking
 
 
@@ -9,6 +11,19 @@ DEFAULT_WORK_START_HOUR = 9
 DEFAULT_WORK_END_HOUR = 20
 SLOT_STEP_MINUTES = 30
 CALENDAR_DAY_SPAN = 5  # сколько дней показывать сверху
+
+SERVICE_COLOR_PALETTE = [
+    "#f97316",
+    "#14b8a6",
+    "#ec4899",
+    "#8b5cf6",
+    "#22c55e",
+    "#06b6d4",
+    "#f59e0b",
+    "#ef4444",
+    "#84cc16",
+    "#3b82f6",
+]
 
 
 def combine_local(date_obj, time_obj):
@@ -59,6 +74,7 @@ def get_employee_schedule(employee, date_obj):
         "end_at": combine_local(date_obj, shift.end_time),
         "break_start_at": combine_local(date_obj, shift.break_start) if shift.break_start else None,
         "break_end_at": combine_local(date_obj, shift.break_end) if shift.break_end else None,
+        "break_label": getattr(shift, "break_label", "") or "Pausa",
         "label": getattr(shift, "label", "") or getattr(shift, "note", ""),
         "is_override": hasattr(shift, "date"),
         "is_day_off": False,
@@ -84,11 +100,24 @@ def fits_employee_schedule(employee, start_at, end_at):
     if break_start and break_end and overlaps(start_at, end_at, break_start, break_end):
         return False, "La reserva cae dentro de la pausa del empleado."
 
+    for block in get_employee_time_blocks(employee, local_start.date()):
+        block_start = combine_local(local_start.date(), block.start_time)
+        block_end = combine_local(local_start.date(), block.end_time)
+        if overlaps(start_at, end_at, block_start, block_end):
+            label = block.label or "bloqueo horario"
+            return False, f"La reserva cae dentro de un bloqueo del empleado: {label}."
+
     return True, ""
 
 
 def overlaps(start_a, end_a, start_b, end_b):
     return start_a < end_b and end_a > start_b
+
+
+def get_employee_time_blocks(employee, date_obj):
+    return list(
+        employee.time_blocks.filter(date=date_obj).order_by("start_time", "end_time", "pk")
+    )
 
 
 def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking_id=None):
@@ -108,6 +137,16 @@ def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking
     ).exists()
 
     if employee_conflict:
+        return False
+
+    block_conflict = EmployeeTimeBlock.objects.filter(
+        employee=employee,
+        date=timezone.localtime(start_at).date(),
+        start_time__lt=timezone.localtime(end_at).time(),
+        end_time__gt=timezone.localtime(start_at).time(),
+    ).exists()
+
+    if block_conflict:
         return False
 
     if service.requires_zone and zone:
@@ -132,6 +171,7 @@ def find_available_slots_for_day(date_obj, employee, service, zone=None, exclude
     work_end = schedule["end_at"]
     break_start = schedule["break_start_at"]
     break_end = schedule["break_end_at"]
+    time_blocks = get_employee_time_blocks(employee, date_obj)
     duration = timedelta(minutes=service.duration_minutes)
     step = timedelta(minutes=SLOT_STEP_MINUTES)
 
@@ -142,6 +182,19 @@ def find_available_slots_for_day(date_obj, employee, service, zone=None, exclude
         slot_end = current + duration
 
         if break_start and break_end and overlaps(current, slot_end, break_start, break_end):
+            current += step
+            continue
+
+        blocked_by_time_block = any(
+            overlaps(
+                current,
+                slot_end,
+                combine_local(date_obj, item.start_time),
+                combine_local(date_obj, item.end_time),
+            )
+            for item in time_blocks
+        )
+        if blocked_by_time_block:
             current += step
             continue
 
@@ -209,9 +262,34 @@ def get_bookings_for_day(date_obj):
     )
 
 
+def build_time_block_layout_data(block):
+    start_at = combine_local(block.date, block.start_time)
+    end_at = combine_local(block.date, block.end_time)
+    start_minutes = minutes_from_work_start(start_at)
+    duration_minutes = int((end_at - start_at).total_seconds() // 60)
+
+    return {
+        "id": f"time-block-{block.pk}",
+        "pk": block.pk,
+        "employee_id": block.employee_id,
+        "label": block.label or "Bloqueo",
+        "color": block.color or "#111111",
+        "start_at": timezone.localtime(start_at),
+        "end_at": timezone.localtime(end_at),
+        "top": max(start_minutes, 0),
+        "height": max(duration_minutes, 18),
+    }
+
+
 def minutes_from_work_start(dt):
     local_dt = timezone.localtime(dt)
     return (local_dt.hour * 60 + local_dt.minute) - (DEFAULT_WORK_START_HOUR * 60)
+
+
+def service_calendar_color(service_id):
+    if not service_id:
+        return SERVICE_COLOR_PALETTE[0]
+    return SERVICE_COLOR_PALETTE[(service_id - 1) % len(SERVICE_COLOR_PALETTE)]
 
     
 def booking_layout_data(booking):
@@ -227,11 +305,14 @@ def booking_layout_data(booking):
         "employee_color": booking.employee.calendar_color or "#c75c8b",
         "service": str(booking.service),
         "service_id": booking.service_id,
+        "service_color": service_calendar_color(booking.service_id),
         "zone": str(booking.zone) if booking.zone else "—",
         "zone_id": booking.zone_id,
         "zone_color": booking.zone.color if booking.zone else "#d8c7cf",
         "status": booking.status,
         "status_label": booking.get_status_display(),
+        "source": booking.source,
+        "source_label": booking.get_source_display(),
         "notes": booking.notes,
         "start_at": timezone.localtime(booking.start_at),
         "end_at": timezone.localtime(booking.end_at),

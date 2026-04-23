@@ -4,12 +4,27 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from bookings.models import Booking
+from bookings.models import BookingPhoto
 from .forms import ClientForm
 from .models import Client
+
+
+def build_referral_tree(root_client):
+    referred_clients = list(
+        root_client.referred_clients.all().order_by("first_name", "last_name")
+    )
+
+    return {
+        "id": root_client.pk,
+        "name": root_client.full_name or str(root_client),
+        "children": [build_referral_tree(client) for client in referred_clients],
+    }
 
 
 @login_required
@@ -64,6 +79,38 @@ def client_create(request):
 
 
 @login_required
+@require_POST
+def client_create_api(request):
+    form = ClientForm(request.POST)
+    if not form.is_valid():
+        message = "No se pudo crear el cliente."
+        for field_errors in form.errors.values():
+            if field_errors:
+                message = field_errors[0]
+                break
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": message,
+                "errors": form.errors.get_json_data(),
+            },
+            status=400,
+        )
+
+    client = form.save()
+    return JsonResponse(
+        {
+            "ok": True,
+            "client": {
+                "id": client.pk,
+                "name": client.full_name or str(client),
+                "phone": client.phone or "",
+            },
+        }
+    )
+
+
+@login_required
 def client_update(request, pk):
     client = get_object_or_404(Client, pk=pk)
 
@@ -111,19 +158,6 @@ def client_delete(request, pk):
         }
     )
 
-from decimal import Decimal
-
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
-from django.db.models.deletion import ProtectedError
-from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
-
-from bookings.models import Booking
-from .forms import ClientForm
-from .models import Client
-
 
 @login_required
 def client_detail(request, pk):
@@ -132,9 +166,11 @@ def client_detail(request, pk):
     bookings = (
         Booking.objects
         .select_related("employee", "service", "zone")
+        .prefetch_related("photos")
         .filter(client=client)
         .order_by("-start_at")
     )
+    booking_history = list(bookings[:20])
 
     done_bookings = bookings.filter(status=Booking.Statuses.DONE)
 
@@ -172,6 +208,7 @@ def client_detail(request, pk):
     )
 
     referred_clients = client.referred_clients.all().order_by("first_name", "last_name")
+    referred_clients_count = referred_clients.count()
 
     successful_referrals = referred_clients.filter(
         bookings__status=Booking.Statuses.DONE
@@ -182,9 +219,25 @@ def client_detail(request, pk):
     remaining_for_next_reward = 5 - (successful_referrals_count % 5) if successful_referrals_count % 5 else 0
 
     context = {
+        "photo_comparisons": [
+            {
+                "booking": booking,
+                "before_photo": next((photo for photo in booking.photos.all() if photo.photo_type == BookingPhoto.PhotoTypes.BEFORE), None),
+                "after_photo": next((photo for photo in booking.photos.all() if photo.photo_type == BookingPhoto.PhotoTypes.AFTER), None),
+            }
+            for booking in booking_history
+            if any(photo.photo_type == BookingPhoto.PhotoTypes.BEFORE for photo in booking.photos.all())
+            or any(photo.photo_type == BookingPhoto.PhotoTypes.AFTER for photo in booking.photos.all())
+        ][:8],
         "active_section": "clients",
         "client": client,
-        "bookings": bookings[:20],
+        "bookings": booking_history,
+        "photo_history": (
+            BookingPhoto.objects
+            .select_related("booking", "booking__service", "booking__employee", "client")
+            .filter(client=client)
+            .order_by("-created_at")[:24]
+        ),
         "stats": {
             "total_visits": total_visits,
             "total_spent": total_spent,
@@ -197,6 +250,8 @@ def client_detail(request, pk):
         "top_services": top_services,
         "top_employees": top_employees,
         "referred_clients": referred_clients,
+        "referred_clients_count": referred_clients_count,
+        "referral_tree": build_referral_tree(client),
         "successful_referrals_count": successful_referrals_count,
         "available_rewards": available_rewards,
         "remaining_for_next_reward": remaining_for_next_reward,

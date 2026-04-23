@@ -4,7 +4,7 @@ from django.forms import BaseInlineFormSet, inlineformset_factory
 
 from services_app.models import Service
 
-from .models import Employee, EmployeeScheduleOverride, EmployeeWeeklyShift, Weekday
+from .models import Employee, EmployeeScheduleOverride, EmployeeTimeBlock, EmployeeWeeklyShift, Weekday
 
 User = get_user_model()
 
@@ -91,6 +91,29 @@ class BaseScheduleFormSet(BaseInlineFormSet):
                     raise forms.ValidationError("La pausa debe quedar dentro del turno.")
 
 
+class BaseTimeBlockFormSet(BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data") or form.cleaned_data.get("DELETE"):
+                continue
+
+            date_value = form.cleaned_data.get("date")
+            start_time = form.cleaned_data.get("start_time")
+            end_time = form.cleaned_data.get("end_time")
+            label = (form.cleaned_data.get("label") or "").strip()
+
+            if not any([date_value, start_time, end_time, label]):
+                continue
+
+            if not date_value or not start_time or not end_time:
+                raise forms.ValidationError("Cada bloqueo debe tener fecha, hora de inicio y hora de fin.")
+
+            if end_time <= start_time:
+                raise forms.ValidationError("La hora de fin del bloqueo debe ser posterior al inicio.")
+
+
 class WeeklyShiftForm(forms.ModelForm):
     class Meta:
         model = EmployeeWeeklyShift
@@ -126,6 +149,19 @@ class ScheduleOverrideForm(forms.ModelForm):
         }
 
 
+class TimeBlockForm(forms.ModelForm):
+    class Meta:
+        model = EmployeeTimeBlock
+        fields = ["date", "start_time", "end_time", "label", "color"]
+        widgets = {
+            "date": forms.DateInput(attrs={"class": "input", "type": "date"}),
+            "start_time": forms.TimeInput(attrs={"class": "input", "type": "time"}),
+            "end_time": forms.TimeInput(attrs={"class": "input", "type": "time"}),
+            "label": forms.TextInput(attrs={"class": "input", "placeholder": "Comida, médico, descanso, reunión"}),
+            "color": forms.TextInput(attrs={"class": "input", "type": "color"}),
+        }
+
+
 WeeklyShiftFormSet = inlineformset_factory(
     Employee,
     EmployeeWeeklyShift,
@@ -141,5 +177,14 @@ ScheduleOverrideFormSet = inlineformset_factory(
     form=ScheduleOverrideForm,
     formset=BaseScheduleFormSet,
     extra=3,
+    can_delete=True,
+)
+
+TimeBlockFormSet = inlineformset_factory(
+    Employee,
+    EmployeeTimeBlock,
+    form=TimeBlockForm,
+    formset=BaseTimeBlockFormSet,
+    extra=4,
     can_delete=True,
 )

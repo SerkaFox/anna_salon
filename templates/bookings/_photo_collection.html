@@ -1,0 +1,69 @@
+{% if compare_before_photo or compare_after_photo %}
+  <div
+    class="photo-compare photo-compare--clickable"
+    data-compare-open
+    {% if compare_before_photo %}data-before-url="{% url 'bookings:photo_image' compare_before_photo.id %}" data-before-alt="Antes de {{ booking.client }}"{% endif %}
+    {% if compare_after_photo %}data-after-url="{% url 'bookings:photo_image' compare_after_photo.id %}" data-after-alt="Después de {{ booking.client }}"{% endif %}
+  >
+    <article class="photo-compare__item">
+      <span class="booking-modal__label">Antes</span>
+      {% if compare_before_photo %}
+        <img src="{% url 'bookings:photo_image' compare_before_photo.id %}" alt="Antes de {{ booking.client }}" class="photo-compare__image">
+      {% else %}
+        <div class="photo-compare__empty">Sin foto antes</div>
+      {% endif %}
+    </article>
+    <article class="photo-compare__item">
+      <span class="booking-modal__label">Después</span>
+      {% if compare_after_photo %}
+        <img src="{% url 'bookings:photo_image' compare_after_photo.id %}" alt="Después de {{ booking.client }}" class="photo-compare__image">
+      {% else %}
+        <div class="photo-compare__empty">Sin foto después</div>
+      {% endif %}
+    </article>
+  </div>
+{% endif %}
+
+{% if booking_photos %}
+  <div class="photo-grid">
+    {% for photo in booking_photos %}
+      <article class="photo-card">
+        <button
+          type="button"
+          class="photo-thumb-button"
+          data-photo-open
+          data-photo-url="{% url 'bookings:photo_image' photo.id %}"
+          data-photo-alt="{{ photo.get_photo_type_display }} de {{ booking.client }}"
+        >
+          <img src="{% url 'bookings:photo_image' photo.id %}" alt="{{ photo.get_photo_type_display }} de {{ booking.client }}" class="photo-card__image">
+        </button>
+        <div class="photo-card__body">
+          <div class="photo-card__head">
+            <span class="dashboard-badge">{{ photo.get_photo_type_display }}</span>
+            {% if photo.is_key_reference %}
+              <span class="dashboard-badge dashboard-badge--score">Clave</span>
+            {% endif %}
+          </div>
+          <p class="muted-text">{{ photo.created_at|date:"d/m/Y H:i" }}</p>
+          {% if photo.notes %}
+            <p>{{ photo.notes }}</p>
+          {% endif %}
+          <div class="form-actions">
+            <a class="btn btn-light btn-small" href="{% url 'bookings:photo_image' photo.id %}" target="_blank" rel="noopener">Abrir</a>
+            <form
+              method="post"
+              action="{% url 'bookings:photo_delete' booking.id photo.id %}"
+              data-photo-delete-form
+              data-photo-delete-url="{% url 'bookings:photo_delete_api' booking.id photo.id %}"
+            >
+              {% csrf_token %}
+              <button type="submit" class="btn btn-light btn-small">Eliminar</button>
+            </form>
+          </div>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="muted-text">Todavía no hay fotos para esta reserva.</p>
+{% endif %}

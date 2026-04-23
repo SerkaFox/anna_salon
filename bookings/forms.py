@@ -10,7 +10,7 @@ from employees.models import Employee
 from salon.models import Zone
 from services_app.models import Service
 
-from .models import Booking
+from .models import Booking, BookingPhoto
 from .utils import fits_employee_schedule
 
 
@@ -46,6 +46,7 @@ class BookingForm(forms.ModelForm):
             "start_at",
             "end_at",
             "status",
+            "source",
             "notes",
         ]
         widgets = {
@@ -62,6 +63,7 @@ class BookingForm(forms.ModelForm):
                 format="%Y-%m-%dT%H:%M",
             ),
             "status": forms.Select(attrs={"class": "input"}),
+            "source": forms.Select(attrs={"class": "input"}),
             "notes": forms.Textarea(attrs={"class": "textarea", "rows": 5, "placeholder": "Notas internas"}),
         }
 
@@ -256,3 +258,26 @@ class BookingForm(forms.ModelForm):
                 client.save(update_fields=["referral_rewards_used"])
 
         return booking
+
+
+class BookingPhotoForm(forms.ModelForm):
+    class Meta:
+        model = BookingPhoto
+        fields = ["image", "photo_type", "notes", "is_key_reference"]
+        widgets = {
+            "image": forms.FileInput(attrs={"class": "input", "accept": "image/*"}),
+            "photo_type": forms.Select(attrs={"class": "input"}),
+            "notes": forms.Textarea(attrs={"class": "textarea", "rows": 3, "placeholder": "Ej.: uñas debilitadas, posible alergia, foto de control..."}),
+            "is_key_reference": forms.CheckboxInput(attrs={"class": "checkbox"}),
+        }
+
+    def clean_image(self):
+        image = self.cleaned_data.get("image")
+        if not image:
+            raise ValidationError("Selecciona una imagen.")
+
+        content_type = getattr(image, "content_type", "")
+        if content_type and not content_type.startswith("image/"):
+            raise ValidationError("Solo se permiten imágenes.")
+
+        return image

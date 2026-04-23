@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from bookings.models import Booking
 
-from .forms import EmployeeForm, ScheduleOverrideFormSet, WeeklyShiftFormSet
+from .forms import EmployeeForm, WeeklyShiftFormSet
 from .models import Employee, EmployeeWeeklyShift, Weekday
 
 
@@ -31,13 +31,6 @@ def build_weekly_shift_formset(request=None, instance=None):
     elif not getattr(instance, "pk", None):
         kwargs["initial"] = initial
     return WeeklyShiftFormSet(**kwargs)
-
-
-def build_override_formset(request=None, instance=None):
-    kwargs = {"instance": instance, "prefix": "overrides"}
-    if request is not None:
-        kwargs["data"] = request.POST
-    return ScheduleOverrideFormSet(**kwargs)
 
 
 @login_required
@@ -214,26 +207,21 @@ def employee_create(request):
     if request.method == "POST":
         form = EmployeeForm(request.POST, instance=employee)
         weekly_formset = build_weekly_shift_formset(request=request, instance=employee)
-        override_formset = build_override_formset(request=request, instance=employee)
-        if form.is_valid() and weekly_formset.is_valid() and override_formset.is_valid():
+        if form.is_valid() and weekly_formset.is_valid():
             with transaction.atomic():
                 employee = form.save()
                 weekly_formset.instance = employee
                 weekly_formset.save()
-                override_formset.instance = employee
-                override_formset.save()
             messages.success(request, f"Empleado creado: {employee.full_name}")
             return redirect("employees:update", pk=employee.pk)
     else:
         form = EmployeeForm(instance=employee)
         weekly_formset = build_weekly_shift_formset(instance=employee)
-        override_formset = build_override_formset(instance=employee)
 
     context = {
         "active_section": "employees",
         "form": form,
         "weekly_formset": weekly_formset,
-        "override_formset": override_formset,
         "is_edit": False,
     }
     return render(request, "employees/employee_form.html", context)
@@ -247,24 +235,20 @@ def employee_update(request, pk):
     if request.method == "POST":
         form = EmployeeForm(request.POST, instance=employee)
         weekly_formset = build_weekly_shift_formset(request=request, instance=employee)
-        override_formset = build_override_formset(request=request, instance=employee)
-        if form.is_valid() and weekly_formset.is_valid() and override_formset.is_valid():
+        if form.is_valid() and weekly_formset.is_valid():
             with transaction.atomic():
                 employee = form.save()
                 weekly_formset.save()
-                override_formset.save()
             messages.success(request, f"Empleado actualizado: {employee.full_name}")
             return redirect("employees:list")
     else:
         form = EmployeeForm(instance=employee)
         weekly_formset = build_weekly_shift_formset(instance=employee)
-        override_formset = build_override_formset(instance=employee)
 
     context = {
         "active_section": "employees",
         "form": form,
         "weekly_formset": weekly_formset,
-        "override_formset": override_formset,
         "employee": employee,
         "is_edit": True,
     }

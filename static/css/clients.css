@@ -1,4 +1,142 @@
+.referral-tree-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.referral-tree-card__head h2 {
+  margin: 0 0 6px;
+}
+
+.referral-tree-card__head p {
+  margin: 0;
+}
+
+.referral-tree {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.referral-tree__root,
+.referral-tree__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.referral-tree__root {
+  display: flex;
+  justify-content: center;
+}
+
+.referral-tree__children {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 20px;
+  padding-top: 26px;
+}
+
+.referral-tree__children::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 2px;
+  height: 18px;
+  background: rgba(163, 232, 192, 0.34);
+  transform: translateX(-50%);
+}
+
+.referral-tree__item {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  min-width: 180px;
+}
+
+.referral-tree__children > .referral-tree__item::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 2px;
+  height: 18px;
+  background: rgba(163, 232, 192, 0.34);
+  transform: translateX(-50%);
+}
+
+.referral-tree__node {
+  display: grid;
+  gap: 8px;
+  width: min(240px, 100%);
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(164, 232, 193, 0.22);
+  background: linear-gradient(180deg, rgba(231, 255, 239, 0.14), rgba(32, 60, 44, 0.3));
+  box-shadow: 0 16px 40px rgba(6, 19, 12, 0.2);
+  text-align: center;
+}
+
+.referral-tree__node.is-root {
+  background: linear-gradient(180deg, rgba(162, 232, 193, 0.24), rgba(32, 60, 44, 0.36));
+  border-color: rgba(184, 244, 209, 0.36);
+}
+
+.referral-tree__badge {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(132, 223, 175, 0.16);
+  color: #dffbe8;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.referral-tree__name {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.referral-tree__name:hover {
+  color: #f0fff6;
+}
+
+.referral-tree__count {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 @media (max-width: 640px) {
+  .referral-tree__root {
+    justify-content: flex-start;
+  }
+
+  .referral-tree__children {
+    justify-content: flex-start;
+    padding-left: 18px;
+  }
+
+  .referral-tree__children::before {
+    left: 24px;
+  }
+
+  .referral-tree__item,
+  .referral-tree__node {
+    min-width: 0;
+    width: 100%;
+  }
+
   .data-table,
   .data-table thead,
   .data-table tbody,
@@ -19,10 +157,10 @@
   }
 
   .data-table tr {
-    background: rgba(255,255,255,0.92);
+    background: rgba(232, 255, 241, 0.1);
     border: 1px solid var(--line);
     border-radius: 18px;
-    box-shadow: 0 8px 24px rgba(92, 46, 68, 0.08);
+    box-shadow: 0 8px 24px rgba(4, 18, 11, 0.24);
     padding: 14px;
   }
 
@@ -36,7 +174,7 @@
   }
 
   .data-table td + td {
-    border-top: 1px solid rgba(183, 115, 143, 0.12);
+    border-top: 1px solid rgba(171, 228, 195, 0.12);
   }
 
   .data-table td::before {

@@ -37,7 +37,7 @@
       <div class="dashboard-booking-card">
         <strong>
           {{ next_booking.start_at|time:"H:i" }} ·
-          <a href="{% url 'clients:detail' next_booking.client.id %}">
+          <a class="dashboard-link" href="{% url 'clients:detail' next_booking.client.id %}">
             {{ next_booking.client }}
           </a>
         </strong>
@@ -65,12 +65,72 @@
     <h2>Alertas del día</h2>
     <ul class="todo-list">
       <li>Pendientes de confirmar: <strong>{{ alerts.pending_count }}</strong></li>
+      <li>Reservas vencidas sin cerrar: <strong id="dashboard-overdue-alert-count">{{ alerts.overdue_count }}</strong></li>
       <li>Canceladas hoy: <strong>{{ alerts.cancelled_count }}</strong></li>
       <li>No asistió: <strong>{{ alerts.no_show_count }}</strong></li>
       <li>Zonas activas: <strong>{{ zones_count }}</strong></li>
     </ul>
   </article>
 </section>
+
+{% if overdue_bookings %}
+<section class="panel-card" id="dashboard-overdue-section">
+    <div class="dashboard-section-head">
+      <div>
+        <h2>Reservas vencidas</h2>
+        <p class="muted-text">Citas cuyo horario terminó pero siguen abiertas.</p>
+      </div>
+      <span class="dashboard-badge dashboard-badge--warn" id="dashboard-overdue-badge">{{ overdue_bookings_count }}</span>
+    </div>
+
+    {% if overdue_bookings %}
+      <div class="dashboard-stack" id="dashboard-overdue-list">
+        {% for booking in overdue_bookings %}
+          <div class="dashboard-booking-card dashboard-booking-card--warn" data-overdue-booking-card data-booking-id="{{ booking.id }}">
+            <strong>
+              <a class="dashboard-link" href="{% url 'bookings:update' booking.id %}">
+                {{ booking.start_at|date:"d/m H:i" }} - {{ booking.end_at|time:"H:i" }}
+              </a>
+              ·
+              <a class="dashboard-link" href="{% url 'clients:detail' booking.client.id %}">{{ booking.client }}</a>
+            </strong>
+            <p>{{ booking.service }} · {{ booking.employee }}</p>
+            <p class="muted-text">
+              Estado actual: {{ booking.get_status_display }}
+              {% if booking.zone %}· {{ booking.zone }}{% endif %}
+            </p>
+            <div class="dashboard-quick-actions">
+              <button
+                type="button"
+                class="icon-action"
+                title="Marcar como hecha"
+                aria-label="Marcar como hecha"
+                data-status-action
+                data-status-url="{% url 'bookings:status_api' booking.id %}"
+                data-status-value="done"
+              >✓</button>
+              <button
+                type="button"
+                class="icon-action icon-action-danger"
+                title="Marcar como no asistió"
+                aria-label="Marcar como no asistió"
+                data-status-action
+                data-status-url="{% url 'bookings:status_api' booking.id %}"
+                data-status-value="no_show"
+              >×</button>
+              <a class="icon-action" href="{% url 'bookings:update' booking.id %}" title="Abrir reserva" aria-label="Abrir reserva">↗</a>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <p class="muted-text" id="dashboard-overdue-empty" hidden>No hay reservas vencidas pendientes de cerrar.</p>
+    {% endif %}
+</section>
+{% else %}
+<p class="muted-text" id="dashboard-overdue-empty" hidden>No hay reservas vencidas pendientes de cerrar.</p>
+{% endif %}
+
+{% include "dashboard/_client_rankings.html" %}
 
 <section class="content-grid">
   <article class="panel-card">
@@ -93,7 +153,7 @@
               <tr>
                 <td>{{ booking.start_at|time:"H:i" }}</td>
                 <td>
-                  <a href="{% url 'clients:detail' booking.client.id %}">
+                  <a class="dashboard-link" href="{% url 'clients:detail' booking.client.id %}">
                     {{ booking.client }}
                   </a>
                 </td>
@@ -129,7 +189,7 @@
               <tr>
                 <td>{{ booking.start_at|date:"d/m H:i" }}</td>
                 <td>
-                  <a href="{% url 'clients:detail' booking.client.id %}">
+                  <a class="dashboard-link" href="{% url 'clients:detail' booking.client.id %}">
                     {{ booking.client }}
                   </a>
                 </td>
@@ -147,4 +207,111 @@
     {% endif %}
   </article>
 </section>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const overdueSection = document.getElementById("dashboard-overdue-section");
+  const overdueList = document.getElementById("dashboard-overdue-list");
+  const overdueBadge = document.getElementById("dashboard-overdue-badge");
+  const overdueAlertCount = document.getElementById("dashboard-overdue-alert-count");
+  const overdueEmpty = document.getElementById("dashboard-overdue-empty");
+  const rankingsContainerId = "dashboard-client-rankings";
+  const rankingsUrl = "{% url 'dashboard:client_rankings_partial' %}";
+  const csrfToken = "{{ csrf_token }}";
+
+  function updateOverdueCounters(nextCount) {
+    if (overdueBadge) {
+      overdueBadge.textContent = String(nextCount);
+    }
+    if (overdueAlertCount) {
+      overdueAlertCount.textContent = String(nextCount);
+    }
+    if (overdueEmpty) {
+      overdueEmpty.hidden = nextCount !== 0;
+    }
+    if (overdueSection) {
+      overdueSection.hidden = nextCount === 0;
+    }
+  }
+
+  async function applyStatus(button) {
+    if (!button || button.disabled) {
+      return;
+    }
+
+    const card = button.closest("[data-overdue-booking-card]");
+    const url = button.dataset.statusUrl;
+    const statusValue = button.dataset.statusValue;
+
+    if (!card || !url || !statusValue) {
+      return;
+    }
+
+    const siblingButtons = card.querySelectorAll("[data-status-action]");
+    siblingButtons.forEach((item) => {
+      item.disabled = true;
+    });
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken,
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: JSON.stringify({ status: statusValue })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "No se pudo actualizar la reserva.");
+      }
+
+      card.remove();
+
+      const remainingCards = overdueList ? overdueList.querySelectorAll("[data-overdue-booking-card]").length : 0;
+      updateOverdueCounters(remainingCards);
+
+      if (overdueList && remainingCards === 0) {
+        overdueList.remove();
+      }
+
+      try {
+        const rankingsResponse = await fetch(rankingsUrl, {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        });
+        const rankingsData = await rankingsResponse.json();
+
+        if (rankingsResponse.ok && rankingsData.ok && rankingsData.html) {
+          const currentRankings = document.getElementById(rankingsContainerId);
+          if (currentRankings) {
+            currentRankings.outerHTML = rankingsData.html;
+          }
+        }
+      } catch (refreshError) {
+        console.error("Error refreshing client rankings:", refreshError);
+      }
+    } catch (error) {
+      console.error("Error updating overdue booking:", error);
+      siblingButtons.forEach((item) => {
+        item.disabled = false;
+      });
+      window.alert(error.message || "No se pudo actualizar la reserva.");
+    }
+  }
+
+  document.addEventListener("click", function (event) {
+    const statusButton = event.target.closest("[data-status-action]");
+    if (statusButton) {
+      applyStatus(statusButton);
+      return;
+    }
+  });
+
+  updateOverdueCounters(document.querySelectorAll("[data-overdue-booking-card]").length);
+});
+</script>
 {% endblock %}

@@ -1,0 +1,89 @@
+{% extends "panel_base.html" %}
+
+{% block title %}{{ document.number }} | Anna Salon{% endblock %}
+
+{% block panel_title %}{{ document.get_document_type_display }} {{ document.number }}{% endblock %}
+{% block panel_subtitle %}Documento emitido para {{ document.booking.client }}.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'documents:list' %}">Volver</a>
+  {% if document.booking.client.email %}
+    <a class="btn btn-light" href="mailto:{{ document.booking.client.email }}?subject={{ document.get_document_type_display }}%20{{ document.number }}%20Anna%20Salon">Enviar al cliente</a>
+  {% endif %}
+  <a class="btn" href="{% url 'documents:print' document.id %}" target="_blank" rel="noopener">Vista para imprimir</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="content-grid">
+  <article class="panel-card">
+    <h2>Datos del documento</h2>
+    <div class="detail-grid">
+      <span class="muted-text">Número</span>
+      <strong>{{ document.number }}</strong>
+      <span class="muted-text">Tipo</span>
+      <strong>{{ document.get_document_type_display }}</strong>
+      <span class="muted-text">Estado</span>
+      <strong>{{ document.get_status_display }}</strong>
+      <span class="muted-text">Fecha de emisión</span>
+      <strong>{{ document.issue_date|date:"d/m/Y" }}</strong>
+      <span class="muted-text">IVA</span>
+      <strong>{{ document.tax_rate }}%</strong>
+    </div>
+  </article>
+
+  <article class="panel-card">
+    <h2>Cliente</h2>
+    <div class="detail-grid">
+      <span class="muted-text">Nombre</span>
+      <strong>{{ document.booking.client }}</strong>
+      <span class="muted-text">Teléfono</span>
+      <strong>{{ document.booking.client.phone|default:"-" }}</strong>
+      <span class="muted-text">Email</span>
+      <strong>{{ document.booking.client.email|default:"-" }}</strong>
+    </div>
+  </article>
+</section>
+
+<section class="panel-card">
+  <h2>Servicio facturado</h2>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Servicio</th>
+          <th>Empleado</th>
+          <th>Precio original</th>
+          <th>Descuento</th>
+          <th>Total cliente</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ document.booking.start_at|date:"d/m/Y H:i" }}</td>
+          <td>{{ document.booking.service }}</td>
+          <td>{{ document.booking.employee }}</td>
+          <td>{{ document.booking.original_client_price_snapshot }} €</td>
+          <td>{{ document.booking.discount_amount_snapshot }} €</td>
+          <td><strong>{{ document.total_amount }} €</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="stats-grid">
+  <article class="stat-card">
+    <span class="stat-label">Base</span>
+    <strong class="stat-value">{{ document.subtotal_amount }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">IVA</span>
+    <strong class="stat-value">{{ document.tax_amount }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Total</span>
+    <strong class="stat-value">{{ document.total_amount }} €</strong>
+  </article>
+</section>
+{% endblock %}

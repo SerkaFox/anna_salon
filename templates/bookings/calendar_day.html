@@ -3,109 +3,374 @@
 {% block title %}Horario | Anna Salon{% endblock %}
 
 {% block panel_title %}Horario{% endblock %}
-{% block panel_subtitle %}{% endblock %}
+{% block panel_subtitle %}Vista operativa del calendario con modo por días y modo por equipo.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'bookings:availability' %}">Disponibilidad</a>
+  <a class="btn" href="{% url 'bookings:create' %}">+ Nueva reserva</a>
+{% endblock %}
 
 {% block panel_content %}
 <section class="calendar-workspace">
-  <section class="panel-card calendar-agenda calendar-agenda--compact">
-    <div class="calendar-agenda__head">
-      <h2>Reservas por empleado</h2>
-      <span class="calendar-agenda__count">{{ total_bookings }}</span>
+  <section class="panel-card calendar-hero calendar-hero--glass">
+    <div class="calendar-hero__summary">
+      <div class="calendar-hero__eyebrow">Green glass board</div>
+      <div>
+        <h2>{{ current_date|date:"l, d F Y" }}</h2>
+        <p>{{ total_bookings }} reservas visibles. Cambia entre la vista por días y la vista por equipo.</p>
+      </div>
     </div>
 
-    <div class="agenda-employee-grid">
-      {% for agenda in employee_agenda %}
-        <article
-          class="employee-agenda-card"
-          style="--employee-color: {{ agenda.employee.calendar_color|default:'#c75c8b' }};"
+    <div class="calendar-hero__actions">
+      <div class="calendar-view-toggle" aria-label="Modo de calendario">
+        <button
+          type="button"
+          data-calendar-view="days"
+          class="calendar-view-toggle__item {% if calendar_view == 'days' %}is-active{% endif %}"
         >
-          <div class="employee-agenda-card__head">
-            <div class="employee-agenda-card__title">
-              <strong>{{ agenda.employee.full_name }}</strong>
-              <span class="employee-agenda-card__count">{{ agenda.bookings_count }}</span>
-            </div>
-            <a class="employee-agenda-card__edit" href="{% url 'employees:update' agenda.employee.pk %}">
-              Perfil
-            </a>
-          </div>
+          Días
+        </button>
+        <button
+          type="button"
+          data-calendar-view="team"
+          class="calendar-view-toggle__item {% if calendar_view == 'team' %}is-active{% endif %}"
+        >
+          Equipo
+        </button>
+      </div>
 
-          <div class="employee-agenda-card__items">
-            {% for item in agenda.bookings %}
-              <button
-                type="button"
-                class="employee-booking-chip"
-                data-target-id="{{ item.target_id }}"
-              >
-                <span class="employee-booking-chip__time-row">
-                  <span class="employee-booking-chip__time">{{ item.time_label }}</span>
-                  <span class="booking-status-dot" data-status="{{ item.status }}" title="{{ item.status_label }}">
-                    {% if item.status == "done" %}✓{% elif item.status == "in_progress" %}▶{% elif item.status == "confirmed" %}✓{% elif item.status == "pending" %}⏱{% elif item.status == "cancelled" %}×{% elif item.status == "no_show" %}!{% else %}•{% endif %}
-                  </span>
-                </span>
-                <span class="employee-booking-chip__main">{{ item.client }}</span>
-                <span class="employee-booking-chip__service">{{ item.service }}</span>
-                <span class="employee-booking-chip__meta">{{ item.date|date:"D d" }}</span>
-              </button>
-            {% empty %}
-              <div class="employee-booking-empty">Sin reservas</div>
-            {% endfor %}
-          </div>
-        </article>
-      {% empty %}
-        <div class="empty-state">
-          <h2>No hay reservas</h2>
-          <p>No hay reservas visibles en este tramo.</p>
+      <div class="calendar-toolbar-inline">
+        <div class="calendar-toolbar-inline__nav">
+          <a href="?date={{ prev_date|date:'Y-m-d' }}" class="calendar-nav-shortcut btn-icon" aria-label="Dia anterior">←</a>
+          <a href="?date={{ today|date:'Y-m-d' }}" class="calendar-today-shortcut">Hoy</a>
+          <a href="?date={{ next_date|date:'Y-m-d' }}" class="calendar-nav-shortcut btn-icon" aria-label="Dia siguiente">→</a>
         </div>
+
+        <div class="calendar-toolbar-inline__date">
+          <span class="calendar-toolbar-inline__label">Fecha activa</span>
+          <strong>{{ current_date|date:"d/m/Y" }}</strong>
+        </div>
+
+        <div class="calendar-toolbar-inline__actions">
+          <a class="btn btn-light btn-small" href="{% url 'bookings:create' %}?start_at={{ current_date|date:'Y-m-d' }}T09:00">+ Reserva</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section
+    class="panel-card calendar-team-filter-panel {% if calendar_view == 'team' %}is-active{% endif %}"
+    data-team-filter-panel
+  >
+    <div class="calendar-team-filter-panel__head">
+      <strong>Mostrar empleados</strong>
+      <span>Activa una o varias columnas sin recargar.</span>
+    </div>
+    <div class="calendar-team-filter" data-team-filter>
+      {% for item in team_timelines %}
+        <button
+          type="button"
+          class="calendar-team-filter__button"
+          style="--employee-color: {{ item.employee.calendar_color|default:'#c75c8b' }};"
+          data-team-filter-button
+          data-employee-id="{{ item.employee.pk }}"
+          aria-pressed="false"
+        >
+          <span class="calendar-team-filter__dot"></span>
+          <span>{{ item.employee.first_name }}</span>
+          <strong>{{ item.bookings_count }}</strong>
+        </button>
       {% endfor %}
     </div>
   </section>
 
-  <section class="panel-card calendar-shell calendar-shell--wide">
-    <div class="calendar-grid-frame days-count-{{ day_columns|length }}">
-      <div class="calendar-grid-frame__header">
-        <div class="calendar-grid-frame__time-head calendar-grid-frame__time-head--nav">
-          <a href="?date={{ prev_date|date:'Y-m-d' }}" class="calendar-nav-shortcut" aria-label="Dia anterior">←</a>
-          <a href="?date={{ today|date:'Y-m-d' }}" class="calendar-today-shortcut">Hoy</a>
-          <a href="?date={{ next_date|date:'Y-m-d' }}" class="calendar-nav-shortcut" aria-label="Dia siguiente">→</a>
-        </div>
-
-        {% for day in day_columns %}
-          <a
-            href="?date={{ day.query_date }}"
-            class="calendar-grid-frame__day-head calendar-grid-frame__day-link {% if day.is_today %}is-today{% endif %} {% if day.is_selected %}is-selected{% endif %}"
-          >
-            <span>{{ day.date|date:"D" }}</span>
-            <strong>{{ day.date|date:"d/m" }}</strong>
-          </a>
-        {% endfor %}
+  <section
+    class="calendar-view-panel calendar-view-panel--days {% if calendar_view == 'days' %}is-active{% endif %}"
+    data-calendar-panel="days"
+  >
+    <section class="panel-card calendar-agenda calendar-agenda--compact">
+      <div class="calendar-agenda__head">
+        <h2>Reservas por empleado</h2>
+        <span class="calendar-agenda__count">{{ total_bookings }}</span>
       </div>
 
-      <div class="calendar-grid-frame__body">
-        <div class="calendar-time-rail">
-          {% for line in hour_lines %}
-            <div class="calendar-time-rail__label" style="top: {{ line.top }}px;">
-              {{ line.label }}
+      <div class="agenda-employee-grid">
+        {% for agenda in employee_agenda %}
+          <article
+            class="employee-agenda-card"
+            style="--employee-color: {{ agenda.employee.calendar_color|default:'#c75c8b' }};"
+          >
+            <div class="employee-agenda-card__head">
+              <div class="employee-agenda-card__title">
+                <strong>{{ agenda.employee.full_name }}</strong>
+                <span class="employee-agenda-card__count">{{ agenda.bookings_count }}</span>
+              </div>
+              <a class="employee-agenda-card__edit" href="{% url 'employees:update' agenda.employee.pk %}">
+                Perfil
+              </a>
             </div>
+
+            <div class="employee-agenda-card__items">
+              {% for item in agenda.bookings %}
+                <button
+                  type="button"
+                  class="employee-booking-chip"
+                  data-target-id="{{ item.target_id }}"
+                  style="--service-color: {{ item.service_color|default:'#14b8a6' }};"
+                >
+                  <span class="employee-booking-chip__time-row">
+                    <span class="employee-booking-chip__time">{{ item.time_label }}</span>
+                    <span class="booking-status-dot" data-status="{{ item.status }}" title="{{ item.status_label }}">
+                      {% if item.status == "done" %}✓{% elif item.status == "in_progress" %}▶{% elif item.status == "confirmed" %}✓{% elif item.status == "pending" %}⏱{% elif item.status == "cancelled" %}×{% elif item.status == "no_show" %}!{% else %}•{% endif %}
+                    </span>
+                  </span>
+                  <span class="employee-booking-chip__main">{{ item.client }}</span>
+                  <span class="employee-booking-chip__service">{{ item.service }}</span>
+                  <span class="employee-booking-chip__meta">{{ item.date|date:"D d" }}</span>
+                </button>
+              {% empty %}
+                <div class="employee-booking-empty">Sin reservas</div>
+              {% endfor %}
+            </div>
+          </article>
+        {% empty %}
+          <div class="empty-state">
+            <h2>No hay reservas</h2>
+            <p>No hay reservas visibles en este tramo.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel-card calendar-shell calendar-shell--wide">
+      <div class="calendar-grid-frame days-count-{{ day_columns|length }}">
+        <div class="calendar-grid-frame__header">
+          <div class="calendar-grid-frame__time-head calendar-grid-frame__time-head--nav"></div>
+
+          {% for day in day_columns %}
+            <a
+              href="?date={{ day.query_date }}&view=days"
+              class="calendar-grid-frame__day-head calendar-grid-frame__day-link {% if day.is_today %}is-today{% endif %} {% if day.is_selected %}is-selected{% endif %}"
+            >
+              <span>{{ day.date|date:"D" }}</span>
+              <strong>{{ day.date|date:"d/m" }}</strong>
+            </a>
           {% endfor %}
         </div>
 
-        <div class="calendar-days-area days-count-{{ day_columns|length }}">
-          {% for day in day_columns %}
-            <section class="calendar-day-panel">
-              <div class="calendar-grid" data-date="{{ day.date|date:'Y-m-d' }}">
+        <div class="calendar-grid-frame__body">
+          <div class="calendar-time-rail">
+            {% for line in hour_lines %}
+              <div class="calendar-time-rail__label" style="top: {{ line.top }}px;">
+                {{ line.label }}
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="calendar-days-area days-count-{{ day_columns|length }}">
+            {% for day in day_columns %}
+              <section class="calendar-day-panel">
+                <div class="calendar-grid" data-date="{{ day.date|date:'Y-m-d' }}">
                 {% for line in hour_lines %}
                   <div class="calendar-hour-line" style="top: {{ line.top }}px;"></div>
                 {% endfor %}
 
+                {% for block in day.time_blocks %}
+                  <div
+                    class="calendar-time-block"
+                    style="
+                      top: {{ block.top }}px;
+                      height: {{ block.height }}px;
+                      --time-block-color: {{ block.color|default:'#111111' }};
+                    "
+                    data-time-block-id="{{ block.pk }}"
+                    data-employee-id="{{ block.employee_id }}"
+                    data-date="{{ day.date|date:'Y-m-d' }}"
+                    data-start-time="{{ block.start_at|time:'H:i' }}"
+                    data-end-time="{{ block.end_at|time:'H:i' }}"
+                    data-label="{{ block.label }}"
+                    data-color="{{ block.color|default:'#111111' }}"
+                    title="{{ block.label }}"
+                  >
+                    <span>{{ block.label }}</span>
+                    <div class="calendar-time-block__actions" aria-label="Acciones del bloqueo">
+                      <button type="button" data-time-block-edit-inline>Editar</button>
+                      <button type="button" data-time-block-delete-inline>Eliminar</button>
+                    </div>
+                  </div>
+                {% endfor %}
+
                 {% for card in day.cards %}
+                    <a
+                      href="{% url 'bookings:update' card.id %}"
+                      class="booking-card"
+                      draggable="true"
+                      style="
+                        top: {{ card.top }}px;
+                        height: {{ card.height }}px;
+                        --employee-color: {{ card.employee_color|default:'#c75c8b' }};
+                        --service-color: {{ card.service_color|default:'#14b8a6' }};
+                      "
+                      data-booking-id="{{ card.id }}"
+                      data-employee-id="{{ card.employee_id }}"
+                      data-service-id="{{ card.service_id }}"
+                      data-zone-id="{{ card.zone_id|default:'' }}"
+                      data-client="{{ card.client }}"
+                      data-client-id="{{ card.client_id }}"
+                      data-employee="{{ card.employee }}"
+                      data-service="{{ card.service }}"
+                      data-zone="{{ card.zone }}"
+                      data-status="{{ card.status }}"
+                      data-status-label="{{ card.status_label }}"
+                      data-source="{{ card.source }}"
+                      data-source-label="{{ card.source_label }}"
+                      data-notes="{{ card.notes|default_if_none:''|escape }}"
+                      data-target-id="{{ card.target_id }}"
+                      data-start-at="{{ card.start_at|date:'Y-m-d\\TH:i' }}"
+                      data-end-at="{{ card.end_at|date:'Y-m-d\\TH:i' }}"
+                      data-reschedule-date="{{ card.reschedule_date }}"
+                      data-reschedule-time="{{ card.reschedule_time }}"
+                      data-edit-url="{% url 'bookings:update' card.id %}"
+                      data-create-from-url="{% url 'bookings:create' %}?from_booking={{ card.id }}"
+                      id="{{ card.target_id }}"
+                    >
+                      <div class="booking-card__color-strip"></div>
+                      <span class="booking-card__status-mark" data-status="{{ card.status }}" title="{{ card.status_label }}">
+                        {% if card.status == "done" %}✓{% elif card.status == "in_progress" %}▶{% elif card.status == "confirmed" %}✓{% elif card.status == "pending" %}⏱{% elif card.status == "cancelled" %}×{% elif card.status == "no_show" %}!{% else %}•{% endif %}
+                      </span>
+
+                      <div class="booking-card__time">
+                        {{ card.start_at|time:"H:i" }} – {{ card.end_at|time:"H:i" }}
+                      </div>
+
+                      <div class="booking-card__client">{{ card.client }}</div>
+
+                      <div class="booking-card__service">{{ card.service }}</div>
+
+                      <div class="booking-card__meta">
+                        <span>{{ card.employee }}</span>
+                        {% if card.zone and card.zone != "—" %}
+                          <span>{{ card.zone }}</span>
+                        {% endif %}
+                      </div>
+                    </a>
+                  {% empty %}
+                    <div class="calendar-empty">Sin reservas</div>
+                  {% endfor %}
+                </div>
+              </section>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section
+    class="calendar-view-panel calendar-view-panel--team {% if calendar_view == 'team' %}is-active{% endif %}"
+    data-calendar-panel="team"
+  >
+    <section class="panel-card calendar-team-shell">
+      <div class="calendar-team-shell__head">
+        <div>
+          <h2>Equipo del día</h2>
+          <p>Cada columna muestra el turno completo del trabajador y sus reservas en el día seleccionado.</p>
+        </div>
+        <span class="calendar-agenda__count">{{ team_timelines|length }}</span>
+      </div>
+
+      <div class="calendar-team-frame">
+        <div class="calendar-time-rail calendar-time-rail--team">
+          <div class="calendar-time-rail__spacer calendar-time-rail__spacer--team"></div>
+          <div class="calendar-time-rail__labels">
+            {% for line in hour_lines %}
+              <div class="calendar-time-rail__label" style="top: {{ line.top }}px;">
+                {{ line.label }}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="calendar-team-columns">
+          {% for item in team_timelines %}
+            <section class="team-day-column" data-team-column data-employee-id="{{ item.employee.pk }}">
+              <header class="team-day-column__head" style="--employee-color: {{ item.employee.calendar_color|default:'#c75c8b' }};">
+                <div>
+                  <strong>{{ item.employee.full_name }}</strong>
+                  <span>{{ item.schedule_label }}</span>
+                </div>
+                <a href="{% url 'employees:update' item.employee.pk %}">Perfil</a>
+              </header>
+
+              <div class="team-day-grid calendar-grid" data-date="{{ current_date|date:'Y-m-d' }}" data-employee-id="{{ item.employee.pk }}">
+                {% for line in hour_lines %}
+                  <div class="calendar-hour-line" style="top: {{ line.top }}px;"></div>
+                {% endfor %}
+
+                {% if item.schedule_block %}
+                  <div
+                    class="team-shift-block"
+                    style="top: {{ item.schedule_block.top }}px; height: {{ item.schedule_block.height }}px;"
+                  >
+                    <span>Turno</span>
+                  </div>
+                {% else %}
+                  <div class="team-day-off-banner">Libre</div>
+                {% endif %}
+
+                {% if item.break_block %}
+                  <div
+                    class="calendar-time-block calendar-time-block--break"
+                    style="top: {{ item.break_block.top }}px; height: {{ item.break_block.height }}px;"
+                    data-break-block
+                    data-employee-id="{{ item.break_block.employee_id }}"
+                    data-date="{{ item.break_block.date }}"
+                    data-start-time="{{ item.break_block.start_time }}"
+                    data-end-time="{{ item.break_block.end_time }}"
+                    data-label="{{ item.break_block.label }}"
+                  >
+                    <span>{{ item.break_block.label }}</span>
+                    <div class="calendar-time-block__actions" aria-label="Acciones de la pausa">
+                      <button type="button" data-break-edit-inline>Editar</button>
+                      <button type="button" data-break-delete-inline>Eliminar</button>
+                    </div>
+                  </div>
+                {% endif %}
+
+                {% for block in item.time_blocks %}
+                  <div
+                    class="calendar-time-block"
+                    style="
+                      top: {{ block.top }}px;
+                      height: {{ block.height }}px;
+                      --time-block-color: {{ block.color|default:'#111111' }};
+                    "
+                    data-time-block-id="{{ block.pk }}"
+                    data-employee-id="{{ block.employee_id }}"
+                    data-date="{{ current_date|date:'Y-m-d' }}"
+                    data-start-time="{{ block.start_at|time:'H:i' }}"
+                    data-end-time="{{ block.end_at|time:'H:i' }}"
+                    data-label="{{ block.label }}"
+                    data-color="{{ block.color|default:'#111111' }}"
+                    title="{{ block.label }}"
+                  >
+                    <span>{{ block.label }}</span>
+                    <div class="calendar-time-block__actions" aria-label="Acciones del bloqueo">
+                      <button type="button" data-time-block-edit-inline>Editar</button>
+                      <button type="button" data-time-block-delete-inline>Eliminar</button>
+                    </div>
+                  </div>
+                {% endfor %}
+
+                {% for card in item.cards %}
                   <a
                     href="{% url 'bookings:update' card.id %}"
-                    class="booking-card"
-                    draggable="true"
+                    class="booking-card booking-card--team"
                     style="
                       top: {{ card.top }}px;
                       height: {{ card.height }}px;
                       --employee-color: {{ card.employee_color|default:'#c75c8b' }};
+                      --service-color: {{ card.service_color|default:'#14b8a6' }};
                     "
                     data-booking-id="{{ card.id }}"
                     data-employee-id="{{ card.employee_id }}"
@@ -116,9 +381,11 @@
                     data-employee="{{ card.employee }}"
                     data-service="{{ card.service }}"
                     data-zone="{{ card.zone }}"
-                    data-status="{{ card.status }}"
-                    data-status-label="{{ card.status_label }}"
-                    data-notes="{{ card.notes|default_if_none:''|escape }}"
+                      data-status="{{ card.status }}"
+                      data-status-label="{{ card.status_label }}"
+                      data-source="{{ card.source }}"
+                      data-source-label="{{ card.source_label }}"
+                      data-notes="{{ card.notes|default_if_none:''|escape }}"
                     data-target-id="{{ card.target_id }}"
                     data-start-at="{{ card.start_at|date:'Y-m-d\\TH:i' }}"
                     data-end-at="{{ card.end_at|date:'Y-m-d\\TH:i' }}"
@@ -132,31 +399,28 @@
                     <span class="booking-card__status-mark" data-status="{{ card.status }}" title="{{ card.status_label }}">
                       {% if card.status == "done" %}✓{% elif card.status == "in_progress" %}▶{% elif card.status == "confirmed" %}✓{% elif card.status == "pending" %}⏱{% elif card.status == "cancelled" %}×{% elif card.status == "no_show" %}!{% else %}•{% endif %}
                     </span>
-
-                    <div class="booking-card__time">
-                      {{ card.start_at|time:"H:i" }} – {{ card.end_at|time:"H:i" }}
-                    </div>
-
+                    <div class="booking-card__time">{{ card.start_at|time:"H:i" }} – {{ card.end_at|time:"H:i" }}</div>
                     <div class="booking-card__client">{{ card.client }}</div>
-
                     <div class="booking-card__service">{{ card.service }}</div>
-
                     <div class="booking-card__meta">
-                      <span>{{ card.employee }}</span>
                       {% if card.zone and card.zone != "—" %}
                         <span>{{ card.zone }}</span>
+                      {% else %}
+                        <span>Sin zona</span>
                       {% endif %}
                     </div>
                   </a>
-                {% empty %}
-                  <div class="calendar-empty">Sin reservas</div>
                 {% endfor %}
+
+                {% if not item.cards and item.schedule_block %}
+                  <div class="calendar-empty calendar-empty--subtle">Sin reservas</div>
+                {% endif %}
               </div>
             </section>
           {% endfor %}
         </div>
       </div>
-    </div>
+    </section>
   </section>
 </section>
 
@@ -184,7 +448,7 @@
           </span>
         </div>
 
-        <div class="booking-modal__details">
+        <div class="booking-modal__details booking-modal__details--four">
           <div>
             <span class="booking-modal__label">Horario</span>
             <strong data-modal-time></strong>
@@ -196,6 +460,10 @@
           <div>
             <span class="booking-modal__label">Empleado</span>
             <strong data-modal-employee></strong>
+          </div>
+          <div>
+            <span class="booking-modal__label">Origen</span>
+            <strong data-modal-source></strong>
           </div>
         </div>
 
@@ -236,11 +504,170 @@
           </div>
         </form>
       </section>
+
+      <section class="booking-modal__section">
+        <div class="booking-modal__section-head">
+          <h3>Fotos del servicio</h3>
+        </div>
+        <form class="booking-reschedule-form booking-reschedule-form--stack" data-photo-upload-form>
+          <label class="booking-reschedule-form__field">
+            <span>Foto</span>
+            <div class="photo-source-picker">
+              <input type="file" class="photo-source-picker__input" name="image" data-photo-upload-file accept="image/*" required>
+              <input type="file" class="photo-source-picker__input" data-photo-gallery-input accept="image/*">
+              <input type="file" class="photo-source-picker__input" data-photo-camera-input accept="image/*" capture="environment">
+              <div class="photo-source-picker__actions">
+                <button type="button" class="btn btn-light btn-small" data-photo-gallery-button>Galería</button>
+                <button type="button" class="btn btn-light btn-small" data-photo-camera-button>Cámara</button>
+              </div>
+              <div class="booking-hint" data-photo-selected-hint>Elige si quieres usar cámara o galería.</div>
+            </div>
+          </label>
+          <label class="booking-reschedule-form__field">
+            <span>Tipo</span>
+            <select name="photo_type" class="input">
+              <option value="base">Base</option>
+              <option value="before">Antes</option>
+              <option value="after">Después</option>
+              <option value="incident">Incidencia</option>
+              <option value="follow_up">Seguimiento</option>
+            </select>
+          </label>
+          <label class="booking-reschedule-form__field">
+            <span>Notas</span>
+            <textarea name="notes" class="textarea" rows="3" placeholder="Ej.: estado inicial, reacción, resultado..."></textarea>
+          </label>
+          <label class="switch-row">
+            <input type="checkbox" class="checkbox" name="is_key_reference">
+            <span>Marcar como foto clave</span>
+          </label>
+          <div class="booking-reschedule-form__actions">
+            <button type="submit" class="btn btn-small">Subir foto</button>
+          </div>
+        </form>
+        <div class="booking-photo-panel" data-modal-photos-panel>
+          <p class="muted-text">Selecciona una reserva para ver sus fotos.</p>
+        </div>
+      </section>
     </div>
 
     <div class="booking-modal__footer">
       <a href="#" class="btn btn-light btn-small" data-modal-create-next>+ Cita siguiente</a>
+      <button type="button" class="btn btn-light btn-small" data-modal-create-block>+ Bloqueo</button>
       <a href="#" class="btn btn-light btn-small" data-modal-edit>Editar</a>
+    </div>
+  </div>
+</div>
+
+<div class="booking-modal" data-action-modal hidden>
+  <div class="booking-modal__backdrop" data-action-close></div>
+  <div class="booking-modal__dialog booking-modal__dialog--compact" role="dialog" aria-modal="true" aria-labelledby="action-modal-title">
+    <div class="booking-modal__head">
+      <div>
+        <span class="booking-modal__eyebrow">Calendario</span>
+        <h2 id="action-modal-title">¿Qué quieres crear?</h2>
+      </div>
+      <button type="button" class="booking-modal__close" aria-label="Cerrar" data-action-close>×</button>
+    </div>
+    <div class="booking-modal__body">
+      <section class="booking-modal__section booking-choice-grid">
+        <button type="button" class="booking-choice-card" data-action-choice="booking">
+          <strong>Nueva reserva</strong>
+          <span>Crear una cita en este hueco.</span>
+        </button>
+        <button type="button" class="booking-choice-card" data-action-choice="block">
+          <strong>Bloqueo horario</strong>
+          <span>Cerrar este tramo para comida, médico o descanso.</span>
+        </button>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="photo-lightbox" id="calendar-photo-lightbox" hidden>
+  <div class="photo-lightbox__backdrop" data-calendar-photo-lightbox-close></div>
+  <div class="photo-lightbox__dialog">
+    <button type="button" class="photo-lightbox__close" aria-label="Cerrar" data-calendar-photo-lightbox-close>×</button>
+    <div class="photo-lightbox__single" data-calendar-photo-lightbox-single hidden>
+      <img src="" alt="" data-calendar-photo-lightbox-image>
+    </div>
+    <div class="photo-lightbox__compare" data-calendar-photo-lightbox-compare hidden>
+      <figure>
+        <figcaption>Antes</figcaption>
+        <img src="" alt="" data-calendar-photo-lightbox-before>
+      </figure>
+      <figure>
+        <figcaption>Después</figcaption>
+        <img src="" alt="" data-calendar-photo-lightbox-after>
+      </figure>
+    </div>
+  </div>
+</div>
+
+<div class="booking-modal" data-time-block-modal hidden>
+  <div class="booking-modal__backdrop" data-time-block-close></div>
+  <div class="booking-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="time-block-modal-title">
+    <div class="booking-modal__head">
+      <div>
+        <span class="booking-modal__eyebrow" data-time-block-modal-eyebrow>Bloqueo</span>
+        <h2 id="time-block-modal-title" data-time-block-modal-title>Crear bloqueo horario</h2>
+      </div>
+      <button type="button" class="booking-modal__close" aria-label="Cerrar" data-time-block-close>×</button>
+    </div>
+    <div class="booking-modal__body">
+      <section class="booking-modal__section">
+        <form class="booking-reschedule-form booking-reschedule-form--stack" data-time-block-form>
+          <input type="hidden" name="entry_mode" value="time_block">
+          <label class="booking-reschedule-form__field">
+            <span>Empleado</span>
+            <select name="employee_id" class="input" required>
+              <option value="">Selecciona empleado</option>
+              {% for employee in calendar_employees %}
+                <option value="{{ employee.pk }}">{{ employee.full_name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="booking-reschedule-form__field">
+            <span>Fecha</span>
+            <input type="date" class="input" name="date" required>
+          </label>
+          <label class="booking-reschedule-form__field">
+            <span>Inicio</span>
+            <input type="time" class="input" name="start_time" step="300" required>
+          </label>
+          <label class="booking-reschedule-form__field">
+            <span>Fin</span>
+            <input type="time" class="input" name="end_time" step="300" required>
+          </label>
+          <label class="booking-reschedule-form__field">
+            <span data-time-block-label-caption>Tipo</span>
+            <select name="label" class="input">
+              <option value="Comida">Comida</option>
+              <option value="Médico">Médico</option>
+              <option value="Descanso">Descanso</option>
+              <option value="Reunión">Reunión</option>
+              <option value="Bloqueo">Bloqueo</option>
+            </select>
+          </label>
+          <label class="booking-reschedule-form__field" data-time-block-repeat-field>
+            <span>Repetición</span>
+            <select name="repeat_pattern" class="input">
+              <option value="none">Solo este día</option>
+              <option value="daily">Cada día</option>
+              <option value="weekdays">Lunes a viernes</option>
+            </select>
+          </label>
+          <label class="booking-reschedule-form__field" data-time-block-repeat-until-field>
+            <span>Repetir hasta</span>
+            <input type="date" class="input" name="repeat_until">
+          </label>
+          <input type="hidden" name="color" value="#111111">
+          <div class="booking-reschedule-form__actions">
+            <button type="submit" class="btn btn-small" data-time-block-submit>Crear bloqueo</button>
+            <button type="button" class="btn btn-danger btn-small" data-time-block-delete hidden>Eliminar bloqueo</button>
+          </div>
+        </form>
+      </section>
     </div>
   </div>
 </div>
@@ -249,7 +676,12 @@
 document.addEventListener("DOMContentLoaded", function () {
   const grids = document.querySelectorAll(".calendar-grid[data-date]");
   const cards = document.querySelectorAll(".booking-card[data-booking-id]");
+  const timeBlockNodes = document.querySelectorAll(".calendar-time-block[data-time-block-id]");
+  const breakBlockNodes = document.querySelectorAll("[data-break-block]");
   const jumpButtons = document.querySelectorAll(".employee-booking-chip[data-target-id]");
+  const viewToggleButtons = document.querySelectorAll("[data-calendar-view]");
+  const calendarPanels = document.querySelectorAll("[data-calendar-panel]");
+  const teamFilterPanel = document.querySelector("[data-team-filter-panel]");
   const modal = document.querySelector("[data-booking-modal]");
   const modalCloseButtons = document.querySelectorAll("[data-modal-close]");
   const rescheduleForm = document.querySelector("[data-reschedule-form]");
@@ -257,6 +689,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const modalTime = document.querySelector("[data-modal-time]");
   const modalService = document.querySelector("[data-modal-service]");
   const modalEmployee = document.querySelector("[data-modal-employee]");
+  const modalSource = document.querySelector("[data-modal-source]");
   const modalNotes = document.querySelector("[data-modal-notes]");
   const modalNotesWrap = document.querySelector("[data-modal-notes-wrap]");
   const modalStatusBadge = document.querySelector("[data-modal-status-badge]");
@@ -264,15 +697,65 @@ document.addEventListener("DOMContentLoaded", function () {
   const modalStatusText = document.querySelector("[data-modal-status-text]");
   const modalEdit = document.querySelector("[data-modal-edit]");
   const modalCreateNext = document.querySelector("[data-modal-create-next]");
+  const modalCreateBlock = document.querySelector("[data-modal-create-block]");
   const statusButtons = document.querySelectorAll("[data-status-option]");
+  const photoUploadForm = document.querySelector("[data-photo-upload-form]");
+  const modalPhotosPanel = document.querySelector("[data-modal-photos-panel]");
+  const photoUploadFileInput = document.querySelector("[data-photo-upload-file]");
+  const photoGalleryInput = document.querySelector("[data-photo-gallery-input]");
+  const photoCameraInput = document.querySelector("[data-photo-camera-input]");
+  const photoGalleryButton = document.querySelector("[data-photo-gallery-button]");
+  const photoCameraButton = document.querySelector("[data-photo-camera-button]");
+  const photoSelectedHint = document.querySelector("[data-photo-selected-hint]");
+  const calendarPhotoLightbox = document.getElementById("calendar-photo-lightbox");
+  const calendarPhotoLightboxSingle = document.querySelector("[data-calendar-photo-lightbox-single]");
+  const calendarPhotoLightboxCompare = document.querySelector("[data-calendar-photo-lightbox-compare]");
+  const calendarPhotoLightboxImage = document.querySelector("[data-calendar-photo-lightbox-image]");
+  const calendarPhotoLightboxBefore = document.querySelector("[data-calendar-photo-lightbox-before]");
+  const calendarPhotoLightboxAfter = document.querySelector("[data-calendar-photo-lightbox-after]");
+  const calendarPhotoLightboxCloseButtons = document.querySelectorAll("[data-calendar-photo-lightbox-close]");
+  let calendarPhotoItems = [];
+  let calendarPhotoIndex = -1;
+  let calendarTouchStartX = 0;
+  let calendarTouchStartY = 0;
+  const actionModal = document.querySelector("[data-action-modal]");
+  const actionChoiceButtons = document.querySelectorAll("[data-action-choice]");
+  const actionCloseButtons = document.querySelectorAll("[data-action-close]");
+  const timeBlockModal = document.querySelector("[data-time-block-modal]");
+  const timeBlockForm = document.querySelector("[data-time-block-form]");
+  const timeBlockCloseButtons = document.querySelectorAll("[data-time-block-close]");
+  const timeBlockModalTitle = document.querySelector("[data-time-block-modal-title]");
+  const timeBlockModalEyebrow = document.querySelector("[data-time-block-modal-eyebrow]");
+  const timeBlockDeleteButton = document.querySelector("[data-time-block-delete]");
+  const timeBlockSubmitButton = document.querySelector("[data-time-block-submit]");
+  const timeBlockLabelCaption = document.querySelector("[data-time-block-label-caption]");
+  const timeBlockRepeatField = document.querySelector("[data-time-block-repeat-field]");
+  const timeBlockRepeatUntilField = document.querySelector("[data-time-block-repeat-until-field]");
+  const teamFilterButtons = document.querySelectorAll("[data-team-filter-button]");
+  const teamColumns = document.querySelectorAll("[data-team-column]");
   const rescheduleBase = "{% url 'bookings:reschedule_api' 0 %}".replace("/0/", "/__ID__/");
   const statusBase = "{% url 'bookings:status_api' 0 %}".replace("/0/", "/__ID__/");
+  const photosPartialBase = "{% url 'bookings:photos_partial_api' 0 %}".replace("/0/", "/__ID__/");
+  const photoUploadBase = "{% url 'bookings:photo_upload_api' 0 %}".replace("/0/", "/__ID__/");
+  const timeBlockCreateUrl = "{% url 'bookings:time_block_create_api' %}";
+  const timeBlockUpdateBase = "{% url 'bookings:time_block_update_api' 0 %}".replace("/0/", "/__ID__/");
+  const timeBlockDeleteBase = "{% url 'bookings:time_block_delete_api' 0 %}".replace("/0/", "/__ID__/");
+  const breakUpdateUrl = "{% url 'bookings:break_update_api' %}";
   const createBase = "{% url 'bookings:create' %}";
   const workStartHour = 9;
   const stepMinutes = 30;
   let draggedCard = null;
   let previewNode = null;
   let activeCard = null;
+  let touchDragCard = null;
+  let touchDragGrid = null;
+  let touchDragging = false;
+  let touchPressTimer = null;
+  let touchStartPoint = null;
+  let suppressCardClick = false;
+  let pendingGridAction = null;
+  let editingTimeBlockId = null;
+  const teamFilterStorageKey = "anna-calendar-team-filter";
 
   function getCookie(name) {
     const cookies = document.cookie ? document.cookie.split(";") : [];
@@ -315,6 +798,72 @@ document.addEventListener("DOMContentLoaded", function () {
     return `${pad(start.getHours())}:${pad(start.getMinutes())} - ${pad(end.getHours())}:${pad(end.getMinutes())}`;
   }
 
+  function setPhotoFile(targetInput, sourceInput, hintNode) {
+    if (!targetInput || !sourceInput || !sourceInput.files || !sourceInput.files.length) {
+      return;
+    }
+
+    const transfer = new DataTransfer();
+    transfer.items.add(sourceInput.files[0]);
+    targetInput.files = transfer.files;
+
+    if (hintNode) {
+      hintNode.textContent = `Seleccionada: ${sourceInput.files[0].name}`;
+    }
+  }
+
+  function closeCalendarPhotoLightbox() {
+    if (!calendarPhotoLightbox) return;
+    calendarPhotoLightbox.hidden = true;
+    calendarPhotoLightboxSingle.hidden = true;
+    calendarPhotoLightboxCompare.hidden = true;
+    calendarPhotoLightboxImage.src = "";
+    calendarPhotoLightboxBefore.src = "";
+    calendarPhotoLightboxAfter.src = "";
+    calendarPhotoIndex = -1;
+    document.body.classList.remove("has-booking-modal");
+  }
+
+  function refreshCalendarSinglePhoto() {
+    if (calendarPhotoIndex < 0 || calendarPhotoIndex >= calendarPhotoItems.length) {
+      return;
+    }
+    const item = calendarPhotoItems[calendarPhotoIndex];
+    calendarPhotoLightboxImage.src = item.url;
+    calendarPhotoLightboxImage.alt = item.alt || "";
+  }
+
+  function openCalendarPhotoSingle(url, altText) {
+    if (!calendarPhotoLightbox) return;
+    calendarPhotoLightboxImage.src = url;
+    calendarPhotoLightboxImage.alt = altText || "";
+    calendarPhotoLightboxSingle.hidden = false;
+    calendarPhotoLightboxCompare.hidden = true;
+    calendarPhotoLightbox.hidden = false;
+    document.body.classList.add("has-booking-modal");
+  }
+
+  function openCalendarPhotoSingleAt(index) {
+    calendarPhotoIndex = index;
+    refreshCalendarSinglePhoto();
+    calendarPhotoLightboxSingle.hidden = false;
+    calendarPhotoLightboxCompare.hidden = true;
+    calendarPhotoLightbox.hidden = false;
+    document.body.classList.add("has-booking-modal");
+  }
+
+  function openCalendarPhotoCompare(beforeUrl, beforeAlt, afterUrl, afterAlt) {
+    if (!calendarPhotoLightbox) return;
+    calendarPhotoLightboxBefore.src = beforeUrl || "";
+    calendarPhotoLightboxBefore.alt = beforeAlt || "Antes";
+    calendarPhotoLightboxAfter.src = afterUrl || "";
+    calendarPhotoLightboxAfter.alt = afterAlt || "Después";
+    calendarPhotoLightboxSingle.hidden = true;
+    calendarPhotoLightboxCompare.hidden = false;
+    calendarPhotoLightbox.hidden = false;
+    document.body.classList.add("has-booking-modal");
+  }
+
   function ensurePreviewNode() {
     if (previewNode) return previewNode;
     previewNode = document.createElement("div");
@@ -349,11 +898,187 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+  function activateCalendarView(viewName) {
+    calendarPanels.forEach((panel) => {
+      panel.classList.toggle("is-active", panel.dataset.calendarPanel === viewName);
+    });
+
+    if (teamFilterPanel) {
+      teamFilterPanel.classList.toggle("is-active", viewName === "team");
+    }
+
+    viewToggleButtons.forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.calendarView === viewName);
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset.calendarView === viewName ? "true" : "false"
+      );
+    });
+
+    window.localStorage.setItem("anna-calendar-view", viewName);
+  }
+
+  function getStoredTeamEmployeeIds() {
+    const rawValue = window.localStorage.getItem(teamFilterStorageKey);
+    if (rawValue === null) {
+      return null;
+    }
+    try {
+      const stored = JSON.parse(rawValue);
+      if (Array.isArray(stored)) {
+        return stored.map(String);
+      }
+    } catch (error) {
+      return null;
+    }
+    return null;
+  }
+
+  function setStoredTeamEmployeeIds(employeeIds) {
+    window.localStorage.setItem(teamFilterStorageKey, JSON.stringify(employeeIds));
+  }
+
+  function applyTeamFilter(employeeIds) {
+    const activeIds = new Set(employeeIds.map(String));
+
+    teamFilterButtons.forEach((button) => {
+      const isActive = activeIds.has(button.dataset.employeeId);
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+
+    teamColumns.forEach((column) => {
+      column.classList.toggle("is-hidden", !activeIds.has(column.dataset.employeeId));
+    });
+  }
+
+  function initializeTeamFilter() {
+    if (!teamFilterButtons.length) return;
+    const storedIds = getStoredTeamEmployeeIds();
+    let selectedIds = Array.isArray(storedIds) ? storedIds.filter((employeeId) => (
+      Array.from(teamFilterButtons).some((button) => button.dataset.employeeId === employeeId)
+    )) : [];
+
+    if (storedIds === null) {
+      selectedIds = Array.from(teamFilterButtons).slice(0, 3).map((button) => button.dataset.employeeId);
+    }
+
+    applyTeamFilter(selectedIds);
+  }
+
+  function clearDropTargets() {
+    grids.forEach((grid) => grid.classList.remove("is-drop-target"));
+  }
+
+  function gridFromPoint(clientX, clientY) {
+    const element = document.elementFromPoint(clientX, clientY);
+    return element ? element.closest(".calendar-grid[data-date]") : null;
+  }
+
+  function cancelTouchPressTimer() {
+    if (touchPressTimer) {
+      window.clearTimeout(touchPressTimer);
+      touchPressTimer = null;
+    }
+  }
+
+  function finishTouchDrag() {
+    cancelTouchPressTimer();
+    touchDragCard?.classList.remove("is-dragging");
+    touchDragCard = null;
+    touchDragging = false;
+    touchStartPoint = null;
+    touchDragGrid = null;
+    clearDropTargets();
+    hidePreview();
+  }
+
   function openCreateBooking(grid, clientY) {
     const startAt = snapDateTime(grid.dataset.date, minutesFromGridTop(grid, clientY));
     const createUrl = new URL(createBase, window.location.origin);
     createUrl.searchParams.set("start_at", startAt);
+    if (grid.dataset.employeeId) {
+      createUrl.searchParams.set("employee", grid.dataset.employeeId);
+    }
     window.location.href = createUrl.toString();
+  }
+
+  function closeActionModal() {
+    actionModal.hidden = true;
+    pendingGridAction = null;
+  }
+
+  function openActionModal(grid, clientY) {
+    pendingGridAction = {
+      grid,
+      clientY,
+      startAt: snapDateTime(grid.dataset.date, minutesFromGridTop(grid, clientY)),
+    };
+    actionModal.hidden = false;
+  }
+
+  function openTimeBlockModal(options = {}) {
+    const startDate = options.startAt ? new Date(options.startAt) : null;
+    const endDate = options.endAt ? new Date(options.endAt) : null;
+    const employeeId = options.employeeId || "";
+    const entryMode = options.entryMode || "time_block";
+    const isBreakMode = entryMode === "break";
+
+    timeBlockForm.reset();
+    timeBlockForm.elements.entry_mode.value = entryMode;
+    timeBlockForm.elements.employee_id.value = employeeId;
+    timeBlockForm.elements.color.value = "#111111";
+    editingTimeBlockId = isBreakMode ? null : (options.timeBlockId || null);
+    timeBlockModalEyebrow.textContent = isBreakMode ? "Pausa" : "Bloqueo";
+    timeBlockModalTitle.textContent = isBreakMode
+      ? "Editar pausa del día"
+      : (editingTimeBlockId ? "Editar bloqueo horario" : "Crear bloqueo horario");
+    timeBlockDeleteButton.hidden = isBreakMode ? false : !editingTimeBlockId;
+    if (timeBlockSubmitButton) {
+      timeBlockSubmitButton.textContent = isBreakMode
+        ? "Guardar pausa"
+        : (editingTimeBlockId ? "Guardar bloqueo" : "Crear bloqueo");
+    }
+    if (timeBlockDeleteButton) {
+      timeBlockDeleteButton.textContent = isBreakMode ? "Eliminar pausa" : "Eliminar bloqueo";
+    }
+    if (timeBlockLabelCaption) {
+      timeBlockLabelCaption.textContent = isBreakMode ? "Motivo" : "Tipo";
+    }
+    if (timeBlockRepeatField) {
+      timeBlockRepeatField.hidden = isBreakMode || Boolean(editingTimeBlockId);
+    }
+    if (timeBlockRepeatUntilField) {
+      timeBlockRepeatUntilField.hidden = isBreakMode || Boolean(editingTimeBlockId);
+    }
+    if (timeBlockForm.elements.label) {
+      timeBlockForm.elements.label.disabled = false;
+    }
+
+    if (startDate) {
+      timeBlockForm.elements.date.value = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
+      timeBlockForm.elements.start_time.value = `${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
+    }
+    if (endDate) {
+      timeBlockForm.elements.end_time.value = `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`;
+    }
+    if (options.label) {
+      timeBlockForm.elements.label.value = options.label;
+    }
+    if (options.color) {
+      timeBlockForm.elements.color.value = options.color;
+    }
+    if (isBreakMode) {
+      timeBlockForm.elements.label.value = options.label || "Pausa";
+      timeBlockForm.elements.color.value = "#2f2f2f";
+    }
+
+    timeBlockModal.hidden = false;
+  }
+
+  function closeTimeBlockModal() {
+    timeBlockModal.hidden = true;
+    editingTimeBlockId = null;
   }
 
   function updateStatusButtons(statusValue) {
@@ -411,6 +1136,7 @@ document.addEventListener("DOMContentLoaded", function () {
     modalTime.textContent = formatDateTimeRange(card.dataset.startAt, card.dataset.endAt);
     modalService.textContent = card.dataset.service;
     modalEmployee.textContent = card.dataset.employee;
+    modalSource.textContent = card.dataset.sourceLabel || "Manual";
     modalStatusBadge.dataset.status = card.dataset.status;
     modalStatusIcon.textContent = getStatusSymbol(card.dataset.status);
     modalStatusText.textContent = card.dataset.statusLabel;
@@ -428,12 +1154,43 @@ document.addEventListener("DOMContentLoaded", function () {
     rescheduleForm.elements.date.value = card.dataset.rescheduleDate;
     rescheduleForm.elements.time.value = card.dataset.rescheduleTime;
     updateStatusButtons(card.dataset.status);
+    if (photoUploadForm) {
+      photoUploadForm.reset();
+      if (photoSelectedHint) {
+        photoSelectedHint.textContent = "Elige si quieres usar cámara o galería.";
+      }
+    }
+    loadBookingPhotos(card.dataset.bookingId);
   }
 
   function closeBookingModal() {
     modal.hidden = true;
     document.body.classList.remove("has-booking-modal");
     activeCard = null;
+  }
+
+  async function loadBookingPhotos(bookingId) {
+    if (!modalPhotosPanel || !bookingId) {
+      return;
+    }
+
+    modalPhotosPanel.innerHTML = '<p class="muted-text">Cargando fotos...</p>';
+
+    try {
+      const response = await fetch(photosPartialBase.replace("__ID__", bookingId), {
+        headers: {
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "No se pudieron cargar las fotos.");
+      }
+      modalPhotosPanel.innerHTML = data.html;
+    } catch (error) {
+      console.error("Error loading booking photos:", error);
+      modalPhotosPanel.innerHTML = '<p class="muted-text">No se pudieron cargar las fotos.</p>';
+    }
   }
 
   async function sendJson(url, payload) {
@@ -457,7 +1214,7 @@ document.addEventListener("DOMContentLoaded", function () {
   async function moveBooking(card, grid, clientY) {
     const minutesFromTop = minutesFromGridTop(grid, clientY);
     const startAt = snapDateTime(grid.dataset.date, minutesFromTop);
-    const employeeId = card.dataset.employeeId;
+    const employeeId = grid.dataset.employeeId || card.dataset.employeeId;
     const bookingId = card.dataset.bookingId;
     const clientLabel = card.dataset.client;
     const confirmed = window.confirm(`¿Mover la reserva de ${clientLabel} a ${startAt.replace("T", " ")}?`);
@@ -481,8 +1238,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
   cards.forEach((card) => {
     card.addEventListener("click", function (event) {
+      if (suppressCardClick) {
+        event.preventDefault();
+        suppressCardClick = false;
+        return;
+      }
       event.preventDefault();
       openBookingModal(card);
+    });
+
+    card.addEventListener("contextmenu", function (event) {
+      event.preventDefault();
     });
 
     card.addEventListener("dragstart", function (event) {
@@ -495,15 +1261,110 @@ document.addEventListener("DOMContentLoaded", function () {
     card.addEventListener("dragend", function () {
       card.classList.remove("is-dragging");
       draggedCard = null;
-      grids.forEach((grid) => grid.classList.remove("is-drop-target"));
+      clearDropTargets();
       hidePreview();
+    });
+
+    card.addEventListener("touchstart", function (event) {
+      if (event.touches.length !== 1) return;
+      event.preventDefault();
+
+      const touch = event.touches[0];
+      touchStartPoint = { x: touch.clientX, y: touch.clientY };
+      touchDragCard = card;
+      touchDragging = false;
+
+      cancelTouchPressTimer();
+      touchPressTimer = window.setTimeout(() => {
+        touchDragging = true;
+        suppressCardClick = true;
+        card.classList.add("is-dragging");
+        if (navigator.vibrate) {
+          navigator.vibrate(35);
+        }
+        const grid = gridFromPoint(touch.clientX, touch.clientY);
+        if (grid) {
+          touchDragGrid = grid;
+          grid.classList.add("is-drop-target");
+          showPreview(grid, card, touch.clientY);
+        }
+      }, 260);
+    }, { passive: false });
+
+    card.addEventListener("touchmove", function (event) {
+      if (!touchDragCard || touchDragCard !== card || event.touches.length !== 1) return;
+
+      const touch = event.touches[0];
+
+      if (!touchDragging && touchStartPoint) {
+        const moveX = Math.abs(touch.clientX - touchStartPoint.x);
+        const moveY = Math.abs(touch.clientY - touchStartPoint.y);
+        if (moveX > 10 || moveY > 10) {
+          cancelTouchPressTimer();
+        }
+        return;
+      }
+
+      event.preventDefault();
+      clearDropTargets();
+      const grid = gridFromPoint(touch.clientX, touch.clientY);
+      touchDragGrid = grid;
+
+      if (grid) {
+        grid.classList.add("is-drop-target");
+        showPreview(grid, card, touch.clientY);
+      } else {
+        hidePreview();
+      }
+    }, { passive: false });
+
+    card.addEventListener("touchend", async function (event) {
+      if (!touchDragCard || touchDragCard !== card) {
+        cancelTouchPressTimer();
+        return;
+      }
+
+      cancelTouchPressTimer();
+
+      if (!touchDragging) {
+        suppressCardClick = true;
+        window.setTimeout(() => {
+          suppressCardClick = false;
+        }, 320);
+        if (touchStartPoint) {
+          const changedTouch = event.changedTouches[0];
+          const moveX = Math.abs(changedTouch.clientX - touchStartPoint.x);
+          const moveY = Math.abs(changedTouch.clientY - touchStartPoint.y);
+          if (moveX < 10 && moveY < 10) {
+            openBookingModal(card);
+          }
+        }
+        touchDragCard = null;
+        touchStartPoint = null;
+        return;
+      }
+
+      event.preventDefault();
+      const changedTouch = event.changedTouches[0];
+      const grid = touchDragGrid || gridFromPoint(changedTouch.clientX, changedTouch.clientY);
+
+      if (grid) {
+        suppressCardClick = true;
+        await moveBooking(card, grid, changedTouch.clientY);
+      }
+
+      finishTouchDrag();
+    }, { passive: false });
+
+    card.addEventListener("touchcancel", function () {
+      finishTouchDrag();
     });
   });
 
   grids.forEach((grid) => {
     grid.addEventListener("click", function (event) {
-      if (event.target.closest(".booking-card")) return;
-      openCreateBooking(grid, event.clientY);
+      if (event.target.closest(".booking-card") || event.target.closest(".calendar-time-block")) return;
+      openActionModal(grid, event.clientY);
     });
 
     grid.addEventListener("dragover", function (event) {
@@ -541,6 +1402,208 @@ document.addEventListener("DOMContentLoaded", function () {
       window.setTimeout(() => openBookingModal(target), 220);
     });
   });
+
+  actionChoiceButtons.forEach((button) => {
+    button.addEventListener("click", function () {
+      if (!pendingGridAction) return;
+      const { grid, clientY, startAt } = pendingGridAction;
+      closeActionModal();
+      if (button.dataset.actionChoice === "booking") {
+        openCreateBooking(grid, clientY);
+        return;
+      }
+
+      const start = new Date(startAt);
+      const end = new Date(start.getTime() + 60 * 60000);
+      openTimeBlockModal({
+        employeeId: grid.dataset.employeeId || "",
+        startAt,
+        endAt: `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`,
+      });
+    });
+  });
+
+  actionCloseButtons.forEach((button) => {
+    button.addEventListener("click", closeActionModal);
+  });
+
+  viewToggleButtons.forEach((button) => {
+    button.addEventListener("click", function () {
+      activateCalendarView(button.dataset.calendarView);
+    });
+  });
+
+  teamFilterButtons.forEach((button) => {
+    button.addEventListener("click", function () {
+      const selectedIds = Array.from(teamFilterButtons)
+        .filter((item) => item.classList.contains("is-active"))
+        .map((item) => item.dataset.employeeId);
+      const targetId = button.dataset.employeeId;
+      const nextIds = selectedIds.includes(targetId)
+        ? selectedIds.filter((employeeId) => employeeId !== targetId)
+        : [...selectedIds, targetId];
+
+      setStoredTeamEmployeeIds(nextIds);
+      applyTeamFilter(nextIds);
+    });
+  });
+
+  if (modalCreateBlock) {
+    modalCreateBlock.addEventListener("click", function () {
+      if (!activeCard) return;
+      closeBookingModal();
+      openTimeBlockModal({
+        employeeId: activeCard.dataset.employeeId,
+        startAt: activeCard.dataset.startAt,
+        endAt: activeCard.dataset.endAt,
+      });
+    });
+  }
+
+  timeBlockCloseButtons.forEach((button) => {
+    button.addEventListener("click", closeTimeBlockModal);
+  });
+
+  timeBlockNodes.forEach((node) => {
+    async function deleteTimeBlockFromNode() {
+      if (!window.confirm("¿Eliminar este bloqueo?")) return;
+
+      try {
+        await sendJson(timeBlockDeleteBase.replace("__ID__", node.dataset.timeBlockId), {});
+        window.location.reload();
+      } catch (error) {
+        window.alert(error.message);
+      }
+    }
+
+    node.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.target.closest("[data-time-block-delete-inline]")) {
+        deleteTimeBlockFromNode();
+        return;
+      }
+
+      openTimeBlockModal({
+        timeBlockId: node.dataset.timeBlockId,
+        entryMode: "time_block",
+        employeeId: node.dataset.employeeId,
+        startAt: `${node.dataset.date}T${node.dataset.startTime}`,
+        endAt: `${node.dataset.date}T${node.dataset.endTime}`,
+        label: node.dataset.label,
+        color: node.dataset.color,
+      });
+    });
+  });
+
+  breakBlockNodes.forEach((node) => {
+    async function deleteBreakFromNode() {
+      if (!window.confirm("¿Eliminar esta pausa solo para este día?")) return;
+
+      try {
+        await sendJson(breakUpdateUrl, {
+          employee_id: node.dataset.employeeId,
+          date: node.dataset.date,
+          clear: true,
+        });
+        window.location.reload();
+      } catch (error) {
+        window.alert(error.message);
+      }
+    }
+
+    node.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.target.closest("[data-break-delete-inline]")) {
+        deleteBreakFromNode();
+        return;
+      }
+
+      openTimeBlockModal({
+        entryMode: "break",
+        employeeId: node.dataset.employeeId,
+        startAt: `${node.dataset.date}T${node.dataset.startTime}`,
+        endAt: `${node.dataset.date}T${node.dataset.endTime}`,
+        label: node.dataset.label || "Pausa",
+        color: "#2f2f2f",
+      });
+    });
+  });
+
+  timeBlockForm.addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const submitButton = timeBlockForm.querySelector("button[type='submit']");
+    submitButton.disabled = true;
+
+    try {
+      const entryMode = timeBlockForm.elements.entry_mode.value || "time_block";
+      const payload = {
+        employee_id: timeBlockForm.elements.employee_id.value,
+        date: timeBlockForm.elements.date.value,
+        start_time: timeBlockForm.elements.start_time.value,
+        end_time: timeBlockForm.elements.end_time.value,
+        label: timeBlockForm.elements.label.value,
+        repeat_pattern: timeBlockForm.elements.repeat_pattern.value,
+        repeat_until: timeBlockForm.elements.repeat_until.value,
+        color: timeBlockForm.elements.color.value,
+      };
+      let targetUrl = timeBlockCreateUrl;
+
+      if (entryMode === "break") {
+        delete payload.repeat_pattern;
+        delete payload.repeat_until;
+        delete payload.color;
+        targetUrl = breakUpdateUrl;
+      } else {
+        targetUrl = editingTimeBlockId
+          ? timeBlockUpdateBase.replace("__ID__", editingTimeBlockId)
+          : timeBlockCreateUrl;
+        if (editingTimeBlockId) {
+          delete payload.repeat_pattern;
+          delete payload.repeat_until;
+        }
+      }
+      await sendJson(targetUrl, payload);
+      window.location.reload();
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  if (timeBlockDeleteButton) {
+    timeBlockDeleteButton.addEventListener("click", async function () {
+      const entryMode = timeBlockForm.elements.entry_mode.value || "time_block";
+      if (entryMode === "break") {
+        if (!window.confirm("¿Eliminar esta pausa solo para este día?")) return;
+      } else {
+        if (!editingTimeBlockId) return;
+        if (!window.confirm("¿Eliminar este bloqueo?")) return;
+      }
+
+      timeBlockDeleteButton.disabled = true;
+      try {
+        if (entryMode === "break") {
+          await sendJson(breakUpdateUrl, {
+            employee_id: timeBlockForm.elements.employee_id.value,
+            date: timeBlockForm.elements.date.value,
+            clear: true,
+          });
+        } else {
+          await sendJson(timeBlockDeleteBase.replace("__ID__", editingTimeBlockId), {});
+        }
+        window.location.reload();
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
+        timeBlockDeleteButton.disabled = false;
+      }
+    });
+  }
 
   statusButtons.forEach((button) => {
     button.addEventListener("click", async function () {
@@ -585,6 +1648,155 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
+  if (photoUploadForm) {
+    if (photoGalleryButton && photoGalleryInput) {
+      photoGalleryButton.addEventListener("click", function () {
+        photoGalleryInput.click();
+      });
+      photoGalleryInput.addEventListener("change", function () {
+        setPhotoFile(photoUploadFileInput, photoGalleryInput, photoSelectedHint);
+      });
+    }
+
+    if (photoCameraButton && photoCameraInput) {
+      photoCameraButton.addEventListener("click", function () {
+        photoCameraInput.click();
+      });
+      photoCameraInput.addEventListener("change", function () {
+        setPhotoFile(photoUploadFileInput, photoCameraInput, photoSelectedHint);
+      });
+    }
+
+    photoUploadForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      if (!activeCard) return;
+
+      const submitButton = photoUploadForm.querySelector("button[type='submit']");
+      const formData = new FormData(photoUploadForm);
+      submitButton.disabled = true;
+
+      try {
+        const response = await fetch(photoUploadBase.replace("__ID__", activeCard.dataset.bookingId), {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCookie("csrftoken"),
+            "X-Requested-With": "XMLHttpRequest"
+          },
+          body: formData
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || "No se pudo subir la foto.");
+        }
+        modalPhotosPanel.innerHTML = data.html;
+        photoUploadForm.reset();
+      } catch (error) {
+        window.alert(error.message || "No se pudo subir la foto.");
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  }
+
+  if (modalPhotosPanel) {
+    modalPhotosPanel.addEventListener("click", function (event) {
+      const singleTrigger = event.target.closest("[data-photo-open]");
+      if (singleTrigger) {
+        calendarPhotoItems = Array.from(modalPhotosPanel.querySelectorAll("[data-photo-open]")).map((node) => ({
+          url: node.dataset.photoUrl,
+          alt: node.dataset.photoAlt || "",
+        }));
+        const triggerIndex = Array.from(modalPhotosPanel.querySelectorAll("[data-photo-open]")).indexOf(singleTrigger);
+        if (triggerIndex >= 0) {
+          openCalendarPhotoSingleAt(triggerIndex);
+        } else {
+          openCalendarPhotoSingle(singleTrigger.dataset.photoUrl, singleTrigger.dataset.photoAlt);
+        }
+        return;
+      }
+
+      const compareTrigger = event.target.closest("[data-compare-open]");
+      if (compareTrigger) {
+        openCalendarPhotoCompare(
+          compareTrigger.dataset.beforeUrl,
+          compareTrigger.dataset.beforeAlt,
+          compareTrigger.dataset.afterUrl,
+          compareTrigger.dataset.afterAlt
+        );
+      }
+    });
+
+    modalPhotosPanel.addEventListener("submit", async function (event) {
+      const form = event.target.closest("[data-photo-delete-form]");
+      if (!form) return;
+
+      event.preventDefault();
+      const submitButton = form.querySelector("button[type='submit']");
+      const deleteUrl = form.dataset.photoDeleteUrl;
+      if (!deleteUrl) return;
+
+      submitButton.disabled = true;
+
+      try {
+        const response = await fetch(deleteUrl, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCookie("csrftoken"),
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || "No se pudo eliminar la foto.");
+        }
+        modalPhotosPanel.innerHTML = data.html;
+      } catch (error) {
+        window.alert(error.message || "No se pudo eliminar la foto.");
+        submitButton.disabled = false;
+      }
+    });
+  }
+
+  calendarPhotoLightboxCloseButtons.forEach((button) => button.addEventListener("click", closeCalendarPhotoLightbox));
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && calendarPhotoLightbox && !calendarPhotoLightbox.hidden) {
+      closeCalendarPhotoLightbox();
+    } else if (event.key === "ArrowRight" && calendarPhotoLightbox && !calendarPhotoLightbox.hidden && !calendarPhotoLightboxSingle.hidden && calendarPhotoItems.length > 1) {
+      calendarPhotoIndex = (calendarPhotoIndex + 1) % calendarPhotoItems.length;
+      refreshCalendarSinglePhoto();
+    } else if (event.key === "ArrowLeft" && calendarPhotoLightbox && !calendarPhotoLightbox.hidden && !calendarPhotoLightboxSingle.hidden && calendarPhotoItems.length > 1) {
+      calendarPhotoIndex = (calendarPhotoIndex - 1 + calendarPhotoItems.length) % calendarPhotoItems.length;
+      refreshCalendarSinglePhoto();
+    }
+  });
+
+  if (calendarPhotoLightbox) {
+    calendarPhotoLightbox.addEventListener("touchstart", function (event) {
+      if (calendarPhotoLightbox.hidden || calendarPhotoLightboxSingle.hidden || event.touches.length !== 1) {
+        return;
+      }
+      calendarTouchStartX = event.touches[0].clientX;
+      calendarTouchStartY = event.touches[0].clientY;
+    }, { passive: true });
+
+    calendarPhotoLightbox.addEventListener("touchend", function (event) {
+      if (calendarPhotoLightbox.hidden || calendarPhotoLightboxSingle.hidden || event.changedTouches.length !== 1 || calendarPhotoItems.length <= 1) {
+        return;
+      }
+      const deltaX = event.changedTouches[0].clientX - calendarTouchStartX;
+      const deltaY = event.changedTouches[0].clientY - calendarTouchStartY;
+      if (Math.abs(deltaX) < 45 || Math.abs(deltaX) < Math.abs(deltaY)) {
+        return;
+      }
+      if (deltaX < 0) {
+        calendarPhotoIndex = (calendarPhotoIndex + 1) % calendarPhotoItems.length;
+      } else {
+        calendarPhotoIndex = (calendarPhotoIndex - 1 + calendarPhotoItems.length) % calendarPhotoItems.length;
+      }
+      refreshCalendarSinglePhoto();
+    }, { passive: true });
+  }
+
   modalCloseButtons.forEach((button) => {
     button.addEventListener("click", closeBookingModal);
   });
@@ -593,7 +1805,21 @@ document.addEventListener("DOMContentLoaded", function () {
     if (event.key === "Escape" && !modal.hidden) {
       closeBookingModal();
     }
+    if (event.key === "Escape" && !actionModal.hidden) {
+      closeActionModal();
+    }
+    if (event.key === "Escape" && !timeBlockModal.hidden) {
+      closeTimeBlockModal();
+    }
   });
+
+  const savedView = window.localStorage.getItem("anna-calendar-view");
+  initializeTeamFilter();
+  if (savedView === "days" || savedView === "team") {
+    activateCalendarView(savedView);
+  } else {
+    activateCalendarView("{{ calendar_view }}");
+  }
 });
 </script>
 {% endblock %}

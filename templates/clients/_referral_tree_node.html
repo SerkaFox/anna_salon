@@ -1,0 +1,29 @@
+<li class="referral-tree__item">
+  <div class="referral-tree__node {% if is_root %}is-root{% endif %}">
+    {% if is_root %}
+      <span class="referral-tree__badge">Base</span>
+    {% elif node.children %}
+      <span class="referral-tree__badge">Recomienda</span>
+    {% endif %}
+
+    {% if node.id == client.id %}
+      <strong class="referral-tree__name">{{ node.name }}</strong>
+    {% else %}
+      <a class="referral-tree__name" href="{% url 'clients:detail' node.id %}">{{ node.name }}</a>
+    {% endif %}
+
+    {% if node.children %}
+      <span class="referral-tree__count">{{ node.children|length }} referido{{ node.children|length|pluralize }}</span>
+    {% else %}
+      <span class="referral-tree__count">Sin referidos</span>
+    {% endif %}
+  </div>
+
+  {% if node.children %}
+    <ul class="referral-tree__children">
+      {% for child in node.children %}
+        {% include "clients/_referral_tree_node.html" with node=child client=client is_root=False %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</li>

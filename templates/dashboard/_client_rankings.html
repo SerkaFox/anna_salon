@@ -1,0 +1,55 @@
+<div id="dashboard-client-rankings" class="dashboard-ranking-stack">
+  <section class="panel-card">
+    <div class="dashboard-section-head">
+      <div>
+        <h2>Ranking de clientes</h2>
+        <p class="muted-text">Un solo ranking con clientes fuertes y clientes delicados según visitas, actividad, referidos y ausencias.</p>
+      </div>
+    </div>
+
+    {% if client_rankings %}
+      <div class="dashboard-stack">
+        {% for row in client_rankings %}
+          <div class="client-score-card">
+            <div class="client-score-card__head">
+              <div>
+                <strong><a class="dashboard-link" href="{% url 'clients:detail' row.client.id %}">{{ row.client }}</a></strong>
+                <p class="muted-text">
+                  {% if row.last_done_booking %}
+                    Última visita: <a class="dashboard-link" href="{% url 'bookings:update' row.last_done_booking.id %}">{{ row.last_done_booking.start_at|date:"d/m/Y H:i" }}</a>
+                  {% else %}
+                    Aún sin visitas terminadas
+                  {% endif %}
+                </p>
+                <p class="client-score-card__explanation">{{ row.rating_explanation }}</p>
+              </div>
+              <div class="client-score-card__meta">
+                <span class="dashboard-badge {% if row.score < 0 or row.no_show_count %}dashboard-badge--danger{% endif %}">{{ row.rating_label }}</span>
+                <span class="dashboard-badge dashboard-badge--score">{{ row.score }}</span>
+              </div>
+            </div>
+            <div class="client-score-grid">
+              <span>Hechas: <strong>{{ row.done_count }}</strong></span>
+              <span>Últimos 90 días: <strong>{{ row.recent_done_count }}</strong></span>
+              <span>Referidos efectivos: <strong>{{ row.successful_referrals }}</strong></span>
+              <span>No show: <strong>{{ row.no_show_count }}</strong></span>
+              <span>Canceladas: <strong>{{ row.cancelled_count }}</strong></span>
+              <span>Nivel: <strong>{{ row.rating_label }}</strong></span>
+            </div>
+            {% if row.issue_reasons %}
+              <div class="client-issue-list">
+                {% for issue in row.issue_reasons %}
+                  <a class="client-issue-chip" href="{% url 'bookings:update' issue.booking.id %}">
+                    {{ issue.label }} · {{ issue.booking.start_at|date:"d/m/Y H:i" }} · {{ issue.booking.service }}
+                  </a>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted-text">Aún no hay suficiente historial para construir el ranking.</p>
+    {% endif %}
+  </section>
+</div>

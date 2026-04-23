@@ -1,0 +1,126 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Documentos | Anna Salon{% endblock %}
+
+{% block panel_title %}Documentos{% endblock %}
+{% block panel_subtitle %}Recibos, facturas, proformas y exportación para contabilidad.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'documents:export_csv' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}">Exportar CSV</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="stats-grid">
+  <article class="stat-card">
+    <span class="stat-label">Documentos</span>
+    <strong class="stat-value">{{ document_count }}</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Base</span>
+    <strong class="stat-value">{{ totals.subtotal|default:"0.00" }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">IVA</span>
+    <strong class="stat-value">{{ totals.tax|default:"0.00" }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Total</span>
+    <strong class="stat-value">{{ totals.total|default:"0.00" }} €</strong>
+  </article>
+</section>
+
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <div class="field-inline">
+      <label for="q">Buscar</label>
+      <input class="input" type="text" name="q" id="q" value="{{ query }}" placeholder="Número, cliente, teléfono o servicio">
+    </div>
+
+    <div class="field-inline">
+      <label for="type">Tipo</label>
+      <select class="input" name="type" id="type">
+        <option value="">Todos</option>
+        {% for value, label in document_type_choices %}
+          <option value="{{ value }}" {% if document_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field-inline">
+      <label for="status">Estado</label>
+      <select class="input" name="status" id="status">
+        <option value="">Todos</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field-inline">
+      <label for="date_from">Desde</label>
+      <input class="input" type="date" name="date_from" id="date_from" value="{{ date_from }}">
+    </div>
+
+    <div class="field-inline">
+      <label for="date_to">Hasta</label>
+      <input class="input" type="date" name="date_to" id="date_to" value="{{ date_to }}">
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">Filtrar</button>
+      <a href="{% url 'documents:list' %}" class="btn btn-light">Limpiar</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel-card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Número</th>
+          <th>Tipo</th>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Servicio</th>
+          <th>Base</th>
+          <th>IVA</th>
+          <th>Total</th>
+          <th>Estado</th>
+          <th class="actions-cell">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for document in documents %}
+          <tr>
+            <td>{{ document.number }}</td>
+            <td>{{ document.get_document_type_display }}</td>
+            <td>{{ document.issue_date|date:"d/m/Y" }}</td>
+            <td>{{ document.booking.client }}</td>
+            <td>{{ document.booking.service }}</td>
+            <td>{{ document.subtotal_amount }} €</td>
+            <td>{{ document.tax_amount }} €</td>
+            <td><strong>{{ document.total_amount }} €</strong></td>
+            <td>{{ document.get_status_display }}</td>
+            <td class="actions-cell">
+              <div class="actions-inline">
+                <a class="btn btn-light btn-small" href="{% url 'documents:detail' document.id %}">Abrir</a>
+                <a class="btn btn-light btn-small" href="{% url 'documents:print' document.id %}" target="_blank" rel="noopener">Imprimir</a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="10">
+              <div class="empty-state">
+                <h2>No hay documentos</h2>
+                <p>Crea un recibo o una factura desde la lista de reservas.</p>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

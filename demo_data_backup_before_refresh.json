@@ -1,0 +1,983 @@
+[
+{
+  "model": "salon.zone",
+  "pk": 2,
+  "fields": {
+    "name": "Unas",
+    "zone_type": "table",
+    "capacity": 1,
+    "color": "#e291b3",
+    "is_active": true,
+    "notes": "",
+    "created_at": "2026-04-03T21:50:14.681Z",
+    "updated_at": "2026-04-03T21:50:14.681Z"
+  }
+},
+{
+  "model": "salon.zone",
+  "pk": 3,
+  "fields": {
+    "name": "Pintarico",
+    "zone_type": "cabin",
+    "capacity": 1,
+    "color": "#fbff00",
+    "is_active": true,
+    "notes": "",
+    "created_at": "2026-04-05T19:24:40.381Z",
+    "updated_at": "2026-04-05T19:24:53.475Z"
+  }
+},
+{
+  "model": "salon.zone",
+  "pk": 4,
+  "fields": {
+    "name": "Camilla",
+    "zone_type": "cabin",
+    "capacity": 1,
+    "color": "#0000ff",
+    "is_active": true,
+    "notes": "",
+    "created_at": "2026-04-06T19:48:51.904Z",
+    "updated_at": "2026-04-06T19:48:51.904Z"
+  }
+},
+{
+  "model": "salon.zone",
+  "pk": 5,
+  "fields": {
+    "name": "Pedicura",
+    "zone_type": "other",
+    "capacity": 1,
+    "color": "#e291b3",
+    "is_active": true,
+    "notes": "",
+    "created_at": "2026-04-06T19:50:09.403Z",
+    "updated_at": "2026-04-06T19:50:09.403Z"
+  }
+},
+{
+  "model": "services_app.service",
+  "pk": 2,
+  "fields": {
+    "name": "Unasy",
+    "description": "",
+    "duration_minutes": 60,
+    "price": "10.00",
+    "requires_zone": true,
+    "is_active": true,
+    "created_at": "2026-04-04T00:01:15.285Z",
+    "updated_at": "2026-04-04T10:04:13.225Z",
+    "allowed_zones": [
+      2
+    ]
+  }
+},
+{
+  "model": "services_app.service",
+  "pk": 3,
+  "fields": {
+    "name": "Pinta",
+    "description": "",
+    "duration_minutes": 60,
+    "price": "12.00",
+    "requires_zone": true,
+    "is_active": true,
+    "created_at": "2026-04-05T19:24:22.954Z",
+    "updated_at": "2026-04-05T19:25:09.179Z",
+    "allowed_zones": [
+      3
+    ]
+  }
+},
+{
+  "model": "services_app.service",
+  "pk": 4,
+  "fields": {
+    "name": "Semipermanente color liso",
+    "description": "",
+    "duration_minutes": 60,
+    "price": "28.00",
+    "requires_zone": true,
+    "is_active": true,
+    "created_at": "2026-04-06T19:56:17.641Z",
+    "updated_at": "2026-04-06T19:56:17.641Z",
+    "allowed_zones": [
+      2
+    ]
+  }
+},
+{
+  "model": "services_app.service",
+  "pk": 5,
+  "fields": {
+    "name": "Semipermanente francesa",
+    "description": "",
+    "duration_minutes": 75,
+    "price": "31.00",
+    "requires_zone": true,
+    "is_active": true,
+    "created_at": "2026-04-06T19:57:37.692Z",
+    "updated_at": "2026-04-06T19:57:37.692Z",
+    "allowed_zones": [
+      2
+    ]
+  }
+},
+{
+  "model": "employees.employee",
+  "pk": 1,
+  "fields": {
+    "user": null,
+    "first_name": "Nataly",
+    "last_name": "Domina",
+    "phone": "982457345",
+    "email": "s@s.com",
+    "calendar_color": "#3400f0",
+    "commission_percent": "40.00",
+    "is_active": true,
+    "notes": "",
+    "created_at": "2026-04-03T21:17:12.879Z",
+    "updated_at": "2026-04-22T14:16:42.156Z",
+    "services": [
+      3
+    ]
+  }
+},
+{
+  "model": "employees.employee",
+  "pk": 2,
+  "fields": {
+    "user": null,
+    "first_name": "Gulnar",
+    "last_name": "Antonio",
+    "phone": "888997",
+    "email": "",
+    "calendar_color": "#00ff1e",
+    "commission_percent": "40.00",
+    "is_active": true,
+    "notes": "",
+    "created_at": "2026-04-05T14:46:26.510Z",
+    "updated_at": "2026-04-05T14:46:26.510Z",
+    "services": [
+      2
+    ]
+  }
+},
+{
+  "model": "employees.employee",
+  "pk": 3,
+  "fields": {
+    "user": null,
+    "first_name": "Alina",
+    "last_name": "Korpa",
+    "phone": "",
+    "email": "",
+    "calendar_color": "#6bffee",
+    "commission_percent": "40.00",
+    "is_active": true,
+    "notes": "",
+    "created_at": "2026-04-05T19:25:51.357Z",
+    "updated_at": "2026-04-05T19:25:51.357Z",
+    "services": [
+      3,
+      2
+    ]
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 1,
+  "fields": {
+    "employee": 3,
+    "weekday": 0,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 2,
+  "fields": {
+    "employee": 3,
+    "weekday": 1,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 3,
+  "fields": {
+    "employee": 3,
+    "weekday": 2,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 4,
+  "fields": {
+    "employee": 3,
+    "weekday": 3,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 5,
+  "fields": {
+    "employee": 3,
+    "weekday": 4,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 6,
+  "fields": {
+    "employee": 3,
+    "weekday": 5,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 7,
+  "fields": {
+    "employee": 3,
+    "weekday": 6,
+    "is_day_off": true,
+    "start_time": null,
+    "end_time": null,
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 8,
+  "fields": {
+    "employee": 2,
+    "weekday": 0,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 9,
+  "fields": {
+    "employee": 2,
+    "weekday": 1,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 10,
+  "fields": {
+    "employee": 2,
+    "weekday": 2,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 11,
+  "fields": {
+    "employee": 2,
+    "weekday": 3,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 12,
+  "fields": {
+    "employee": 2,
+    "weekday": 4,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 13,
+  "fields": {
+    "employee": 2,
+    "weekday": 5,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 14,
+  "fields": {
+    "employee": 2,
+    "weekday": 6,
+    "is_day_off": true,
+    "start_time": null,
+    "end_time": null,
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 15,
+  "fields": {
+    "employee": 1,
+    "weekday": 0,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 16,
+  "fields": {
+    "employee": 1,
+    "weekday": 1,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 17,
+  "fields": {
+    "employee": 1,
+    "weekday": 2,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 18,
+  "fields": {
+    "employee": 1,
+    "weekday": 3,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 19,
+  "fields": {
+    "employee": 1,
+    "weekday": 4,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 20,
+  "fields": {
+    "employee": 1,
+    "weekday": 5,
+    "is_day_off": false,
+    "start_time": "09:00:00",
+    "end_time": "20:00:00",
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeeweeklyshift",
+  "pk": 21,
+  "fields": {
+    "employee": 1,
+    "weekday": 6,
+    "is_day_off": true,
+    "start_time": null,
+    "end_time": null,
+    "break_start": null,
+    "break_end": null,
+    "note": ""
+  }
+},
+{
+  "model": "employees.employeetimeblock",
+  "pk": 2,
+  "fields": {
+    "employee": 2,
+    "date": "2026-04-22",
+    "start_time": "11:30:00",
+    "end_time": "12:30:00",
+    "label": "Comida",
+    "color": "#111111"
+  }
+},
+{
+  "model": "clients.client",
+  "pk": 1,
+  "fields": {
+    "first_name": "Sergei",
+    "last_name": "Svitkin",
+    "phone": "607025853",
+    "email": "serkafox@gmail.com",
+    "birth_date": "1982-10-13",
+    "notes": "",
+    "is_active": true,
+    "created_at": "2026-04-03T21:04:27.947Z",
+    "updated_at": "2026-04-22T16:35:10.276Z",
+    "referred_by": null,
+    "referral_rewards_used": 0
+  }
+},
+{
+  "model": "clients.client",
+  "pk": 2,
+  "fields": {
+    "first_name": "Tatiana",
+    "last_name": "Gorbunova",
+    "phone": "613708322",
+    "email": "taswitta@gmail.com",
+    "birth_date": null,
+    "notes": "",
+    "is_active": true,
+    "created_at": "2026-04-03T21:04:51.603Z",
+    "updated_at": "2026-04-17T19:37:06.138Z",
+    "referred_by": 1,
+    "referral_rewards_used": 0
+  }
+},
+{
+  "model": "clients.client",
+  "pk": 3,
+  "fields": {
+    "first_name": "Mario",
+    "last_name": "Plum",
+    "phone": "667889778",
+    "email": "",
+    "birth_date": null,
+    "notes": "",
+    "is_active": true,
+    "created_at": "2026-04-22T16:28:40.147Z",
+    "updated_at": "2026-04-22T16:28:40.147Z",
+    "referred_by": 1,
+    "referral_rewards_used": 0
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 2,
+  "fields": {
+    "client": 1,
+    "employee": 3,
+    "service": 3,
+    "zone": 3,
+    "start_at": "2026-04-05T12:26:00Z",
+    "end_at": "2026-04-05T13:26:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "12.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "0.00",
+    "client_price_snapshot": "0.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "0.00",
+    "employee_amount_snapshot": "0.00",
+    "salon_amount_snapshot": "0.00",
+    "created_at": "2026-04-04T10:04:37.319Z",
+    "updated_at": "2026-04-22T16:52:52.199Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 3,
+  "fields": {
+    "client": 2,
+    "employee": 1,
+    "service": 2,
+    "zone": 2,
+    "start_at": "2026-04-05T14:44:00Z",
+    "end_at": "2026-04-05T15:44:00Z",
+    "status": "no_show",
+    "notes": "",
+    "price_snapshot": "10.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "0.00",
+    "client_price_snapshot": "0.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "0.00",
+    "employee_amount_snapshot": "0.00",
+    "salon_amount_snapshot": "0.00",
+    "created_at": "2026-04-05T14:44:06.621Z",
+    "updated_at": "2026-04-22T16:53:11.457Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 4,
+  "fields": {
+    "client": 2,
+    "employee": 2,
+    "service": 2,
+    "zone": 2,
+    "start_at": "2026-04-06T16:46:00Z",
+    "end_at": "2026-04-06T17:46:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "10.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "0.00",
+    "client_price_snapshot": "10.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.00",
+    "salon_amount_snapshot": "6.00",
+    "created_at": "2026-04-05T14:47:01.884Z",
+    "updated_at": "2026-04-17T16:09:20.608Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 5,
+  "fields": {
+    "client": 1,
+    "employee": 3,
+    "service": 3,
+    "zone": 3,
+    "start_at": "2026-04-05T13:26:00Z",
+    "end_at": "2026-04-05T14:26:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "12.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "0.00",
+    "client_price_snapshot": "0.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "0.00",
+    "employee_amount_snapshot": "0.00",
+    "salon_amount_snapshot": "0.00",
+    "created_at": "2026-04-05T21:34:42.984Z",
+    "updated_at": "2026-04-22T16:53:01.259Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 6,
+  "fields": {
+    "client": 1,
+    "employee": 3,
+    "service": 3,
+    "zone": 3,
+    "start_at": "2026-04-06T14:26:00Z",
+    "end_at": "2026-04-06T15:26:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "12.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "0.00",
+    "client_price_snapshot": "0.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "0.00",
+    "employee_amount_snapshot": "0.00",
+    "salon_amount_snapshot": "0.00",
+    "created_at": "2026-04-05T22:14:36.217Z",
+    "updated_at": "2026-04-22T17:05:08.700Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 7,
+  "fields": {
+    "client": 1,
+    "employee": 3,
+    "service": 3,
+    "zone": 3,
+    "start_at": "2026-04-17T08:17:00Z",
+    "end_at": "2026-04-17T09:17:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "12.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "12.00",
+    "client_price_snapshot": "12.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.80",
+    "salon_amount_snapshot": "7.20",
+    "created_at": "2026-04-17T21:18:07.254Z",
+    "updated_at": "2026-04-22T17:05:12.023Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 8,
+  "fields": {
+    "client": 1,
+    "employee": 3,
+    "service": 3,
+    "zone": 3,
+    "start_at": "2026-04-18T10:00:00Z",
+    "end_at": "2026-04-18T11:00:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "12.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "12.00",
+    "client_price_snapshot": "12.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.80",
+    "salon_amount_snapshot": "7.20",
+    "created_at": "2026-04-18T14:27:17.453Z",
+    "updated_at": "2026-04-22T17:05:14.193Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 9,
+  "fields": {
+    "client": 2,
+    "employee": 2,
+    "service": 2,
+    "zone": 2,
+    "start_at": "2026-04-18T08:00:00Z",
+    "end_at": "2026-04-18T09:00:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "10.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "10.00",
+    "client_price_snapshot": "10.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.00",
+    "salon_amount_snapshot": "6.00",
+    "created_at": "2026-04-18T14:27:33.605Z",
+    "updated_at": "2026-04-19T21:03:07.817Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 10,
+  "fields": {
+    "client": 1,
+    "employee": 3,
+    "service": 3,
+    "zone": 3,
+    "start_at": "2026-04-20T12:00:00Z",
+    "end_at": "2026-04-20T13:00:00Z",
+    "status": "no_show",
+    "notes": "",
+    "price_snapshot": "12.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "12.00",
+    "client_price_snapshot": "12.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.80",
+    "salon_amount_snapshot": "7.20",
+    "created_at": "2026-04-18T14:28:22.846Z",
+    "updated_at": "2026-04-22T17:05:16.972Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 11,
+  "fields": {
+    "client": 2,
+    "employee": 1,
+    "service": 2,
+    "zone": 2,
+    "start_at": "2026-04-20T10:30:00Z",
+    "end_at": "2026-04-20T11:30:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "10.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "10.00",
+    "client_price_snapshot": "10.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.00",
+    "salon_amount_snapshot": "6.00",
+    "created_at": "2026-04-20T14:14:45.504Z",
+    "updated_at": "2026-04-20T14:29:35.267Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 12,
+  "fields": {
+    "client": 1,
+    "employee": 2,
+    "service": 2,
+    "zone": 2,
+    "start_at": "2026-04-20T15:15:00Z",
+    "end_at": "2026-04-20T16:15:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "10.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "10.00",
+    "client_price_snapshot": "10.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.00",
+    "salon_amount_snapshot": "6.00",
+    "created_at": "2026-04-20T14:15:10.331Z",
+    "updated_at": "2026-04-22T17:05:19.090Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 13,
+  "fields": {
+    "client": 1,
+    "employee": 3,
+    "service": 2,
+    "zone": 2,
+    "start_at": "2026-04-22T08:00:00Z",
+    "end_at": "2026-04-22T09:00:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "10.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "10.00",
+    "client_price_snapshot": "10.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.00",
+    "salon_amount_snapshot": "6.00",
+    "created_at": "2026-04-20T14:15:40.210Z",
+    "updated_at": "2026-04-22T16:33:39.904Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 14,
+  "fields": {
+    "client": 1,
+    "employee": 2,
+    "service": 2,
+    "zone": 2,
+    "start_at": "2026-04-20T13:30:00Z",
+    "end_at": "2026-04-20T14:30:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "10.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "10.00",
+    "client_price_snapshot": "10.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.00",
+    "salon_amount_snapshot": "6.00",
+    "created_at": "2026-04-20T14:15:49.002Z",
+    "updated_at": "2026-04-22T17:05:20.152Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 15,
+  "fields": {
+    "client": 1,
+    "employee": 3,
+    "service": 3,
+    "zone": 3,
+    "start_at": "2026-04-21T07:30:00Z",
+    "end_at": "2026-04-21T08:30:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "12.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "12.00",
+    "client_price_snapshot": "12.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.80",
+    "salon_amount_snapshot": "7.20",
+    "created_at": "2026-04-20T14:16:22.099Z",
+    "updated_at": "2026-04-22T16:34:14.155Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 16,
+  "fields": {
+    "client": 3,
+    "employee": 3,
+    "service": 3,
+    "zone": 3,
+    "start_at": "2026-04-22T11:00:00Z",
+    "end_at": "2026-04-22T12:00:00Z",
+    "status": "done",
+    "notes": "",
+    "price_snapshot": "12.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "12.00",
+    "client_price_snapshot": "12.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.80",
+    "salon_amount_snapshot": "7.20",
+    "created_at": "2026-04-22T16:28:52.132Z",
+    "updated_at": "2026-04-22T16:33:44.718Z"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 17,
+  "fields": {
+    "client": 1,
+    "employee": 3,
+    "service": 3,
+    "zone": 3,
+    "start_at": "2026-04-23T11:36:00Z",
+    "end_at": "2026-04-23T12:36:00Z",
+    "status": "confirmed",
+    "notes": "",
+    "price_snapshot": "12.00",
+    "duration_snapshot": 60,
+    "original_client_price_snapshot": "12.00",
+    "client_price_snapshot": "12.00",
+    "discount_amount_snapshot": "0.00",
+    "referral_reward_applied": false,
+    "employee_percent_snapshot": "40.00",
+    "employee_amount_snapshot": "4.80",
+    "salon_amount_snapshot": "7.20",
+    "created_at": "2026-04-22T16:35:46.626Z",
+    "updated_at": "2026-04-22T22:58:02.498Z"
+  }
+},
+{
+  "model": "bookings.bookingphoto",
+  "pk": 1,
+  "fields": {
+    "booking": 17,
+    "client": 1,
+    "image": "booking_photos/2026/04/photo_2026-04-14_11-05-59.jpg",
+    "photo_type": "base",
+    "notes": "",
+    "is_key_reference": false,
+    "created_at": "2026-04-22T22:56:49.822Z"
+  }
+},
+{
+  "model": "bookings.bookingphoto",
+  "pk": 2,
+  "fields": {
+    "booking": 17,
+    "client": 1,
+    "image": "booking_photos/2026/04/photo_2026-04-14_11-05-56.jpg",
+    "photo_type": "before",
+    "notes": "",
+    "is_key_reference": false,
+    "created_at": "2026-04-22T22:57:39.298Z"
+  }
+},
+{
+  "model": "bookings.bookingphoto",
+  "pk": 3,
+  "fields": {
+    "booking": 17,
+    "client": 1,
+    "image": "booking_photos/2026/04/photo_2026-04-14_11-05-45.jpg",
+    "photo_type": "after",
+    "notes": "",
+    "is_key_reference": false,
+    "created_at": "2026-04-22T23:11:46.712Z"
+  }
+}
+]

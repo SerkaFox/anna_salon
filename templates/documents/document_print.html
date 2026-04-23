@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ document.number }} | Anna Salon</title>
+  <style>
+    :root {
+      color: #15231b;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: #f3f0e8;
+    }
+
+    .sheet {
+      width: min(820px, calc(100% - 32px));
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 42px;
+      background: #fffdf8;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 32px;
+      border-bottom: 2px solid #1d3d2d;
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 34px;
+      letter-spacing: -0.04em;
+    }
+
+    .muted {
+      color: #6a766d;
+    }
+
+    .box {
+      border: 1px solid #cbd8cd;
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      border-bottom: 1px solid #d9e2db;
+      padding: 12px 8px;
+    }
+
+    th {
+      color: #5f6e63;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .totals {
+      margin-left: auto;
+      width: min(340px, 100%);
+    }
+
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #d9e2db;
+    }
+
+    .total {
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .actions {
+      position: sticky;
+      top: 0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 12px;
+      background: rgba(243, 240, 232, 0.92);
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 16px;
+      background: #1d6a44;
+      color: white;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    @media print {
+      body {
+        background: white;
+      }
+
+      .actions {
+        display: none;
+      }
+
+      .sheet {
+        width: 100%;
+        min-height: auto;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="actions">
+    <button class="btn" type="button" onclick="window.print()">Imprimir</button>
+    <a class="btn" href="{% url 'documents:detail' document.id %}">Volver</a>
+  </div>
+
+  <main class="sheet">
+    <header class="top">
+      <div>
+        <h1>Anna Salon</h1>
+        <p class="muted">Gestión interna de servicios de salón</p>
+      </div>
+      <div>
+        <h2>{{ document.get_document_type_display }}</h2>
+        <p><strong>{{ document.number }}</strong></p>
+        <p class="muted">{{ document.issue_date|date:"d/m/Y" }}</p>
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="box">
+        <h2>Cliente</h2>
+        <p><strong>{{ document.booking.client }}</strong></p>
+        <p class="muted">{{ document.booking.client.phone|default:"Teléfono no indicado" }}</p>
+        <p class="muted">{{ document.booking.client.email|default:"Email no indicado" }}</p>
+      </div>
+
+      <div class="box">
+        <h2>Servicio</h2>
+        <p><strong>{{ document.booking.service }}</strong></p>
+        <p class="muted">{{ document.booking.start_at|date:"d/m/Y H:i" }}</p>
+        <p class="muted">Atendido por {{ document.booking.employee }}</p>
+      </div>
+    </section>
+
+    <section class="box">
+      <h2>Detalle</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            <th>Precio</th>
+            <th>Descuento</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ document.booking.service }}</td>
+            <td>{{ document.booking.original_client_price_snapshot }} €</td>
+            <td>{{ document.booking.discount_amount_snapshot }} €</td>
+            <td>{{ document.total_amount }} €</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="totals">
+      <div class="totals-row">
+        <span>Base imponible</span>
+        <strong>{{ document.subtotal_amount }} €</strong>
+      </div>
+      <div class="totals-row">
+        <span>IVA {{ document.tax_rate }}%</span>
+        <strong>{{ document.tax_amount }} €</strong>
+      </div>
+      <div class="totals-row total">
+        <span>Total</span>
+        <span>{{ document.total_amount }} €</span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -18,5 +18,6 @@ urlpatterns = [
     path("panel/servicios/", include("services_app.urls")),
     path("panel/zonas/", include("salon.urls")),
     path("panel/reservas/", include("bookings.urls")),
+    path("panel/documentos/", include("documents.urls")),
     path("dj-admin/", admin.site.urls),
 ]

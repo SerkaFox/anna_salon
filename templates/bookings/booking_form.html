@@ -33,7 +33,12 @@
     <div class="form-grid">
       <div class="field">
         <label for="{{ form.client.id_for_label }}">Cliente</label>
-        {{ form.client }}
+        <div class="client-inline-select">
+          {{ form.client }}
+          <button type="button" class="btn btn-light btn-small client-inline-select__button" id="open-client-create-modal">
+            + Cliente
+          </button>
+        </div>
         {{ form.client.errors }}
       </div>
 <div class="field field-checkbox">
@@ -84,6 +89,12 @@
         {{ form.status }}
         {{ form.status.errors }}
       </div>
+
+      <div class="field">
+        <label for="{{ form.source.id_for_label }}">Origen</label>
+        {{ form.source }}
+        {{ form.source.errors }}
+      </div>
     </div>
 
     <div class="booking-hint" id="service-duration-hint"></div>
@@ -102,6 +113,136 @@
     </div>
   </form>
 </section>
+{% if is_edit and booking %}
+<section class="panel-card">
+  <div class="dashboard-section-head">
+    <div>
+      <h2>Fotos del servicio</h2>
+      <p class="muted-text">Guarda fotos base, antes, después o incidencias para el historial del cliente.</p>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="entity-form">
+    {% csrf_token %}
+    <input type="hidden" name="photo_submit" value="1">
+
+    {% if photo_form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in photo_form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ photo_form.image.id_for_label }}">Foto</label>
+        <div class="photo-source-picker">
+          {{ photo_form.image }}
+          <input type="file" class="photo-source-picker__input" id="booking-photo-gallery-input" accept="image/*">
+          <input type="file" class="photo-source-picker__input" id="booking-photo-camera-input" accept="image/*" capture="environment">
+          <div class="photo-source-picker__actions">
+            <button type="button" class="btn btn-light btn-small" id="booking-photo-gallery-button">Galería</button>
+            <button type="button" class="btn btn-light btn-small" id="booking-photo-camera-button">Cámara</button>
+          </div>
+          <div class="booking-hint" id="booking-photo-selected-hint">Elige si quieres usar cámara o galería.</div>
+        </div>
+        {{ photo_form.image.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ photo_form.photo_type.id_for_label }}">Tipo</label>
+        {{ photo_form.photo_type }}
+        {{ photo_form.photo_type.errors }}
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="{{ photo_form.notes.id_for_label }}">Notas</label>
+      {{ photo_form.notes }}
+      {{ photo_form.notes.errors }}
+    </div>
+
+    <div class="field field-checkbox">
+      <label for="{{ photo_form.is_key_reference.id_for_label }}">Referencia importante</label>
+      <div class="checkbox-row">
+        {{ photo_form.is_key_reference }}
+        <span>Marcar como foto clave para el historial</span>
+      </div>
+      {{ photo_form.is_key_reference.errors }}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn">Subir foto</button>
+    </div>
+  </form>
+
+  {% include "bookings/_photo_collection.html" with booking=booking booking_photos=booking_photos compare_before_photo=compare_before_photo compare_after_photo=compare_after_photo %}
+</section>
+{% endif %}
+
+<div class="photo-lightbox" id="booking-photo-lightbox" hidden>
+  <div class="photo-lightbox__backdrop" data-booking-photo-lightbox-close></div>
+  <div class="photo-lightbox__dialog">
+    <button type="button" class="photo-lightbox__close" aria-label="Cerrar" data-booking-photo-lightbox-close>×</button>
+    <div class="photo-lightbox__single" data-booking-photo-lightbox-single hidden>
+      <img src="" alt="" data-booking-photo-lightbox-image>
+    </div>
+    <div class="photo-lightbox__compare" data-booking-photo-lightbox-compare hidden>
+      <figure>
+        <figcaption>Antes</figcaption>
+        <img src="" alt="" data-booking-photo-lightbox-before>
+      </figure>
+      <figure>
+        <figcaption>Después</figcaption>
+        <img src="" alt="" data-booking-photo-lightbox-after>
+      </figure>
+    </div>
+  </div>
+</div>
+<div class="booking-modal" id="client-create-modal" hidden>
+  <div class="booking-modal__backdrop" data-client-modal-close></div>
+  <div class="booking-modal__dialog booking-modal__dialog--compact" role="dialog" aria-modal="true" aria-labelledby="client-create-modal-title">
+    <div class="booking-modal__head">
+      <div>
+        <span class="booking-modal__eyebrow">Cliente</span>
+        <h2 id="client-create-modal-title">Nuevo cliente rápido</h2>
+      </div>
+      <button type="button" class="booking-modal__close" aria-label="Cerrar" data-client-modal-close>×</button>
+    </div>
+    <div class="booking-modal__body">
+      <form class="entity-form" id="client-inline-form">
+        <div class="form-errors" id="client-inline-errors" hidden></div>
+        <div class="form-grid client-inline-form-grid">
+          <div class="field">
+            <label for="inline-client-first-name">Nombre</label>
+            <input class="input" id="inline-client-first-name" name="first_name" type="text" required>
+          </div>
+          <div class="field">
+            <label for="inline-client-last-name">Apellidos</label>
+            <input class="input" id="inline-client-last-name" name="last_name" type="text">
+          </div>
+          <div class="field">
+            <label for="inline-client-phone">Teléfono</label>
+            <input class="input" id="inline-client-phone" name="phone" type="text">
+          </div>
+          <div class="field">
+            <label for="inline-client-referred-by">Vino por</label>
+            <select class="input" id="inline-client-referred-by" name="referred_by">
+              <option value="">Sin recomendación</option>
+              {% for referral_client in referral_clients %}
+                <option value="{{ referral_client.id }}">{{ referral_client.full_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="booking-modal__footer">
+      <button type="button" class="btn" id="client-inline-submit">Crear cliente</button>
+      <button type="button" class="btn btn-light" data-client-modal-close>Cancelar</button>
+    </div>
+  </div>
+</div>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   const clientSelect = document.getElementById("id_client");
@@ -114,6 +255,33 @@ document.addEventListener("DOMContentLoaded", function () {
   const slotHint = document.getElementById("slot-availability-hint");
   const rewardCheckbox = document.getElementById("id_apply_referral_reward");
   const rewardHint = document.getElementById("client-reward-hint");
+  const clientCreateModal = document.getElementById("client-create-modal");
+  const clientCreateOpenButton = document.getElementById("open-client-create-modal");
+  const clientCreateCloseButtons = document.querySelectorAll("[data-client-modal-close]");
+  const clientInlineForm = document.getElementById("client-inline-form");
+  const clientInlineSubmit = document.getElementById("client-inline-submit");
+  const clientInlineErrors = document.getElementById("client-inline-errors");
+  const clientInlineFirstName = document.getElementById("inline-client-first-name");
+  const clientInlineLastName = document.getElementById("inline-client-last-name");
+  const clientInlinePhone = document.getElementById("inline-client-phone");
+  const clientInlineReferredBy = document.getElementById("inline-client-referred-by");
+  const bookingPhotoFileInput = document.getElementById("id_image");
+  const bookingPhotoGalleryInput = document.getElementById("booking-photo-gallery-input");
+  const bookingPhotoCameraInput = document.getElementById("booking-photo-camera-input");
+  const bookingPhotoGalleryButton = document.getElementById("booking-photo-gallery-button");
+  const bookingPhotoCameraButton = document.getElementById("booking-photo-camera-button");
+  const bookingPhotoSelectedHint = document.getElementById("booking-photo-selected-hint");
+  const bookingPhotoLightbox = document.getElementById("booking-photo-lightbox");
+  const bookingPhotoLightboxSingle = document.querySelector("[data-booking-photo-lightbox-single]");
+  const bookingPhotoLightboxCompare = document.querySelector("[data-booking-photo-lightbox-compare]");
+  const bookingPhotoLightboxImage = document.querySelector("[data-booking-photo-lightbox-image]");
+  const bookingPhotoLightboxBefore = document.querySelector("[data-booking-photo-lightbox-before]");
+  const bookingPhotoLightboxAfter = document.querySelector("[data-booking-photo-lightbox-after]");
+  const bookingPhotoLightboxCloseButtons = document.querySelectorAll("[data-booking-photo-lightbox-close]");
+  let bookingPhotoItems = [];
+  let bookingPhotoIndex = -1;
+  let bookingTouchStartX = 0;
+  let bookingTouchStartY = 0;
 
   if (
     !clientSelect ||
@@ -130,6 +298,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const serviceDataUrl = "{% url 'bookings:service_data_api' %}";
   const clientRewardApiUrl = "{% url 'bookings:client_reward_api' %}";
+  const clientCreateApiUrl = "{% url 'clients:create_api' %}";
   const slotCheckApiUrl = "{% url 'bookings:slot_check_api' %}";
   const bookingId = {% if is_edit and booking %}{{ booking.id }}{% else %}null{% endif %};
 
@@ -143,6 +312,52 @@ document.addEventListener("DOMContentLoaded", function () {
   let lastDuration = null;
   let userTouchedEnd = !!initialEndValue;
   let slotCheckTimer = null;
+  let clientInlineSubmitting = false;
+
+  function getCsrfToken() {
+    const csrfInput = document.querySelector("#booking-form input[name='csrfmiddlewaretoken']");
+    return csrfInput ? csrfInput.value : "";
+  }
+
+  function resetInlineClientForm() {
+    if (!clientInlineForm) {
+      return;
+    }
+    clientInlineForm.reset();
+    clientInlineErrors.hidden = true;
+    clientInlineErrors.textContent = "";
+  }
+
+  function openInlineClientModal() {
+    if (!clientCreateModal) {
+      return;
+    }
+    resetInlineClientForm();
+    clientCreateModal.hidden = false;
+    document.body.classList.add("has-booking-modal");
+    window.setTimeout(() => {
+      if (clientInlineFirstName) {
+        clientInlineFirstName.focus();
+      }
+    }, 40);
+  }
+
+  function closeInlineClientModal() {
+    if (!clientCreateModal) {
+      return;
+    }
+    clientCreateModal.hidden = true;
+    document.body.classList.remove("has-booking-modal");
+    resetInlineClientForm();
+  }
+
+  function showInlineClientError(message) {
+    if (!clientInlineErrors) {
+      return;
+    }
+    clientInlineErrors.textContent = message || "No se pudo crear el cliente.";
+    clientInlineErrors.hidden = false;
+  }
 
   function formatDateTimeLocal(date) {
     const pad = (n) => String(n).padStart(2, "0");
@@ -150,6 +365,72 @@ document.addEventListener("DOMContentLoaded", function () {
       `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
       `T${pad(date.getHours())}:${pad(date.getMinutes())}`
     );
+  }
+
+  function setFileInputFile(targetInput, sourceInput, hintNode) {
+    if (!targetInput || !sourceInput || !sourceInput.files || !sourceInput.files.length) {
+      return;
+    }
+
+    const transfer = new DataTransfer();
+    transfer.items.add(sourceInput.files[0]);
+    targetInput.files = transfer.files;
+
+    if (hintNode) {
+      hintNode.textContent = `Seleccionada: ${sourceInput.files[0].name}`;
+    }
+  }
+
+  function closeBookingPhotoLightbox() {
+    if (!bookingPhotoLightbox) return;
+    bookingPhotoLightbox.hidden = true;
+    bookingPhotoLightboxSingle.hidden = true;
+    bookingPhotoLightboxCompare.hidden = true;
+    bookingPhotoLightboxImage.src = "";
+    bookingPhotoLightboxBefore.src = "";
+    bookingPhotoLightboxAfter.src = "";
+    bookingPhotoIndex = -1;
+    document.body.classList.remove("has-booking-modal");
+  }
+
+  function refreshBookingSinglePhoto() {
+    if (bookingPhotoIndex < 0 || bookingPhotoIndex >= bookingPhotoItems.length) {
+      return;
+    }
+    const item = bookingPhotoItems[bookingPhotoIndex];
+    bookingPhotoLightboxImage.src = item.url;
+    bookingPhotoLightboxImage.alt = item.alt || "";
+  }
+
+  function openBookingPhotoSingle(url, altText) {
+    if (!bookingPhotoLightbox) return;
+    bookingPhotoLightboxImage.src = url;
+    bookingPhotoLightboxImage.alt = altText || "";
+    bookingPhotoLightboxSingle.hidden = false;
+    bookingPhotoLightboxCompare.hidden = true;
+    bookingPhotoLightbox.hidden = false;
+    document.body.classList.add("has-booking-modal");
+  }
+
+  function openBookingPhotoSingleAt(index) {
+    bookingPhotoIndex = index;
+    refreshBookingSinglePhoto();
+    bookingPhotoLightboxSingle.hidden = false;
+    bookingPhotoLightboxCompare.hidden = true;
+    bookingPhotoLightbox.hidden = false;
+    document.body.classList.add("has-booking-modal");
+  }
+
+  function openBookingPhotoCompare(beforeUrl, beforeAlt, afterUrl, afterAlt) {
+    if (!bookingPhotoLightbox) return;
+    bookingPhotoLightboxBefore.src = beforeUrl || "";
+    bookingPhotoLightboxBefore.alt = beforeAlt || "Antes";
+    bookingPhotoLightboxAfter.src = afterUrl || "";
+    bookingPhotoLightboxAfter.alt = afterAlt || "Después";
+    bookingPhotoLightboxSingle.hidden = true;
+    bookingPhotoLightboxCompare.hidden = false;
+    bookingPhotoLightbox.hidden = false;
+    document.body.classList.add("has-booking-modal");
   }
 
   function updateHint(duration) {
@@ -392,6 +673,178 @@ document.addEventListener("DOMContentLoaded", function () {
     loadClientRewardData();
   });
 
+  if (clientCreateOpenButton) {
+    clientCreateOpenButton.addEventListener("click", openInlineClientModal);
+  }
+
+  clientCreateCloseButtons.forEach((button) => {
+    button.addEventListener("click", closeInlineClientModal);
+  });
+
+  if (clientCreateModal) {
+    clientCreateModal.addEventListener("click", function (event) {
+      if (event.target === clientCreateModal) {
+        closeInlineClientModal();
+      }
+    });
+  }
+
+  if (clientInlineSubmit) {
+    clientInlineSubmit.addEventListener("click", async function () {
+      if (!clientInlineForm || clientInlineSubmitting) {
+        return;
+      }
+
+      if (!clientInlineFirstName.value.trim()) {
+        showInlineClientError("Indica al menos el nombre del cliente.");
+        clientInlineFirstName.focus();
+        return;
+      }
+
+      clientInlineSubmitting = true;
+      clientInlineSubmit.disabled = true;
+      clientInlineErrors.hidden = true;
+      clientInlineErrors.textContent = "";
+
+      try {
+        const payload = new URLSearchParams();
+        payload.set("first_name", clientInlineFirstName.value.trim());
+        payload.set("last_name", clientInlineLastName.value.trim());
+        payload.set("phone", clientInlinePhone.value.trim());
+        payload.set("referred_by", clientInlineReferredBy.value || "");
+        payload.set("is_active", "on");
+
+        const response = await fetch(clientCreateApiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "X-CSRFToken": getCsrfToken(),
+            "X-Requested-With": "XMLHttpRequest"
+          },
+          body: payload.toString()
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || "No se pudo crear el cliente.");
+        }
+
+        const option = document.createElement("option");
+        option.value = String(data.client.id);
+        option.textContent = data.client.name;
+        option.selected = true;
+        clientSelect.appendChild(option);
+        clientSelect.value = String(data.client.id);
+
+        if (clientInlineReferredBy && !clientInlineReferredBy.querySelector(`option[value="${data.client.id}"]`)) {
+          const referredOption = document.createElement("option");
+          referredOption.value = String(data.client.id);
+          referredOption.textContent = data.client.name;
+          clientInlineReferredBy.appendChild(referredOption);
+        }
+
+        closeInlineClientModal();
+        await loadClientRewardData();
+      } catch (error) {
+        console.error("Error creating client:", error);
+        showInlineClientError(error.message);
+      } finally {
+        clientInlineSubmitting = false;
+        clientInlineSubmit.disabled = false;
+      }
+    });
+  }
+
+  if (bookingPhotoFileInput) {
+    bookingPhotoFileInput.classList.add("photo-source-picker__input");
+  }
+
+  if (bookingPhotoGalleryButton && bookingPhotoGalleryInput) {
+    bookingPhotoGalleryButton.addEventListener("click", function () {
+      bookingPhotoGalleryInput.click();
+    });
+    bookingPhotoGalleryInput.addEventListener("change", function () {
+      setFileInputFile(bookingPhotoFileInput, bookingPhotoGalleryInput, bookingPhotoSelectedHint);
+    });
+  }
+
+  if (bookingPhotoCameraButton && bookingPhotoCameraInput) {
+    bookingPhotoCameraButton.addEventListener("click", function () {
+      bookingPhotoCameraInput.click();
+    });
+    bookingPhotoCameraInput.addEventListener("change", function () {
+      setFileInputFile(bookingPhotoFileInput, bookingPhotoCameraInput, bookingPhotoSelectedHint);
+    });
+  }
+
+  document.addEventListener("click", function (event) {
+    const singleTrigger = event.target.closest("[data-photo-open]");
+    if (singleTrigger) {
+      bookingPhotoItems = Array.from(document.querySelectorAll("[data-photo-open]")).map((node) => ({
+        url: node.dataset.photoUrl,
+        alt: node.dataset.photoAlt || "",
+      }));
+      const triggerIndex = Array.from(document.querySelectorAll("[data-photo-open]")).indexOf(singleTrigger);
+      if (triggerIndex >= 0) {
+        openBookingPhotoSingleAt(triggerIndex);
+      } else {
+        openBookingPhotoSingle(singleTrigger.dataset.photoUrl, singleTrigger.dataset.photoAlt);
+      }
+      return;
+    }
+
+    const compareTrigger = event.target.closest("[data-compare-open]");
+    if (compareTrigger) {
+      openBookingPhotoCompare(
+        compareTrigger.dataset.beforeUrl,
+        compareTrigger.dataset.beforeAlt,
+        compareTrigger.dataset.afterUrl,
+        compareTrigger.dataset.afterAlt
+      );
+    }
+  });
+
+  bookingPhotoLightboxCloseButtons.forEach((button) => button.addEventListener("click", closeBookingPhotoLightbox));
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && bookingPhotoLightbox && !bookingPhotoLightbox.hidden) {
+      closeBookingPhotoLightbox();
+    } else if (event.key === "ArrowRight" && bookingPhotoLightbox && !bookingPhotoLightbox.hidden && !bookingPhotoLightboxSingle.hidden && bookingPhotoItems.length > 1) {
+      bookingPhotoIndex = (bookingPhotoIndex + 1) % bookingPhotoItems.length;
+      refreshBookingSinglePhoto();
+    } else if (event.key === "ArrowLeft" && bookingPhotoLightbox && !bookingPhotoLightbox.hidden && !bookingPhotoLightboxSingle.hidden && bookingPhotoItems.length > 1) {
+      bookingPhotoIndex = (bookingPhotoIndex - 1 + bookingPhotoItems.length) % bookingPhotoItems.length;
+      refreshBookingSinglePhoto();
+    }
+  });
+
+  if (bookingPhotoLightbox) {
+    bookingPhotoLightbox.addEventListener("touchstart", function (event) {
+      if (bookingPhotoLightbox.hidden || bookingPhotoLightboxSingle.hidden || event.touches.length !== 1) {
+        return;
+      }
+      bookingTouchStartX = event.touches[0].clientX;
+      bookingTouchStartY = event.touches[0].clientY;
+    }, { passive: true });
+
+    bookingPhotoLightbox.addEventListener("touchend", function (event) {
+      if (bookingPhotoLightbox.hidden || bookingPhotoLightboxSingle.hidden || event.changedTouches.length !== 1 || bookingPhotoItems.length <= 1) {
+        return;
+      }
+      const deltaX = event.changedTouches[0].clientX - bookingTouchStartX;
+      const deltaY = event.changedTouches[0].clientY - bookingTouchStartY;
+      if (Math.abs(deltaX) < 45 || Math.abs(deltaX) < Math.abs(deltaY)) {
+        return;
+      }
+      if (deltaX < 0) {
+        bookingPhotoIndex = (bookingPhotoIndex + 1) % bookingPhotoItems.length;
+      } else {
+        bookingPhotoIndex = (bookingPhotoIndex - 1 + bookingPhotoItems.length) % bookingPhotoItems.length;
+      }
+      refreshBookingSinglePhoto();
+    }, { passive: true });
+  }
+
   employeeSelect.addEventListener("change", debounceSlotCheck);
   employeeSelect.addEventListener("input", debounceSlotCheck);
 
@@ -425,6 +878,28 @@ document.addEventListener("DOMContentLoaded", function () {
     await loadClientRewardData();
     await checkSlotAvailability();
   }
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && clientCreateModal && !clientCreateModal.hidden) {
+      closeInlineClientModal();
+    }
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Enter" || !clientCreateModal || clientCreateModal.hidden) {
+      return;
+    }
+
+    if (
+      event.target === clientInlineFirstName ||
+      event.target === clientInlineLastName ||
+      event.target === clientInlinePhone ||
+      event.target === clientInlineReferredBy
+    ) {
+      event.preventDefault();
+      clientInlineSubmit.click();
+    }
+  });
 
   initForm();
 });

@@ -78,6 +78,7 @@ class EmployeeWeeklyShift(models.Model):
     end_time = models.TimeField("Fin", null=True, blank=True)
     break_start = models.TimeField("Inicio pausa", null=True, blank=True)
     break_end = models.TimeField("Fin pausa", null=True, blank=True)
+    break_label = models.CharField("Motivo pausa", max_length=140, blank=True)
     note = models.CharField("Nota", max_length=140, blank=True)
 
     class Meta:
@@ -103,6 +104,7 @@ class EmployeeScheduleOverride(models.Model):
     end_time = models.TimeField("Fin", null=True, blank=True)
     break_start = models.TimeField("Inicio pausa", null=True, blank=True)
     break_end = models.TimeField("Fin pausa", null=True, blank=True)
+    break_label = models.CharField("Motivo pausa", max_length=140, blank=True)
     label = models.CharField("Motivo", max_length=140, blank=True)
 
     class Meta:
@@ -113,3 +115,25 @@ class EmployeeScheduleOverride(models.Model):
 
     def __str__(self):
         return f"{self.employee} · {self.date:%d/%m/%Y}"
+
+
+class EmployeeTimeBlock(models.Model):
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="time_blocks",
+        verbose_name="Empleado",
+    )
+    date = models.DateField("Fecha")
+    start_time = models.TimeField("Inicio")
+    end_time = models.TimeField("Fin")
+    label = models.CharField("Motivo", max_length=140, blank=True)
+    color = models.CharField("Color", max_length=20, default="#111111")
+
+    class Meta:
+        ordering = ["employee", "date", "start_time", "end_time", "pk"]
+        verbose_name = "Bloqueo horario"
+        verbose_name_plural = "Bloqueos horarios"
+
+    def __str__(self):
+        return f"{self.employee} · {self.date:%d/%m/%Y} · {self.start_time:%H:%M}-{self.end_time:%H:%M}"

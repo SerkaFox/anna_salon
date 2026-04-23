@@ -28,6 +28,16 @@
       </select>
     </div>
 
+    <div class="field-inline">
+      <label for="source">Origen</label>
+      <select class="input" name="source" id="source">
+        <option value="">Todos</option>
+        {% for value, label in source_choices %}
+          <option value="{{ value }}" {% if source == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
     <div class="form-actions">
       <button type="submit" class="btn">Filtrar</button>
       <a href="{% url 'bookings:list' %}" class="btn btn-light">Limpiar</a>
@@ -46,36 +56,52 @@
           <th>Empleado</th>
           <th>Zona</th>
           <th>Estado</th>
+          <th>Origen</th>
           <th>Cliente €</th>
           <th>Empleado €</th>
           <th>Salón €</th>
-          <th class="actions-cell">Acciones</th>
         </tr>
       </thead>
       <tbody>
         {% for booking in bookings %}
-          <tr>
+          <tr class="booking-data-row">
             <td>{{ booking.start_at|date:"d/m/Y H:i" }}</td>
-                            <td>
-                  <a href="{% url 'clients:detail' booking.client.id %}">
-                    {{ booking.client }}
-                  </a>
-                </td>
+            <td>
+              <a class="client-link-pill" href="{% url 'clients:detail' booking.client.id %}">
+                {{ booking.client }}
+              </a>
+            </td>
             <td>{{ booking.service }}</td>
             <td>{{ booking.employee }}</td>
             <td>{% if booking.zone %}{{ booking.zone }}{% else %}—{% endif %}</td>
             <td>{{ booking.get_status_display }}</td>
-			<td>
-			  {{ booking.client_price_snapshot }} €
-			  {% if booking.referral_reward_applied %}
-				<div class="muted-text">Premio aplicado</div>
-			  {% endif %}
-			</td>
-			<td>{{ booking.employee_amount_snapshot }} €</td>
-			<td>{{ booking.salon_amount_snapshot }} €</td>
-            <td class="actions-cell">
-              <div class="actions-inline">
+            <td>{{ booking.get_source_display }}</td>
+            <td>
+              {{ booking.client_price_snapshot }} €
+              {% if booking.referral_reward_applied %}
+                <div class="muted-text">Premio aplicado</div>
+              {% endif %}
+            </td>
+            <td>{{ booking.employee_amount_snapshot }} €</td>
+            <td>{{ booking.salon_amount_snapshot }} €</td>
+          </tr>
+          <tr class="booking-actions-row">
+            <td colspan="10">
+              <div class="booking-actions">
+                <span class="booking-actions__label">Acciones</span>
                 <a class="btn btn-light btn-small" href="{% url 'bookings:update' booking.id %}">Editar</a>
+                <form method="post" action="{% url 'documents:create_from_booking' booking.id 'receipt' %}">
+                  {% csrf_token %}
+                  <button class="btn btn-light btn-small" type="submit">Recibo</button>
+                </form>
+                <form method="post" action="{% url 'documents:create_from_booking' booking.id 'invoice' %}">
+                  {% csrf_token %}
+                  <button class="btn btn-light btn-small" type="submit">Factura</button>
+                </form>
+                <form method="post" action="{% url 'documents:create_from_booking' booking.id 'proforma' %}">
+                  {% csrf_token %}
+                  <button class="btn btn-light btn-small" type="submit">Proforma</button>
+                </form>
                 <a class="btn btn-light btn-small" href="{% url 'bookings:delete' booking.id %}">Eliminar</a>
               </div>
             </td>

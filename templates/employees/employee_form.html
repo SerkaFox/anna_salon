@@ -96,7 +96,7 @@
       <div class="schedule-editor__head">
         <div>
           <h2>Semana base</h2>
-          <p>Define el turno normal de cada día, incluyendo pausa y días libres.</p>
+          <p>Define el turno fijo de cada día. Los descansos, comidas, médico o bloqueos especiales se gestionan desde el calendario.</p>
         </div>
         <a class="btn btn-light btn-small" href="{% url 'bookings:calendar_day' %}">Ver calendario</a>
       </div>
@@ -124,19 +124,6 @@
                 <label>Fin</label>
                 {{ shift_form.end_time }}
               </div>
-              <div class="field-inline">
-                <label>Pausa inicio</label>
-                {{ shift_form.break_start }}
-              </div>
-              <div class="field-inline">
-                <label>Pausa fin</label>
-                {{ shift_form.break_end }}
-              </div>
-            </div>
-
-            <div class="field">
-              <label>Nota</label>
-              {{ shift_form.note }}
             </div>
 
             {% if shift_form.non_field_errors %}
@@ -148,80 +135,6 @@
             {% endif %}
           </article>
         {% endfor %}
-      </div>
-    </section>
-
-    <section class="schedule-editor">
-      <div class="schedule-editor__head">
-        <div>
-          <h2>Excepciones</h2>
-          <p>Usa esta tabla para vacaciones, festivos, cambios de turno o días con horario especial.</p>
-        </div>
-      </div>
-
-      {{ override_formset.management_form }}
-      <div class="override-table-wrap">
-        <table class="override-table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Libre</th>
-              <th>Inicio</th>
-              <th>Fin</th>
-              <th>Pausa</th>
-              <th>Motivo</th>
-              <th>Eliminar</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for override_form in override_formset %}
-              <tr>
-                {{ override_form.id }}
-                <td>
-                  {{ override_form.date }}
-                  {{ override_form.date.errors }}
-                </td>
-                <td class="override-check-cell">
-                  {{ override_form.is_day_off }}
-                </td>
-                <td>
-                  {{ override_form.start_time }}
-                  {{ override_form.start_time.errors }}
-                </td>
-                <td>
-                  {{ override_form.end_time }}
-                  {{ override_form.end_time.errors }}
-                </td>
-                <td>
-                  <div class="override-break">
-                    {{ override_form.break_start }}
-                    {{ override_form.break_end }}
-                  </div>
-                </td>
-                <td>
-                  {{ override_form.label }}
-                  {{ override_form.label.errors }}
-                </td>
-                <td class="override-check-cell">
-                  {% if override_formset.can_delete %}
-                    {{ override_form.DELETE }}
-                  {% endif %}
-                </td>
-              </tr>
-              {% if override_form.non_field_errors %}
-                <tr>
-                  <td colspan="7">
-                    <div class="form-errors">
-                      {% for error in override_form.non_field_errors %}
-                        <div>{{ error }}</div>
-                      {% endfor %}
-                    </div>
-                  </td>
-                </tr>
-              {% endif %}
-            {% endfor %}
-          </tbody>
-        </table>
       </div>
     </section>
 

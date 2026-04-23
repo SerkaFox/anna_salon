@@ -93,6 +93,7 @@ INSTALLED_APPS = [
     'dashboard', # — главная внутренняя панель
     'clients', # — база клиентов
     'employees', # — сотрудники
+    'documents', # — recibos, facturas y exportación fiscal
     'core',
 ]
 
