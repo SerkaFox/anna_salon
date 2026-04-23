@@ -1,0 +1,133 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Caja | Anna Salon{% endblock %}
+
+{% block panel_title %}Caja{% endblock %}
+{% block panel_subtitle %}Cobros del día, métodos de pago y saldo pendiente.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'documents:list' %}">Documentos</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <div class="field-inline">
+      <label for="date">Fecha</label>
+      <input class="input" type="date" id="date" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn">Ver caja</button>
+      <a href="{% url 'documents:cashbox' %}" class="btn btn-light">Hoy</a>
+    </div>
+  </form>
+</section>
+
+<section class="stats-grid">
+  <article class="stat-card">
+    <span class="stat-label">Pagos</span>
+    <strong class="stat-value">{{ payments_count }}</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Total cobrado</span>
+    <strong class="stat-value">{{ payments_total }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Pendiente</span>
+    <strong class="stat-value">{{ pending_total }} €</strong>
+  </article>
+</section>
+
+<section class="stats-grid">
+  <article class="stat-card">
+    <span class="stat-label">Efectivo</span>
+    <strong class="stat-value">{{ totals_by_method.cash }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Tarjeta</span>
+    <strong class="stat-value">{{ totals_by_method.card }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Bizum</span>
+    <strong class="stat-value">{{ totals_by_method.bizum }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Transferencia</span>
+    <strong class="stat-value">{{ totals_by_method.transfer }} €</strong>
+  </article>
+</section>
+
+<section class="content-grid">
+  <article class="panel-card">
+    <h2>Pagos del día</h2>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Cliente</th>
+            <th>Documento</th>
+            <th>Método</th>
+            <th>Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for payment in payments %}
+            <tr>
+              <td>{{ payment.paid_at|date:"H:i" }}</td>
+              <td>{{ payment.booking.client }}</td>
+              <td><a href="{% url 'documents:detail' payment.fiscal_document.id %}">{{ payment.fiscal_document.number }}</a></td>
+              <td>{{ payment.get_method_display }}</td>
+              <td><strong>{{ payment.amount }} €</strong></td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5">
+                <div class="empty-state">
+                  <h2>Sin pagos</h2>
+                  <p>No se registraron cobros para la fecha seleccionada.</p>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="panel-card">
+    <h2>Documentos pendientes</h2>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Documento</th>
+            <th>Cliente</th>
+            <th>Total</th>
+            <th>Pendiente</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for document in pending_documents %}
+            <tr>
+              <td><a href="{% url 'documents:detail' document.id %}">{{ document.number }}</a></td>
+              <td>{{ document.booking.client }}</td>
+              <td>{{ document.total_amount }} €</td>
+              <td><strong>{{ document.balance_due }} €</strong></td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4">
+                <div class="empty-state">
+                  <h2>Todo cobrado</h2>
+                  <p>No hay documentos con saldo pendiente.</p>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+{% endblock %}

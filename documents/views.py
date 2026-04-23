@@ -1,4 +1,5 @@
 import csv
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -10,7 +11,8 @@ from django.views.decorators.http import require_POST
 
 from bookings.models import Booking
 
-from .models import FiscalDocument
+from .forms import PaymentForm
+from .models import FiscalDocument, Payment
 
 
 def _filtered_documents(request):
@@ -25,7 +27,7 @@ def _filtered_documents(request):
         "booking__client",
         "booking__employee",
         "booking__service",
-    )
+    ).prefetch_related("payments")
 
     if query:
         documents = documents.filter(
@@ -76,6 +78,7 @@ def document_list(request):
             "totals": totals,
             "document_type_choices": FiscalDocument.DocumentTypes.choices,
             "status_choices": FiscalDocument.Statuses.choices,
+            "payment_method_choices": Payment.Methods.choices,
             **filters,
         },
     )
@@ -119,15 +122,18 @@ def document_detail(request, pk):
             "booking__employee",
             "booking__service",
             "booking__zone",
-        ),
+        ).prefetch_related("payments"),
         pk=pk,
     )
+    initial_paid_at = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+    initial_amount = document.balance_due or document.total_amount
     return render(
         request,
         "documents/document_detail.html",
         {
             "active_section": "documents",
             "document": document,
+            "payment_form": PaymentForm(initial={"paid_at": initial_paid_at, "amount": initial_amount}),
         },
     )
 
@@ -186,3 +192,77 @@ def document_export_csv(request):
         ])
 
     return response
+
+
+@login_required
+@require_POST
+def payment_create(request, document_pk):
+    document = get_object_or_404(
+        FiscalDocument.objects.select_related("booking", "booking__client"),
+        pk=document_pk,
+    )
+    form = PaymentForm(request.POST)
+
+    if not form.is_valid():
+        messages.error(request, "No se pudo registrar el pago. Revisa los datos.")
+        return redirect("documents:detail", pk=document.pk)
+
+    payment = form.save(commit=False)
+    payment.fiscal_document = document
+    payment.booking = document.booking
+
+    if payment.amount > document.balance_due and document.balance_due > Decimal("0.00"):
+        messages.error(request, "El pago supera el saldo pendiente del documento.")
+        return redirect("documents:detail", pk=document.pk)
+
+    payment.save()
+    messages.success(request, f"Pago registrado: {payment.amount} € por {payment.get_method_display()}.")
+    return redirect("documents:detail", pk=document.pk)
+
+
+@login_required
+def cashbox(request):
+    date_value = request.GET.get("date", "").strip()
+    if date_value:
+        try:
+            selected_date = timezone.datetime.strptime(date_value, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = timezone.localdate()
+    else:
+        selected_date = timezone.localdate()
+
+    payments = Payment.objects.select_related(
+        "booking",
+        "booking__client",
+        "booking__service",
+        "fiscal_document",
+    ).filter(paid_at__date=selected_date)
+
+    totals = payments.aggregate(total=Sum("amount"))
+    totals_by_method = {
+        method: payments.filter(method=method).aggregate(total=Sum("amount")).get("total") or Decimal("0.00")
+        for method, _label in Payment.Methods.choices
+    }
+    pending_documents = FiscalDocument.objects.select_related(
+        "booking",
+        "booking__client",
+        "booking__service",
+    ).prefetch_related("payments")
+
+    pending_documents = [document for document in pending_documents if document.balance_due > Decimal("0.00")]
+    pending_total = sum((document.balance_due for document in pending_documents), Decimal("0.00"))
+
+    return render(
+        request,
+        "documents/cashbox.html",
+        {
+            "active_section": "cashbox",
+            "selected_date": selected_date,
+            "payments": payments,
+            "payments_count": payments.count(),
+            "payments_total": totals.get("total") or Decimal("0.00"),
+            "totals_by_method": totals_by_method,
+            "pending_documents": pending_documents[:12],
+            "pending_total": pending_total,
+        },
+    )

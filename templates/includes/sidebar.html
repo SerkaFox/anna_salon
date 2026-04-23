@@ -20,6 +20,7 @@
     <a class="nav-link {% if active_section == 'bookings' %}active{% endif %}" href="{% url 'bookings:list' %}">Reservas</a>
     <a class="nav-link {% if active_section == 'calendar' %}active{% endif %}" href="{% url 'bookings:calendar_day' %}">Calendario</a>
     <a class="nav-link {% if active_section == 'documents' %}active{% endif %}" href="{% url 'documents:list' %}">Documentos</a>
+    <a class="nav-link {% if active_section == 'cashbox' %}active{% endif %}" href="{% url 'documents:cashbox' %}">Caja</a>
   </nav>
 
   <div class="sidebar-bottom">

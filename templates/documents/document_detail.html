@@ -7,6 +7,7 @@
 
 {% block panel_actions %}
   <a class="btn btn-light" href="{% url 'documents:list' %}">Volver</a>
+  <a class="btn btn-light" href="{% url 'documents:cashbox' %}">Caja</a>
   {% if document.booking.client.email %}
     <a class="btn btn-light" href="mailto:{{ document.booking.client.email }}?subject={{ document.get_document_type_display }}%20{{ document.number }}%20Anna%20Salon">Enviar al cliente</a>
   {% endif %}
@@ -84,6 +85,83 @@
   <article class="stat-card">
     <span class="stat-label">Total</span>
     <strong class="stat-value">{{ document.total_amount }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Cobrado</span>
+    <strong class="stat-value">{{ document.payments_total }} €</strong>
+  </article>
+  <article class="stat-card">
+    <span class="stat-label">Pendiente</span>
+    <strong class="stat-value">{{ document.balance_due }} €</strong>
+  </article>
+</section>
+
+<section class="content-grid">
+  <article class="panel-card">
+    <h2>Registrar pago</h2>
+    <form method="post" action="{% url 'documents:payment_create' document.id %}" class="entity-form">
+      {% csrf_token %}
+      <div class="form-grid">
+        <div class="field">
+          <label for="{{ payment_form.paid_at.id_for_label }}">Fecha de pago</label>
+          {{ payment_form.paid_at }}
+        </div>
+        <div class="field">
+          <label for="{{ payment_form.amount.id_for_label }}">Importe</label>
+          {{ payment_form.amount }}
+        </div>
+        <div class="field">
+          <label for="{{ payment_form.method.id_for_label }}">Método</label>
+          {{ payment_form.method }}
+        </div>
+        <div class="field">
+          <label for="{{ payment_form.reference.id_for_label }}">Referencia</label>
+          {{ payment_form.reference }}
+        </div>
+      </div>
+      <div class="field">
+        <label for="{{ payment_form.notes.id_for_label }}">Notas</label>
+        {{ payment_form.notes }}
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn" {% if document.balance_due <= 0 %}disabled{% endif %}>Registrar pago</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="panel-card">
+    <h2>Historial de pagos</h2>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Método</th>
+            <th>Referencia</th>
+            <th>Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for payment in document.payments.all %}
+            <tr>
+              <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+              <td>{{ payment.get_method_display }}</td>
+              <td>{{ payment.reference|default:"-" }}</td>
+              <td><strong>{{ payment.amount }} €</strong></td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4">
+                <div class="empty-state">
+                  <h2>Sin pagos</h2>
+                  <p>Todavía no se registró ningún cobro para este documento.</p>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </article>
 </section>
 {% endblock %}

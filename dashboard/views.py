@@ -2,6 +2,7 @@ from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
@@ -9,6 +10,7 @@ from django.utils import timezone
 
 from bookings.models import Booking
 from clients.models import Client
+from documents.models import FiscalDocument, Payment
 from employees.models import Employee
 from services_app.models import Service
 from salon.models import Zone
@@ -193,6 +195,15 @@ def home(request):
         (booking.salon_amount_snapshot for booking in active_today_bookings),
         Decimal("0.00"),
     )
+    cash_total_today = (
+        Payment.objects.filter(paid_at__date=today).aggregate(total=Sum("amount")).get("total")
+        or Decimal("0.00")
+    )
+    pending_documents = FiscalDocument.objects.prefetch_related("payments")
+    pending_total = sum(
+        (document.balance_due for document in pending_documents if document.balance_due > Decimal("0.00")),
+        Decimal("0.00"),
+    )
 
     context = {
         "active_section": "dashboard",
@@ -208,6 +219,8 @@ def home(request):
             {"label": "Cobro clientes hoy", "value": client_total_today},
             {"label": "Pago empleados hoy", "value": employee_total_today},
             {"label": "Ingreso salón hoy", "value": salon_total_today},
+            {"label": "Caja registrada hoy", "value": cash_total_today},
+            {"label": "Pendiente por cobrar", "value": pending_total},
         ],
         "next_booking": next_booking,
         "today_bookings": active_today_bookings.order_by("start_at"),
