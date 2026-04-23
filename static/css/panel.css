@@ -89,7 +89,54 @@
 
 .sidebar-nav {
   display: grid;
+  gap: 14px;
+}
+
+.sidebar-group {
+  display: grid;
   gap: 8px;
+}
+
+.sidebar-group__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-group__title {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebar-group__chevron {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.sidebar-group__toggle[aria-expanded="true"] .sidebar-group__chevron {
+  transform: rotate(180deg);
+}
+
+.sidebar-group__content {
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar-group__content[hidden] {
+  display: none;
 }
 
 .nav-link {

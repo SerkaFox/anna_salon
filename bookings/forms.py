@@ -68,14 +68,25 @@ class BookingForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        allowed_employee = kwargs.pop("allowed_employee", None)
+        allowed_clients = kwargs.pop("allowed_clients", None)
         super().__init__(*args, **kwargs)
 
         self.fields["zone"].required = False
         self.fields["service"].queryset = Service.objects.filter(is_active=True).order_by("name")
         self.fields["employee"].queryset = Employee.objects.filter(is_active=True).order_by("first_name", "last_name")
+        self.fields["client"].queryset = Client.objects.filter(is_active=True).order_by("first_name", "last_name")
         self.fields["zone"].queryset = Zone.objects.filter(is_active=True).order_by("name")
         self.fields["start_at"].input_formats = ("%Y-%m-%dT%H:%M",)
         self.fields["end_at"].input_formats = ("%Y-%m-%dT%H:%M",)
+
+        if allowed_clients is not None:
+            self.fields["client"].queryset = allowed_clients
+
+        if allowed_employee is not None:
+            self.fields["employee"].queryset = Employee.objects.filter(pk=allowed_employee.pk)
+            self.fields["employee"].initial = allowed_employee
+            self.fields["employee"].disabled = True
 
         service = None
         client = None
@@ -124,6 +135,12 @@ class BookingForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+
+        if self.fields["employee"].disabled and self.instance.pk:
+            cleaned_data["employee"] = self.instance.employee
+        elif self.fields["employee"].disabled:
+            employee_qs = self.fields["employee"].queryset
+            cleaned_data["employee"] = employee_qs.first()
 
         client = cleaned_data.get("client")
         employee = cleaned_data.get("employee")

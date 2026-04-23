@@ -3,11 +3,14 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
+from accounts.permissions import admin_required
+
 from .forms import ZoneForm
 from .models import Zone
 
 
 @login_required
+@admin_required
 def zone_list(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
@@ -36,6 +39,7 @@ def zone_list(request):
 
 
 @login_required
+@admin_required
 def zone_create(request):
     if request.method == "POST":
         form = ZoneForm(request.POST)
@@ -57,6 +61,7 @@ def zone_create(request):
 
 
 @login_required
+@admin_required
 def zone_update(request, pk):
     zone = get_object_or_404(Zone, pk=pk)
 
@@ -81,6 +86,7 @@ def zone_update(request, pk):
 
 
 @login_required
+@admin_required
 def zone_delete(request, pk):
     zone = get_object_or_404(Zone, pk=pk)
 

@@ -94,6 +94,7 @@ INSTALLED_APPS = [
     'clients', # — база клиентов
     'employees', # — сотрудники
     'documents', # — recibos, facturas y exportación fiscal
+    'auditlog', # — journal de cambios
     'core',
 ]
 

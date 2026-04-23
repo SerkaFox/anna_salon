@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
@@ -9,6 +10,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from accounts.permissions import can_access_client, scope_clients_queryset
+from auditlog.services import log_event
 from bookings.models import Booking
 from bookings.models import BookingPhoto
 from .forms import ClientForm
@@ -31,7 +34,7 @@ def build_referral_tree(root_client):
 def client_list(request):
     query = request.GET.get("q", "").strip()
 
-    clients = Client.objects.all()
+    clients = scope_clients_queryset(Client.objects.all(), request.user)
 
     if query:
         clients = clients.filter(
@@ -61,13 +64,32 @@ def client_create(request):
         initial["referred_by"] = referrer
 
     if request.method == "POST":
-        form = ClientForm(request.POST)
+        form = ClientForm(
+            request.POST,
+            allowed_referred_by=scope_clients_queryset(
+                Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+                request.user,
+            ) if not request.user.can_manage_staff else None,
+        )
         if form.is_valid():
             client = form.save()
+            log_event(
+                actor=request.user,
+                section="client",
+                action="create",
+                instance=client,
+                message=f"Cliente creado: {client.full_name}.",
+            )
             messages.success(request, f"Cliente creado: {client.full_name}")
             return redirect("clients:detail", pk=client.pk)
     else:
-        form = ClientForm(initial=initial)
+        form = ClientForm(
+            initial=initial,
+            allowed_referred_by=scope_clients_queryset(
+                Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+                request.user,
+            ) if not request.user.can_manage_staff else None,
+        )
 
     context = {
         "active_section": "clients",
@@ -81,7 +103,13 @@ def client_create(request):
 @login_required
 @require_POST
 def client_create_api(request):
-    form = ClientForm(request.POST)
+    form = ClientForm(
+        request.POST,
+        allowed_referred_by=scope_clients_queryset(
+            Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+            request.user,
+        ) if not request.user.can_manage_staff else None,
+    )
     if not form.is_valid():
         message = "No se pudo crear el cliente."
         for field_errors in form.errors.values():
@@ -98,6 +126,13 @@ def client_create_api(request):
         )
 
     client = form.save()
+    log_event(
+        actor=request.user,
+        section="client",
+        action="create",
+        instance=client,
+        message=f"Cliente creado por API: {client.full_name}.",
+    )
     return JsonResponse(
         {
             "ok": True,
@@ -113,15 +148,37 @@ def client_create_api(request):
 @login_required
 def client_update(request, pk):
     client = get_object_or_404(Client, pk=pk)
+    if not can_access_client(request.user, client):
+        raise PermissionDenied
 
     if request.method == "POST":
-        form = ClientForm(request.POST, instance=client)
+        form = ClientForm(
+            request.POST,
+            instance=client,
+            allowed_referred_by=scope_clients_queryset(
+                Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+                request.user,
+            ) if not request.user.can_manage_staff else None,
+        )
         if form.is_valid():
             client = form.save()
+            log_event(
+                actor=request.user,
+                section="client",
+                action="update",
+                instance=client,
+                message=f"Cliente actualizado: {client.full_name}.",
+            )
             messages.success(request, f"Cliente actualizado: {client.full_name}")
             return redirect("clients:detail", pk=client.pk)
     else:
-        form = ClientForm(instance=client)
+        form = ClientForm(
+            instance=client,
+            allowed_referred_by=scope_clients_queryset(
+                Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+                request.user,
+            ) if not request.user.can_manage_staff else None,
+        )
 
     context = {
         "active_section": "clients",
@@ -136,11 +193,21 @@ def client_update(request, pk):
 @login_required
 def client_delete(request, pk):
     client = get_object_or_404(Client, pk=pk)
+    if not can_access_client(request.user, client):
+        raise PermissionDenied
+    if not request.user.can_manage_staff:
+        raise PermissionDenied
 
     if request.method == "POST":
         client_name = client.full_name
         try:
             client.delete()
+            log_event(
+                actor=request.user,
+                section="client",
+                action="delete",
+                message=f"Cliente eliminado: {client_name}.",
+            )
             messages.success(request, f"Cliente eliminado: {client_name}")
         except ProtectedError:
             messages.error(
@@ -162,6 +229,8 @@ def client_delete(request, pk):
 @login_required
 def client_detail(request, pk):
     client = get_object_or_404(Client, pk=pk)
+    if not can_access_client(request.user, client):
+        raise PermissionDenied
 
     bookings = (
         Booking.objects
@@ -170,6 +239,8 @@ def client_detail(request, pk):
         .filter(client=client)
         .order_by("-start_at")
     )
+    if not request.user.can_manage_staff:
+        bookings = bookings.filter(employee=request.user.employee_profile)
     booking_history = list(bookings[:20])
 
     done_bookings = bookings.filter(status=Booking.Statuses.DONE)
@@ -207,7 +278,10 @@ def client_detail(request, pk):
         .order_by("-total")[:3]
     )
 
-    referred_clients = client.referred_clients.all().order_by("first_name", "last_name")
+    referred_clients = scope_clients_queryset(
+        client.referred_clients.all().order_by("first_name", "last_name"),
+        request.user,
+    )
     referred_clients_count = referred_clients.count()
 
     successful_referrals = referred_clients.filter(

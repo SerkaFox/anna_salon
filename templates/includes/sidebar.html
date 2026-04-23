@@ -12,15 +12,71 @@
   </div>
 
   <nav class="sidebar-nav">
-    <a class="nav-link {% if active_section == 'dashboard' %}active{% endif %}" href="{% url 'dashboard:home' %}">Panel</a>
-    <a class="nav-link {% if active_section == 'clients' %}active{% endif %}" href="{% url 'clients:list' %}">Clientes</a>
-    <a class="nav-link {% if active_section == 'employees' %}active{% endif %}" href="{% url 'employees:list' %}">Empleados</a>
-    <a class="nav-link {% if active_section == 'services' %}active{% endif %}" href="{% url 'services_app:list' %}">Servicios</a>
-    <a class="nav-link {% if active_section == 'zones' %}active{% endif %}" href="{% url 'salon:list' %}">Zonas</a>
-    <a class="nav-link {% if active_section == 'bookings' %}active{% endif %}" href="{% url 'bookings:list' %}">Reservas</a>
-    <a class="nav-link {% if active_section == 'calendar' %}active{% endif %}" href="{% url 'bookings:calendar_day' %}">Calendario</a>
-    <a class="nav-link {% if active_section == 'documents' %}active{% endif %}" href="{% url 'documents:list' %}">Documentos</a>
-    <a class="nav-link {% if active_section == 'cashbox' %}active{% endif %}" href="{% url 'documents:cashbox' %}">Caja</a>
+    <div class="sidebar-group" data-sidebar-group>
+      <button
+        type="button"
+        class="sidebar-group__toggle"
+        data-sidebar-group-toggle
+        aria-expanded="{% if active_section == 'dashboard' or active_section == 'profile' or active_section == 'clients' or active_section == 'bookings' or active_section == 'calendar' %}true{% else %}false{% endif %}"
+      >
+        <span class="sidebar-group__title">Operativa</span>
+        <span class="sidebar-group__chevron">⌄</span>
+      </button>
+      <div
+        class="sidebar-group__content"
+        data-sidebar-group-content
+        {% if not active_section == 'dashboard' and not active_section == 'profile' and not active_section == 'clients' and not active_section == 'bookings' and not active_section == 'calendar' %}hidden{% endif %}
+      >
+        <a class="nav-link {% if active_section == 'dashboard' %}active{% endif %}" href="{% url 'dashboard:home' %}">Panel</a>
+        <a class="nav-link {% if active_section == 'profile' %}active{% endif %}" href="{% url 'accounts:profile' %}">Mi perfil</a>
+        <a class="nav-link {% if active_section == 'clients' %}active{% endif %}" href="{% url 'clients:list' %}">Clientes</a>
+        <a class="nav-link {% if active_section == 'bookings' %}active{% endif %}" href="{% url 'bookings:list' %}">Reservas</a>
+        <a class="nav-link {% if active_section == 'calendar' %}active{% endif %}" href="{% url 'bookings:calendar_day' %}">Calendario</a>
+      </div>
+    </div>
+    {% if request.user.can_manage_staff %}
+      <div class="sidebar-group" data-sidebar-group>
+        <button
+          type="button"
+          class="sidebar-group__toggle"
+          data-sidebar-group-toggle
+          aria-expanded="{% if active_section == 'employees' or active_section == 'services' or active_section == 'zones' or active_section == 'accounts' %}true{% else %}false{% endif %}"
+        >
+          <span class="sidebar-group__title">Equipo</span>
+          <span class="sidebar-group__chevron">⌄</span>
+        </button>
+        <div
+          class="sidebar-group__content"
+          data-sidebar-group-content
+          {% if not active_section == 'employees' and not active_section == 'services' and not active_section == 'zones' and not active_section == 'accounts' %}hidden{% endif %}
+        >
+          <a class="nav-link {% if active_section == 'employees' %}active{% endif %}" href="{% url 'employees:list' %}">Empleados</a>
+          <a class="nav-link {% if active_section == 'services' %}active{% endif %}" href="{% url 'services_app:list' %}">Servicios</a>
+          <a class="nav-link {% if active_section == 'zones' %}active{% endif %}" href="{% url 'salon:list' %}">Zonas</a>
+          <a class="nav-link {% if active_section == 'accounts' %}active{% endif %}" href="{% url 'accounts:user_list' %}">Cuentas</a>
+        </div>
+      </div>
+      <div class="sidebar-group" data-sidebar-group>
+        <button
+          type="button"
+          class="sidebar-group__toggle"
+          data-sidebar-group-toggle
+          aria-expanded="{% if active_section == 'documents' or active_section == 'cashbox' or active_section == 'auditlog' %}true{% else %}false{% endif %}"
+        >
+          <span class="sidebar-group__title">Administración</span>
+          <span class="sidebar-group__chevron">⌄</span>
+        </button>
+        <div
+          class="sidebar-group__content"
+          data-sidebar-group-content
+          {% if not active_section == 'documents' and not active_section == 'cashbox' and not active_section == 'auditlog' %}hidden{% endif %}
+        >
+          <a class="nav-link {% if active_section == 'documents' %}active{% endif %}" href="{% url 'documents:list' %}">Documentos</a>
+          <a class="nav-link {% if active_section == 'cashbox' %}active{% endif %}" href="{% url 'documents:cashbox' %}">Caja</a>
+          <a class="nav-link {% if active_section == 'auditlog' %}active{% endif %}" href="{% url 'auditlog:list' %}">Auditoría</a>
+        </div>
+      </div>
+    {% endif %}
   </nav>
 
   <div class="sidebar-bottom">

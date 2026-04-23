@@ -19,5 +19,6 @@ urlpatterns = [
     path("panel/zonas/", include("salon.urls")),
     path("panel/reservas/", include("bookings.urls")),
     path("panel/documentos/", include("documents.urls")),
+    path("panel/auditoria/", include("auditlog.urls")),
     path("dj-admin/", admin.site.urls),
 ]

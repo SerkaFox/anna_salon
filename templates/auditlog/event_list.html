@@ -1,0 +1,76 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Auditoría | Anna Salon{% endblock %}
+{% block panel_title %}Auditoría{% endblock %}
+{% block panel_subtitle %}Registro de cambios operativos y financieros.{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <div class="field-inline">
+      <label for="q">Buscar</label>
+      <input class="input" type="text" id="q" name="q" value="{{ query }}" placeholder="Usuario, cliente, reserva, mensaje">
+    </div>
+    <div class="field-inline">
+      <label for="section">Sección</label>
+      <select class="input" id="section" name="section">
+        <option value="">Todas</option>
+        {% for item in section_choices %}
+          <option value="{{ item }}" {% if section == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field-inline">
+      <label for="action">Acción</label>
+      <select class="input" id="action" name="action">
+        <option value="">Todas</option>
+        {% for item in action_choices %}
+          <option value="{{ item }}" {% if action == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn">Filtrar</button>
+      <a class="btn btn-light" href="{% url 'auditlog:list' %}">Limpiar</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel-card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Usuario</th>
+          <th>Sección</th>
+          <th>Acción</th>
+          <th>Objetivo</th>
+          <th>Mensaje</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in events %}
+          <tr>
+            <td>{{ event.created_at|date:"d/m/Y H:i" }}</td>
+            <td>{% if event.actor %}{{ event.actor }}{% else %}Sistema{% endif %}</td>
+            <td>{{ event.section }}</td>
+            <td>{{ event.action }}</td>
+            <td>{{ event.target_repr|default:"—" }}</td>
+            <td>{{ event.message }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6">
+              <div class="empty-state">
+                <h2>Sin eventos</h2>
+                <p>Todavía no hay cambios registrados para los filtros actuales.</p>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

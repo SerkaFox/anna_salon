@@ -10,6 +10,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from accounts.permissions import admin_required
+from auditlog.services import log_event
 from bookings.models import Booking
 
 from .forms import PaymentForm
@@ -100,6 +102,7 @@ def _pending_documents(documents):
 
 
 @login_required
+@admin_required
 def document_list(request):
     documents, filters = _filtered_documents(request)
     pending_documents = _pending_documents(documents)
@@ -128,6 +131,7 @@ def document_list(request):
 
 
 @login_required
+@admin_required
 def unpaid_documents(request):
     documents, filters = _filtered_documents(request)
     pending_documents = _pending_documents(documents)
@@ -150,6 +154,7 @@ def unpaid_documents(request):
 
 @login_required
 @require_POST
+@admin_required
 def document_create_from_booking(request, booking_pk, document_type):
     if document_type not in FiscalDocument.DocumentTypes.values:
         messages.error(request, "Tipo de documento no válido.")
@@ -172,12 +177,20 @@ def document_create_from_booking(request, booking_pk, document_type):
     if not created:
         messages.info(request, f"Ya existe: {document}.")
     else:
+        log_event(
+            actor=request.user,
+            section="document",
+            action="create",
+            instance=document,
+            message=f"Documento creado: {document.number}.",
+        )
         messages.success(request, f"Documento creado: {document}.")
 
     return redirect("documents:detail", pk=document.pk)
 
 
 @login_required
+@admin_required
 def document_detail(request, pk):
     document = get_object_or_404(
         FiscalDocument.objects.select_related(
@@ -208,6 +221,7 @@ def document_detail(request, pk):
 
 
 @login_required
+@admin_required
 def document_print(request, pk):
     document = get_object_or_404(
         FiscalDocument.objects.select_related(
@@ -223,6 +237,7 @@ def document_print(request, pk):
 
 
 @login_required
+@admin_required
 def document_export_csv(request):
     documents, _filters = _filtered_documents(request)
     response = HttpResponse(content_type="text/csv; charset=utf-8")
@@ -265,6 +280,7 @@ def document_export_csv(request):
 
 @login_required
 @require_POST
+@admin_required
 def payment_create(request, document_pk):
     document = get_object_or_404(
         FiscalDocument.objects.select_related("booking", "booking__client"),
@@ -308,12 +324,21 @@ def payment_create(request, document_pk):
         return redirect("documents:detail", pk=document.pk)
 
     payment.save()
+    log_event(
+        actor=request.user,
+        section="payment",
+        action="create",
+        instance=payment,
+        message=f"{payment.get_entry_type_display()} registrada en {document.number}.",
+        metadata={"amount": str(payment.amount), "method": payment.method},
+    )
     messages.success(request, f"{payment.get_entry_type_display()} registrada: {payment.amount} € por {payment.get_method_display()}.")
     return redirect("documents:detail", pk=document.pk)
 
 
 @login_required
 @require_POST
+@admin_required
 def document_quick_refund(request, pk):
     document = get_object_or_404(
         FiscalDocument.objects.select_related("booking", "booking__client").prefetch_related("payments"),
@@ -362,11 +387,20 @@ def document_quick_refund(request, pk):
         request,
         f"Devolución rápida registrada en {document.number}: {payment.amount} € por {payment.get_method_display()}.",
     )
+    log_event(
+        actor=request.user,
+        section="payment",
+        action="refund",
+        instance=payment,
+        message=f"Devolución rápida registrada en {document.number}.",
+        metadata={"amount": str(payment.amount), "method": payment.method},
+    )
     return redirect("documents:detail", pk=document.pk)
 
 
 @login_required
 @require_POST
+@admin_required
 def booking_quick_payment(request, booking_pk):
     booking = get_object_or_404(
         Booking.objects.select_related("client", "employee", "service").prefetch_related("fiscal_documents__payments"),
@@ -399,11 +433,27 @@ def booking_quick_payment(request, booking_pk):
     )
 
     if created:
+        log_event(
+            actor=request.user,
+            section="payment",
+            action="quick_payment",
+            instance=payment,
+            message=f"Cobro rápido con recibo nuevo {document.number}.",
+            metadata={"amount": str(payment.amount), "method": payment.method},
+        )
         messages.success(
             request,
             f"Recibo {document.number} creado y cobrado completo: {payment.amount} € por {payment.get_method_display()}.",
         )
     else:
+        log_event(
+            actor=request.user,
+            section="payment",
+            action="quick_payment",
+            instance=payment,
+            message=f"Cobro rápido registrado en {document.number}.",
+            metadata={"amount": str(payment.amount), "method": payment.method},
+        )
         messages.success(
             request,
             f"Cobro rápido registrado en {document.number}: {payment.amount} € por {payment.get_method_display()}.",
@@ -412,6 +462,7 @@ def booking_quick_payment(request, booking_pk):
 
 
 @login_required
+@admin_required
 def cashbox(request):
     selected_date = _parse_cashbox_date(request)
     method_value = request.GET.get("method", "").strip()
@@ -470,6 +521,7 @@ def cashbox(request):
 
 
 @login_required
+@admin_required
 def cashbox_print(request):
     selected_date = _parse_cashbox_date(request)
     payments = list(
@@ -502,6 +554,7 @@ def cashbox_print(request):
 
 
 @login_required
+@admin_required
 def payment_edit(request, pk):
     payment = get_object_or_404(
         Payment.objects.select_related("fiscal_document", "booking", "booking__client"),
@@ -536,6 +589,14 @@ def payment_edit(request, pk):
                 messages.error(request, "La devolución total no puede dejar el documento en saldo cobrado negativo.")
             else:
                 updated_payment.save()
+                log_event(
+                    actor=request.user,
+                    section="payment",
+                    action="update",
+                    instance=updated_payment,
+                    message=f"Movimiento actualizado en {document.number}.",
+                    metadata={"amount": str(updated_payment.amount), "method": updated_payment.method},
+                )
                 messages.success(request, "Movimiento actualizado correctamente.")
                 return redirect("documents:detail", pk=document.pk)
     else:
@@ -560,6 +621,7 @@ def payment_edit(request, pk):
 
 @login_required
 @require_POST
+@admin_required
 def payment_delete(request, pk):
     payment = get_object_or_404(Payment.objects.select_related("fiscal_document"), pk=pk)
     if _is_cashbox_closed(timezone.localtime(payment.paid_at).date()):
@@ -567,13 +629,21 @@ def payment_delete(request, pk):
         return redirect("documents:detail", pk=payment.fiscal_document_id)
 
     document_pk = payment.fiscal_document_id
+    payment_label = str(payment)
     payment.delete()
+    log_event(
+        actor=request.user,
+        section="payment",
+        action="delete",
+        message=f"Movimiento eliminado: {payment_label}.",
+    )
     messages.success(request, "Movimiento eliminado correctamente.")
     return redirect("documents:detail", pk=document_pk)
 
 
 @login_required
 @require_POST
+@admin_required
 def cashbox_close(request):
     date_str = request.POST.get("date", "").strip()
     notes = request.POST.get("notes", "").strip()
@@ -613,10 +683,19 @@ def cashbox_close(request):
         request,
         "Caja cerrada correctamente." if created else "Cierre de caja actualizado correctamente.",
     )
+    log_event(
+        actor=request.user,
+        section="cashbox",
+        action="close" if created else "update_close",
+        instance=closure,
+        message=f"Cierre de caja {'creado' if created else 'actualizado'} para {closure_date:%d/%m/%Y}.",
+        metadata={"payments_count": len(payments), "total_amount": str(total_amount)},
+    )
     return redirect(f"{reverse('documents:cashbox')}?date={closure.closure_date:%Y-%m-%d}")
 
 
 @login_required
+@admin_required
 def cashbox_export_csv(request):
     selected_date = _parse_cashbox_date(request)
     method_value = request.GET.get("method", "").strip()

@@ -1,0 +1,66 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Cuentas | Anna Salon{% endblock %}
+{% block panel_title %}Cuentas{% endblock %}
+{% block panel_subtitle %}Usuarios de acceso al portal y su vínculo con el equipo.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn" href="{% url 'accounts:user_create' %}">+ Nueva cuenta</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <div class="field-inline">
+      <label for="q">Buscar</label>
+      <input class="input" type="text" id="q" name="q" value="{{ query }}" placeholder="Usuario o nombre">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn">Filtrar</button>
+      <a class="btn btn-light" href="{% url 'accounts:user_list' %}">Limpiar</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel-card">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Nombre</th>
+          <th>Rol</th>
+          <th>Empleado</th>
+          <th>Email</th>
+          <th>Estado</th>
+          <th class="actions-cell">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in user_rows %}
+          <tr>
+            <td>{{ row.user.username }}</td>
+            <td>{{ row.user.get_full_name|default:row.user.username }}</td>
+            <td>{{ row.user.get_role_display }}</td>
+            <td>{% if row.employee %}{{ row.employee }}{% else %}—{% endif %}</td>
+            <td>{{ row.user.email|default:"—" }}</td>
+            <td>{% if row.user.is_active %}Activa{% else %}Inactiva{% endif %}</td>
+            <td class="actions-cell">
+              <a class="btn btn-light btn-small" href="{% url 'accounts:user_update' row.user.id %}">Editar</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">
+                <h2>Sin cuentas</h2>
+                <p>Todavía no hay usuarios creados.</p>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

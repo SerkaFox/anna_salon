@@ -8,6 +8,7 @@ from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from accounts.permissions import get_employee_profile, scope_bookings_queryset, scope_clients_queryset
 from bookings.models import Booking
 from clients.models import Client
 from documents.models import FiscalDocument, Payment
@@ -146,11 +147,14 @@ def home(request):
     day_start = timezone.make_aware(datetime.combine(today, time.min))
     day_end = timezone.make_aware(datetime.combine(today, time.max))
 
-    today_bookings = Booking.objects.select_related(
+    today_bookings = scope_bookings_queryset(
+        Booking.objects.select_related(
         "client", "employee", "service", "zone"
     ).filter(
         start_at__lte=day_end,
         end_at__gte=day_start,
+    ),
+        request.user,
     )
 
     active_today_bookings = today_bookings.exclude(status=Booking.Statuses.CANCELLED)
@@ -162,13 +166,15 @@ def home(request):
         .first()
     )
 
-    recent_bookings = (
+    recent_bookings = scope_bookings_queryset(
         Booking.objects.select_related("client", "employee", "service", "zone")
         .exclude(status=Booking.Statuses.CANCELLED)
-        .order_by("-created_at")[:5]
+        .order_by("-created_at"),
+        request.user,
     )
+    recent_bookings = recent_bookings[:5]
 
-    overdue_bookings = (
+    overdue_bookings = scope_bookings_queryset(
         Booking.objects.select_related("client", "employee", "service", "zone")
         .filter(end_at__lt=now)
         .exclude(
@@ -178,10 +184,11 @@ def home(request):
                 Booking.Statuses.NO_SHOW,
             ]
         )
-        .order_by("end_at")
+        .order_by("end_at"),
+        request.user,
     )
 
-    ranking_context = _get_client_ranking_context(now)
+    ranking_context = _get_client_ranking_context(now) if request.user.can_manage_staff else {"client_rankings": []}
 
     client_total_today = sum(
         (booking.client_price_snapshot for booking in active_today_bookings),
@@ -195,15 +202,31 @@ def home(request):
         (booking.salon_amount_snapshot for booking in active_today_bookings),
         Decimal("0.00"),
     )
-    cash_total_today = (
-        Payment.objects.filter(paid_at__date=today).aggregate(total=Sum("amount")).get("total")
-        or Decimal("0.00")
-    )
-    pending_documents = FiscalDocument.objects.prefetch_related("payments")
-    pending_total = sum(
-        (document.balance_due for document in pending_documents if document.balance_due > Decimal("0.00")),
-        Decimal("0.00"),
-    )
+    if request.user.can_manage_staff:
+        cash_total_today = (
+            Payment.objects.filter(paid_at__date=today).aggregate(total=Sum("amount")).get("total")
+            or Decimal("0.00")
+        )
+        pending_documents = FiscalDocument.objects.prefetch_related("payments")
+        pending_total = sum(
+            (document.balance_due for document in pending_documents if document.balance_due > Decimal("0.00")),
+            Decimal("0.00"),
+        )
+        money_stats = [
+            {"label": "Cobro clientes hoy", "value": client_total_today},
+            {"label": "Pago empleados hoy", "value": employee_total_today},
+            {"label": "Ingreso salón hoy", "value": salon_total_today},
+            {"label": "Caja registrada hoy", "value": cash_total_today},
+            {"label": "Pendiente por cobrar", "value": pending_total},
+        ]
+    else:
+        employee = get_employee_profile(request.user)
+        money_stats = [
+            {"label": "Mis servicios hoy", "value": active_today_bookings.count()},
+            {"label": "Mi facturación hoy", "value": client_total_today},
+            {"label": "Mi comisión hoy", "value": employee_total_today},
+            {"label": "Mis clientes", "value": scope_clients_queryset(Client.objects.all(), request.user).count()},
+        ]
 
     context = {
         "active_section": "dashboard",
@@ -211,17 +234,11 @@ def home(request):
             {"label": "Reservas hoy", "value": active_today_bookings.count()},
             {"label": "Pendientes", "value": today_bookings.filter(status=Booking.Statuses.PENDING).count()},
             {"label": "No show", "value": today_bookings.filter(status=Booking.Statuses.NO_SHOW).count()},
-            {"label": "Clientes", "value": Client.objects.count()},
-            {"label": "Empleados", "value": Employee.objects.filter(is_active=True).count()},
+            {"label": "Clientes", "value": scope_clients_queryset(Client.objects.all(), request.user).count()},
+            {"label": "Empleados", "value": Employee.objects.filter(is_active=True).count() if request.user.can_manage_staff else (1 if employee else 0)},
             {"label": "Servicios", "value": Service.objects.filter(is_active=True).count()},
         ],
-        "money_stats": [
-            {"label": "Cobro clientes hoy", "value": client_total_today},
-            {"label": "Pago empleados hoy", "value": employee_total_today},
-            {"label": "Ingreso salón hoy", "value": salon_total_today},
-            {"label": "Caja registrada hoy", "value": cash_total_today},
-            {"label": "Pendiente por cobrar", "value": pending_total},
-        ],
+        "money_stats": money_stats,
         "next_booking": next_booking,
         "today_bookings": active_today_bookings.order_by("start_at"),
         "recent_bookings": recent_bookings,
@@ -241,6 +258,8 @@ def home(request):
 
 @login_required
 def client_rankings_partial(request):
+    if not request.user.can_manage_staff:
+        return JsonResponse({"ok": False, "html": ""}, status=403)
     ranking_context = _get_client_ranking_context(timezone.localtime())
     html = render_to_string(
         "dashboard/_client_rankings.html",

@@ -4,6 +4,19 @@ from .models import Client
 
 
 class ClientForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        allowed_referred_by = kwargs.pop("allowed_referred_by", None)
+        super().__init__(*args, **kwargs)
+        self.fields["referred_by"].required = False
+        self.fields["referred_by"].queryset = Client.objects.filter(is_active=True).order_by("first_name", "last_name")
+        self.fields["referred_by"].label_from_instance = lambda obj: obj.full_name or str(obj)
+
+        if allowed_referred_by is not None:
+            self.fields["referred_by"].queryset = allowed_referred_by
+
+        if self.instance.pk:
+            self.fields["referred_by"].queryset = self.fields["referred_by"].queryset.exclude(pk=self.instance.pk)
+
     class Meta:
         model = Client
         fields = [
@@ -27,11 +40,3 @@ class ClientForm(forms.ModelForm):
             "is_active": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["referred_by"].required = False
-        self.fields["referred_by"].queryset = Client.objects.filter(is_active=True).order_by("first_name", "last_name")
-        self.fields["referred_by"].label_from_instance = lambda obj: obj.full_name or str(obj)
-
-        if self.instance.pk:
-            self.fields["referred_by"].queryset = self.fields["referred_by"].queryset.exclude(pk=self.instance.pk)

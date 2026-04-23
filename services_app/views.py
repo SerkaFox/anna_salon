@@ -4,11 +4,14 @@ from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
 
+from accounts.permissions import admin_required
+
 from .forms import ServiceForm
 from .models import Service
 
 
 @login_required
+@admin_required
 def service_list(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
@@ -36,6 +39,7 @@ def service_list(request):
 
 
 @login_required
+@admin_required
 def service_create(request):
     if request.method == "POST":
         form = ServiceForm(request.POST)
@@ -54,6 +58,7 @@ def service_create(request):
 
 
 @login_required
+@admin_required
 def service_update(request, pk):
     service = get_object_or_404(Service, pk=pk)
 
@@ -75,6 +80,7 @@ def service_update(request, pk):
 
 
 @login_required
+@admin_required
 def service_delete(request, pk):
     service = get_object_or_404(Service, pk=pk)
 

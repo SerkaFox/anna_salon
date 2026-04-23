@@ -9,12 +9,16 @@ from django.http import FileResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from accounts.permissions import can_access_booking, can_access_employee, get_employee_profile, scope_bookings_queryset, scope_employees_queryset
+from auditlog.services import log_event
 from clients.models import Client
 from employees.models import Employee
 from employees.models import EmployeeScheduleOverride
+from employees.models import EmployeeTimeBlock
 from salon.models import Zone
 from services_app.models import Service
 
@@ -68,9 +72,12 @@ def booking_list(request):
     status = request.GET.get("status", "").strip()
     source = request.GET.get("source", "").strip()
 
-    bookings = Booking.objects.select_related(
+    bookings = scope_bookings_queryset(
+        Booking.objects.select_related(
         "client", "employee", "service", "zone"
-    ).prefetch_related("fiscal_documents__payments").all()
+    ).prefetch_related("fiscal_documents__payments").all(),
+        request.user,
+    )
 
     if query:
         bookings = bookings.filter(
@@ -197,13 +204,32 @@ def booking_create(request):
             pass
 
     if request.method == "POST":
-        form = BookingForm(request.POST)
+        form = BookingForm(
+            request.POST,
+            allowed_employee=None if request.user.can_manage_staff else get_employee_profile(request.user),
+            allowed_clients=Client.objects.filter(is_active=True).order_by("first_name", "last_name")
+            if request.user.can_manage_staff
+            else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+        )
         if form.is_valid():
             booking = form.save()
+            log_event(
+                actor=request.user,
+                section="booking",
+                action="create",
+                instance=booking,
+                message=f"Reserva creada para {booking.client} con {booking.employee}.",
+            )
             messages.success(request, f"Reserva creada: {booking}")
             return redirect("bookings:list")
     else:
-        form = BookingForm(initial=initial)
+        form = BookingForm(
+            initial=initial,
+            allowed_employee=None if request.user.can_manage_staff else get_employee_profile(request.user),
+            allowed_clients=Client.objects.filter(is_active=True).order_by("first_name", "last_name")
+            if request.user.can_manage_staff
+            else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+        )
 
     return render(
         request,
@@ -223,8 +249,16 @@ def booking_create(request):
 @login_required
 def booking_update(request, pk):
     booking = get_object_or_404(Booking, pk=pk)
+    if not can_access_booking(request.user, booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
     form = BookingForm(
         instance=booking,
+        allowed_employee=None if request.user.can_manage_staff else booking.employee,
+        allowed_clients=Client.objects.filter(is_active=True).order_by("first_name", "last_name")
+        if request.user.can_manage_staff
+        else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
         initial={
             "start_at": timezone.localtime(booking.start_at).strftime("%Y-%m-%dT%H:%M"),
             "end_at": timezone.localtime(booking.end_at).strftime("%Y-%m-%dT%H:%M"),
@@ -239,12 +273,34 @@ def booking_update(request, pk):
             booking_photo.booking = booking
             booking_photo.client = booking.client
             booking_photo.save()
+            log_event(
+                actor=request.user,
+                section="booking_photo",
+                action="upload",
+                instance=booking,
+                message=f"Foto añadida a la reserva de {booking.client}.",
+                metadata={"photo_type": booking_photo.photo_type},
+            )
             messages.success(request, "Foto añadida al historial del cliente.")
             return redirect("bookings:update", pk=booking.pk)
     elif request.method == "POST":
-        form = BookingForm(request.POST, instance=booking)
+        form = BookingForm(
+            request.POST,
+            instance=booking,
+            allowed_employee=None if request.user.can_manage_staff else booking.employee,
+            allowed_clients=Client.objects.filter(is_active=True).order_by("first_name", "last_name")
+            if request.user.can_manage_staff
+            else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+        )
         if form.is_valid():
             booking = form.save()
+            log_event(
+                actor=request.user,
+                section="booking",
+                action="update",
+                instance=booking,
+                message=f"Reserva actualizada para {booking.client}.",
+            )
             messages.success(request, f"Reserva actualizada: {booking}")
             return redirect("bookings:list")
 
@@ -265,10 +321,26 @@ def booking_update(request, pk):
 @login_required
 def booking_delete(request, pk):
     booking = get_object_or_404(Booking, pk=pk)
+    if not can_access_booking(request.user, booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
+    if not request.user.can_manage_staff:
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
 
     if request.method == "POST":
         booking_label = str(booking)
+        booking_client = str(booking.client)
         booking.delete()
+        log_event(
+            actor=request.user,
+            section="booking",
+            action="delete",
+            message=f"Reserva eliminada: {booking_label}.",
+            metadata={"client": booking_client},
+        )
         messages.success(request, f"Reserva eliminada: {booking_label}")
         return redirect("bookings:list")
 
@@ -288,6 +360,10 @@ def booking_photo_image(request, pk):
         BookingPhoto.objects.select_related("booking", "client"),
         pk=pk,
     )
+    if not can_access_booking(request.user, photo.booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
     guessed_type, _encoding = mimetypes.guess_type(photo.image.name)
     content_type = guessed_type or "application/octet-stream"
     return FileResponse(photo.image.open("rb"), content_type=content_type)
@@ -299,6 +375,10 @@ def booking_photos_partial(request, pk):
         Booking.objects.select_related("client", "employee", "service", "zone"),
         pk=pk,
     )
+    if not can_access_booking(request.user, booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
     html = render_to_string(
         "bookings/_photo_collection.html",
         _build_booking_photo_context(booking),
@@ -311,6 +391,10 @@ def booking_photos_partial(request, pk):
 @require_POST
 def booking_photo_upload_api(request, pk):
     booking = get_object_or_404(Booking, pk=pk)
+    if not can_access_booking(request.user, booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
     form = BookingPhotoForm(request.POST, request.FILES)
 
     if not form.is_valid():
@@ -325,6 +409,14 @@ def booking_photo_upload_api(request, pk):
     photo.booking = booking
     photo.client = booking.client
     photo.save()
+    log_event(
+        actor=request.user,
+        section="booking_photo",
+        action="upload",
+        instance=booking,
+        message=f"Foto subida desde calendario para {booking.client}.",
+        metadata={"photo_type": photo.photo_type},
+    )
 
     html = render_to_string(
         "bookings/_photo_collection.html",
@@ -338,10 +430,23 @@ def booking_photo_upload_api(request, pk):
 @require_POST
 def booking_photo_delete(request, booking_pk, photo_pk):
     booking = get_object_or_404(Booking, pk=booking_pk)
+    if not can_access_booking(request.user, booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
     photo = get_object_or_404(BookingPhoto, pk=photo_pk, booking=booking)
     if photo.image:
         photo.image.delete(save=False)
+    photo_type = photo.get_photo_type_display()
     photo.delete()
+    log_event(
+        actor=request.user,
+        section="booking_photo",
+        action="delete",
+        instance=booking,
+        message=f"Foto eliminada de la reserva de {booking.client}.",
+        metadata={"photo_type": photo_type},
+    )
     messages.success(request, "Foto eliminada del historial.")
     return redirect("bookings:update", pk=booking.pk)
 
@@ -350,10 +455,23 @@ def booking_photo_delete(request, booking_pk, photo_pk):
 @require_POST
 def booking_photo_delete_api(request, booking_pk, photo_pk):
     booking = get_object_or_404(Booking, pk=booking_pk)
+    if not can_access_booking(request.user, booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
     photo = get_object_or_404(BookingPhoto, pk=photo_pk, booking=booking)
     if photo.image:
         photo.image.delete(save=False)
+    photo_type = photo.get_photo_type_display()
     photo.delete()
+    log_event(
+        actor=request.user,
+        section="booking_photo",
+        action="delete",
+        instance=booking,
+        message=f"Foto eliminada de la reserva de {booking.client}.",
+        metadata={"photo_type": photo_type},
+    )
 
     html = render_to_string(
         "bookings/_photo_collection.html",
@@ -394,7 +512,10 @@ def service_data_api(request):
         zones = []
 
     employees = list(
-        service.employees.filter(is_active=True)
+        scope_employees_queryset(
+            service.employees.filter(is_active=True),
+            request.user,
+        )
         .order_by("first_name", "last_name")
         .values("id", "first_name", "last_name")
     )
@@ -433,6 +554,10 @@ def booking_availability(request):
             service = None
             employee = None
 
+        if employee and not can_access_employee(request.user, employee):
+            employee = None
+            service = None
+
         if service and employee:
             if zone_id:
                 try:
@@ -459,7 +584,10 @@ def booking_availability(request):
         "zone": zone,
         "availability": availability,
         "services": Service.objects.filter(is_active=True).order_by("name"),
-        "employees": Employee.objects.filter(is_active=True).order_by("first_name", "last_name"),
+        "employees": scope_employees_queryset(
+            Employee.objects.filter(is_active=True).order_by("first_name", "last_name"),
+            request.user,
+        ),
         "zones": Zone.objects.filter(is_active=True).order_by("name"),
     }
     return render(request, "bookings/availability.html", context)
@@ -481,7 +609,11 @@ def booking_calendar_day(request):
         current_date = today
 
     visible_days = [current_date, current_date + timedelta(days=1), current_date + timedelta(days=2)]
-    bookings_by_day = {day: list(get_bookings_for_day(day)) for day in visible_days}
+    employee_scope = get_employee_profile(request.user)
+    bookings_by_day = {
+        day: list(scope_bookings_queryset(get_bookings_for_day(day), request.user))
+        for day in visible_days
+    }
     all_bookings = [booking for day in visible_days for booking in bookings_by_day[day]]
     employees_by_id = {}
     employee_agenda_map = {}
@@ -517,7 +649,11 @@ def booking_calendar_day(request):
                 "status_label": card["status_label"],
             })
 
-        for employee in Employee.objects.filter(is_active=True).order_by("first_name", "last_name"):
+        day_employees = scope_employees_queryset(
+            Employee.objects.filter(is_active=True).order_by("first_name", "last_name"),
+            request.user,
+        )
+        for employee in day_employees:
             for time_block in get_employee_time_blocks(employee, day):
                 block_card = build_time_block_layout_data(time_block)
                 day_time_blocks.append(block_card)
@@ -555,7 +691,10 @@ def booking_calendar_day(request):
     team_timelines = []
     day_bookings = bookings_by_day[current_date]
     active_employees = list(
-        Employee.objects.filter(is_active=True).order_by("first_name", "last_name")
+        scope_employees_queryset(
+            Employee.objects.filter(is_active=True).order_by("first_name", "last_name"),
+            request.user,
+        )
     )
 
     for employee in active_employees:
@@ -630,7 +769,7 @@ def booking_calendar_day(request):
 
     context = {
         "active_section": "calendar",
-        "calendar_view": calendar_view,
+        "calendar_view": calendar_view if request.user.can_manage_staff else "days",
         "current_date": current_date,
         "hour_lines": build_calendar_hour_lines(),
         "calendar_height": (DEFAULT_WORK_END_HOUR - DEFAULT_WORK_START_HOUR) * 60,
@@ -750,6 +889,8 @@ def booking_slot_check_api(request):
 @require_POST
 def booking_reschedule_api(request, pk):
     booking = get_object_or_404(Booking, pk=pk)
+    if not can_access_booking(request.user, booking):
+        return JsonResponse({"ok": False, "message": "Sin acceso a esta reserva."}, status=403)
 
     try:
         payload = json.loads(request.body.decode("utf-8"))
@@ -763,6 +904,8 @@ def booking_reschedule_api(request, pk):
         return JsonResponse({"ok": False, "message": "Faltan datos para mover la reserva."}, status=400)
 
     employee = get_object_or_404(Employee, pk=employee_id, is_active=True)
+    if not can_access_employee(request.user, employee):
+        return JsonResponse({"ok": False, "message": "Sin acceso a este empleado."}, status=403)
 
     try:
         start_at = datetime.strptime(start_at_str, "%Y-%m-%dT%H:%M")
@@ -799,6 +942,14 @@ def booking_reschedule_api(request, pk):
         return JsonResponse({"ok": False, "message": message}, status=400)
 
     moved_booking = form.save()
+    log_event(
+        actor=request.user,
+        section="booking",
+        action="reschedule",
+        instance=moved_booking,
+        message=f"Reserva movida para {moved_booking.client}.",
+        metadata={"employee_id": moved_booking.employee_id, "start_at": timezone.localtime(moved_booking.start_at).isoformat()},
+    )
     card = booking_layout_data(moved_booking)
 
     return JsonResponse({
@@ -817,6 +968,8 @@ def booking_reschedule_api(request, pk):
 @require_POST
 def booking_status_api(request, pk):
     booking = get_object_or_404(Booking, pk=pk)
+    if not can_access_booking(request.user, booking):
+        return JsonResponse({"ok": False, "message": "Sin acceso a esta reserva."}, status=403)
 
     try:
         payload = json.loads(request.body.decode("utf-8"))
@@ -831,6 +984,14 @@ def booking_status_api(request, pk):
 
     booking.status = status_value
     booking.save(update_fields=["status", "updated_at"])
+    log_event(
+        actor=request.user,
+        section="booking",
+        action="status",
+        instance=booking,
+        message=f"Estado cambiado a {booking.get_status_display()} para {booking.client}.",
+        metadata={"status": booking.status},
+    )
 
     return JsonResponse({
         "ok": True,
@@ -844,6 +1005,10 @@ def booking_status_api(request, pk):
 @require_POST
 def booking_quick_status_update(request, pk):
     booking = get_object_or_404(Booking, pk=pk)
+    if not can_access_booking(request.user, booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
     status_value = (request.POST.get("status") or "").strip()
     allowed_statuses = {
         Booking.Statuses.DONE,
@@ -856,6 +1021,14 @@ def booking_quick_status_update(request, pk):
 
     booking.status = status_value
     booking.save(update_fields=["status", "updated_at"])
+    log_event(
+        actor=request.user,
+        section="booking",
+        action="status",
+        instance=booking,
+        message=f"Estado rápido cambiado a {booking.get_status_display()} para {booking.client}.",
+        metadata={"status": booking.status},
+    )
     messages.success(
         request,
         f"Reserva actualizada: {booking.client} · {booking.get_status_display()}."
@@ -866,8 +1039,6 @@ def booking_quick_status_update(request, pk):
 @login_required
 @require_POST
 def calendar_time_block_create_api(request):
-    from employees.models import EmployeeTimeBlock
-
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except (TypeError, ValueError, json.JSONDecodeError):
@@ -886,6 +1057,8 @@ def calendar_time_block_create_api(request):
         return JsonResponse({"ok": False, "message": "Faltan datos para crear el bloqueo."}, status=400)
 
     employee = get_object_or_404(Employee, pk=employee_id, is_active=True)
+    if not can_access_employee(request.user, employee):
+        return JsonResponse({"ok": False, "message": "Sin acceso a este empleado."}, status=403)
 
     try:
         date_value, start_time_value, end_time_value = _parse_block_start_end(
@@ -917,7 +1090,7 @@ def calendar_time_block_create_api(request):
             or (repeat_pattern == "none" and current_date == date_value)
         )
         if should_create:
-            EmployeeTimeBlock.objects.create(
+            time_block = EmployeeTimeBlock.objects.create(
                 employee=employee,
                 date=current_date,
                 start_time=start_time_value,
@@ -926,6 +1099,14 @@ def calendar_time_block_create_api(request):
                 color=color,
             )
             created.append(current_date.strftime("%Y-%m-%d"))
+            log_event(
+                actor=request.user,
+                section="calendar",
+                action="time_block_create",
+                instance=time_block,
+                message=f"Bloqueo creado para {employee.full_name} el {current_date:%d/%m/%Y}.",
+                metadata={"label": label},
+            )
 
         if repeat_pattern == "none":
             break
@@ -943,9 +1124,9 @@ def calendar_time_block_create_api(request):
 @login_required
 @require_POST
 def calendar_time_block_update_api(request, pk):
-    from employees.models import EmployeeTimeBlock
-
     time_block = get_object_or_404(EmployeeTimeBlock, pk=pk)
+    if not can_access_employee(request.user, time_block.employee):
+        return JsonResponse({"ok": False, "message": "Sin acceso a este bloqueo."}, status=403)
 
     try:
         payload = json.loads(request.body.decode("utf-8"))
@@ -963,6 +1144,8 @@ def calendar_time_block_update_api(request, pk):
         return JsonResponse({"ok": False, "message": "Faltan datos para actualizar el bloqueo."}, status=400)
 
     employee = get_object_or_404(Employee, pk=employee_id, is_active=True)
+    if not can_access_employee(request.user, employee):
+        return JsonResponse({"ok": False, "message": "Sin acceso a este empleado."}, status=403)
 
     try:
         date_value, start_time_value, end_time_value = _parse_block_start_end(
@@ -980,6 +1163,14 @@ def calendar_time_block_update_api(request, pk):
     time_block.label = label
     time_block.color = color
     time_block.save()
+    log_event(
+        actor=request.user,
+        section="calendar",
+        action="time_block_update",
+        instance=time_block,
+        message=f"Bloqueo actualizado para {employee.full_name} el {date_value:%d/%m/%Y}.",
+        metadata={"label": label},
+    )
 
     return JsonResponse({"ok": True, "message": "Bloqueo actualizado correctamente."})
 
@@ -987,10 +1178,20 @@ def calendar_time_block_update_api(request, pk):
 @login_required
 @require_POST
 def calendar_time_block_delete_api(request, pk):
-    from employees.models import EmployeeTimeBlock
-
     time_block = get_object_or_404(EmployeeTimeBlock, pk=pk)
+    if not can_access_employee(request.user, time_block.employee):
+        return JsonResponse({"ok": False, "message": "Sin acceso a este bloqueo."}, status=403)
+    block_label = time_block.label
+    employee_name = time_block.employee.full_name
+    block_date = time_block.date
     time_block.delete()
+    log_event(
+        actor=request.user,
+        section="calendar",
+        action="time_block_delete",
+        message=f"Bloqueo eliminado para {employee_name} el {block_date:%d/%m/%Y}.",
+        metadata={"label": block_label},
+    )
     return JsonResponse({"ok": True, "message": "Bloqueo eliminado correctamente."})
 
 
@@ -1010,6 +1211,8 @@ def calendar_break_update_api(request):
         return JsonResponse({"ok": False, "message": "Faltan datos de empleado o fecha."}, status=400)
 
     employee = get_object_or_404(Employee, pk=employee_id, is_active=True)
+    if not can_access_employee(request.user, employee):
+        return JsonResponse({"ok": False, "message": "Sin acceso a este empleado."}, status=403)
 
     try:
         date_value = datetime.strptime(date_str, "%Y-%m-%d").date()
@@ -1069,5 +1272,137 @@ def calendar_break_update_api(request):
     override.start_time = override.start_time or timezone.localtime(schedule["start_at"]).time()
     override.end_time = override.end_time or timezone.localtime(schedule["end_at"]).time()
     override.save()
+    log_event(
+        actor=request.user,
+        section="calendar",
+        action="break_clear" if clear_break else "break_update",
+        instance=override,
+        message=(
+            f"Pausa eliminada para {employee.full_name} el {date_value:%d/%m/%Y}."
+            if clear_break
+            else f"Pausa actualizada para {employee.full_name} el {date_value:%d/%m/%Y}."
+        ),
+        metadata={"label": override.break_label},
+    )
 
     return JsonResponse({"ok": True, "message": "Pausa actualizada correctamente."})
+
+
+@login_required
+@require_POST
+def calendar_bulk_create_blocks(request):
+    employee_ids = request.POST.getlist("employee_ids")
+    date_from_str = (request.POST.get("date_from") or "").strip()
+    date_to_str = (request.POST.get("date_to") or "").strip()
+    start_time_str = (request.POST.get("start_time") or "").strip()
+    end_time_str = (request.POST.get("end_time") or "").strip()
+    label = (request.POST.get("label") or "").strip() or "Bloqueo"
+    color = (request.POST.get("color") or "").strip() or "#111111"
+    weekdays_only = bool(request.POST.get("weekdays_only"))
+
+    if not employee_ids or not date_from_str or not date_to_str or not start_time_str or not end_time_str:
+        messages.error(request, "Completa empleados, rango de fechas y tramo horario.")
+        return redirect("bookings:calendar_day")
+
+    try:
+        date_from = datetime.strptime(date_from_str, "%Y-%m-%d").date()
+        date_to = datetime.strptime(date_to_str, "%Y-%m-%d").date()
+        _date_value, start_time_value, end_time_value = _parse_block_start_end(date_from_str, start_time_str, end_time_str)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("bookings:calendar_day")
+
+    if date_to < date_from:
+        messages.error(request, "La fecha final debe ser posterior o igual a la inicial.")
+        return redirect("bookings:calendar_day")
+
+    employees = []
+    for raw_id in employee_ids:
+        employee = get_object_or_404(Employee, pk=raw_id, is_active=True)
+        if not can_access_employee(request.user, employee):
+            messages.error(request, "Intentaste usar un empleado fuera de tu alcance.")
+            return redirect("bookings:calendar_day")
+        employees.append(employee)
+
+    created_count = 0
+    current_date = date_from
+    while current_date <= date_to:
+        if weekdays_only and current_date.weekday() >= 5:
+            current_date += timedelta(days=1)
+            continue
+        for employee in employees:
+            time_block = EmployeeTimeBlock.objects.create(
+                employee=employee,
+                date=current_date,
+                start_time=start_time_value,
+                end_time=end_time_value,
+                label=label,
+                color=color,
+            )
+            created_count += 1
+            log_event(
+                actor=request.user,
+                section="calendar",
+                action="bulk_time_block_create",
+                instance=time_block,
+                message=f"Bloqueo masivo creado para {employee.full_name} el {current_date:%d/%m/%Y}.",
+                metadata={"label": label},
+            )
+        current_date += timedelta(days=1)
+
+    messages.success(request, f"Bloqueos masivos creados: {created_count}.")
+    return redirect(f"{reverse('bookings:calendar_day')}?date={date_from:%Y-%m-%d}")
+
+
+@login_required
+@require_POST
+def calendar_bulk_status_update(request):
+    date_str = (request.POST.get("date") or "").strip()
+    employee_id = (request.POST.get("employee_id") or "").strip()
+    from_status = (request.POST.get("from_status") or "").strip()
+    to_status = (request.POST.get("to_status") or "").strip()
+
+    valid_statuses = {value for value, _label in Booking.Statuses.choices}
+    if not date_str or to_status not in valid_statuses:
+        messages.error(request, "Indica fecha y estado destino válidos.")
+        return redirect("bookings:calendar_day")
+
+    try:
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        messages.error(request, "Fecha inválida.")
+        return redirect("bookings:calendar_day")
+
+    bookings = scope_bookings_queryset(
+        Booking.objects.select_related("employee", "client").filter(start_at__date=target_date),
+        request.user,
+    )
+
+    if employee_id:
+        employee = get_object_or_404(Employee, pk=employee_id, is_active=True)
+        if not can_access_employee(request.user, employee):
+            messages.error(request, "Sin acceso a ese empleado.")
+            return redirect("bookings:calendar_day")
+        bookings = bookings.filter(employee=employee)
+
+    if from_status:
+        bookings = bookings.filter(status=from_status)
+
+    affected = 0
+    for booking in bookings:
+        if booking.status == to_status:
+            continue
+        booking.status = to_status
+        booking.save(update_fields=["status", "updated_at"])
+        affected += 1
+        log_event(
+            actor=request.user,
+            section="booking",
+            action="bulk_status",
+            instance=booking,
+            message=f"Estado masivo cambiado a {booking.get_status_display()} para {booking.client}.",
+            metadata={"status": booking.status, "date": target_date.isoformat()},
+        )
+
+    messages.success(request, f"Reservas actualizadas en bloque: {affected}.")
+    return redirect(f"{reverse('bookings:calendar_day')}?date={target_date:%Y-%m-%d}")

@@ -47,13 +47,17 @@
           {{ next_booking.get_status_display }}
         </p>
         <p class="muted-text">
-          Cliente: {{ next_booking.client_price_snapshot }} € ·
-          Empleado: {{ next_booking.employee_amount_snapshot }} € ·
-          Salón: {{ next_booking.salon_amount_snapshot }} €
+          {% if request.user.can_manage_staff %}
+            Cliente: {{ next_booking.client_price_snapshot }} € ·
+            Empleado: {{ next_booking.employee_amount_snapshot }} € ·
+            Salón: {{ next_booking.salon_amount_snapshot }} €
+          {% else %}
+            Tu comisión estimada: {{ next_booking.employee_amount_snapshot }} €
+          {% endif %}
         </p>
         <div class="form-actions">
-          <a class="btn btn-light btn-small" href="{% url 'bookings:update' next_booking.id %}">Editar</a>
           <a class="btn btn-light btn-small" href="{% url 'bookings:calendar_day' %}">Abrir calendario</a>
+          <a class="btn btn-light btn-small" href="{% url 'bookings:update' next_booking.id %}">Editar</a>
         </div>
       </div>
     {% else %}
@@ -130,7 +134,9 @@
 <p class="muted-text" id="dashboard-overdue-empty" hidden>No hay reservas vencidas pendientes de cerrar.</p>
 {% endif %}
 
-{% include "dashboard/_client_rankings.html" %}
+{% if request.user.can_manage_staff %}
+  {% include "dashboard/_client_rankings.html" %}
+{% endif %}
 
 <section class="content-grid">
   <article class="panel-card">

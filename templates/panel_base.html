@@ -52,6 +52,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const openBtn = document.querySelector(".mobile-menu-btn");
   const closeBtn = document.querySelector(".sidebar-close");
   const navLinks = document.querySelectorAll(".sidebar .nav-link");
+  const sidebarGroupToggles = document.querySelectorAll("[data-sidebar-group-toggle]");
 
   function openSidebar() {
     body.classList.add("sidebar-open");
@@ -77,6 +78,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
   navLinks.forEach(link => {
     link.addEventListener("click", closeSidebar);
+  });
+
+  sidebarGroupToggles.forEach((toggle) => {
+    toggle.addEventListener("click", function () {
+      const group = toggle.closest("[data-sidebar-group]");
+      const content = group ? group.querySelector("[data-sidebar-group-content]") : null;
+      if (!content) return;
+      const nextExpanded = content.hidden;
+      content.hidden = !nextExpanded;
+      toggle.setAttribute("aria-expanded", nextExpanded ? "true" : "false");
+    });
   });
 
   document.addEventListener("keydown", function (e) {

@@ -1,0 +1,57 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Mi perfil | Anna Salon{% endblock %}
+{% block panel_title %}Mi perfil{% endblock %}
+{% block panel_subtitle %}Datos de acceso y contacto del usuario actual.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'accounts:change_password' %}">Cambiar contraseña</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="content-grid">
+  <article class="panel-card">
+    <h2>Cuenta</h2>
+    <form method="post" class="entity-form">
+      {% csrf_token %}
+      <div class="form-grid">
+        <div class="field">
+          <label for="{{ form.username.id_for_label }}">Usuario</label>
+          {{ form.username }}
+        </div>
+        <div class="field">
+          <label for="{{ form.first_name.id_for_label }}">Nombre</label>
+          {{ form.first_name }}
+        </div>
+        <div class="field">
+          <label for="{{ form.last_name.id_for_label }}">Apellidos</label>
+          {{ form.last_name }}
+        </div>
+        <div class="field">
+          <label for="{{ form.email.id_for_label }}">Email</label>
+          {{ form.email }}
+        </div>
+        <div class="field">
+          <label for="{{ form.phone.id_for_label }}">Teléfono</label>
+          {{ form.phone }}
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn">Guardar perfil</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="panel-card">
+    <h2>Vinculación</h2>
+    <div class="detail-grid">
+      <span class="muted-text">Rol</span>
+      <strong>{{ request.user.get_role_display }}</strong>
+      <span class="muted-text">Empleado</span>
+      <strong>{% if linked_employee %}{{ linked_employee }}{% else %}—{% endif %}</strong>
+      <span class="muted-text">Estado</span>
+      <strong>{% if request.user.is_active %}Activo{% else %}Inactivo{% endif %}</strong>
+    </div>
+  </article>
+</section>
+{% endblock %}

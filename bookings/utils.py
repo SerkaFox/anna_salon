@@ -272,6 +272,7 @@ def build_time_block_layout_data(block):
         "id": f"time-block-{block.pk}",
         "pk": block.pk,
         "employee_id": block.employee_id,
+        "employee_name": getattr(block.employee, "full_name", str(block.employee)),
         "label": block.label or "Bloqueo",
         "color": block.color or "#111111",
         "start_at": timezone.localtime(start_at),

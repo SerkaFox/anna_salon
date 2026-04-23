@@ -6,6 +6,9 @@
 {% block panel_subtitle %}Vista operativa del calendario con modo por días y modo por equipo.{% endblock %}
 
 {% block panel_actions %}
+  <button type="button" class="btn btn-light" data-bulk-panel-toggle aria-expanded="false" aria-controls="calendar-bulk-panel">
+    Operaciones masivas
+  </button>
   <a class="btn btn-light" href="{% url 'bookings:availability' %}">Disponibilidad</a>
   <a class="btn" href="{% url 'bookings:create' %}">+ Nueva reserva</a>
 {% endblock %}
@@ -100,14 +103,16 @@
             class="employee-agenda-card"
             style="--employee-color: {{ agenda.employee.calendar_color|default:'#c75c8b' }};"
           >
-            <div class="employee-agenda-card__head">
-              <div class="employee-agenda-card__title">
-                <strong>{{ agenda.employee.full_name }}</strong>
-                <span class="employee-agenda-card__count">{{ agenda.bookings_count }}</span>
-              </div>
-              <a class="employee-agenda-card__edit" href="{% url 'employees:update' agenda.employee.pk %}">
-                Perfil
-              </a>
+              <div class="employee-agenda-card__head">
+                <div class="employee-agenda-card__title">
+                  <strong>{{ agenda.employee.full_name }}</strong>
+                  <span class="employee-agenda-card__count">{{ agenda.bookings_count }}</span>
+                </div>
+              {% if request.user.can_manage_staff %}
+                <a class="employee-agenda-card__edit" href="{% url 'employees:update' agenda.employee.pk %}">
+                  Perfil
+                </a>
+              {% endif %}
             </div>
 
             <div class="employee-agenda-card__items">
@@ -190,9 +195,9 @@
                     data-end-time="{{ block.end_at|time:'H:i' }}"
                     data-label="{{ block.label }}"
                     data-color="{{ block.color|default:'#111111' }}"
-                    title="{{ block.label }}"
+                    title="{{ block.employee_name }} · {{ block.label }}"
                   >
-                    <span>{{ block.label }}</span>
+                    <span>{{ block.employee_name }} · {{ block.label }}</span>
                     <div class="calendar-time-block__actions" aria-label="Acciones del bloqueo">
                       <button type="button" data-time-block-edit-inline>Editar</button>
                       <button type="button" data-time-block-delete-inline>Eliminar</button>
@@ -299,7 +304,9 @@
                   <strong>{{ item.employee.full_name }}</strong>
                   <span>{{ item.schedule_label }}</span>
                 </div>
-                <a href="{% url 'employees:update' item.employee.pk %}">Perfil</a>
+                {% if request.user.can_manage_staff %}
+                  <a href="{% url 'employees:update' item.employee.pk %}">Perfil</a>
+                {% endif %}
               </header>
 
               <div class="team-day-grid calendar-grid" data-date="{{ current_date|date:'Y-m-d' }}" data-employee-id="{{ item.employee.pk }}">
@@ -672,8 +679,120 @@
   </div>
 </div>
 
+<div class="booking-modal" data-bulk-ops-modal hidden>
+  <div class="booking-modal__backdrop" data-bulk-ops-close></div>
+  <div class="booking-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-ops-modal-title">
+    <div class="booking-modal__head">
+      <div>
+        <span class="booking-modal__eyebrow">Calendario</span>
+        <h2 id="bulk-ops-modal-title">Operaciones masivas</h2>
+      </div>
+      <button type="button" class="booking-modal__close" aria-label="Cerrar" data-bulk-ops-close>×</button>
+    </div>
+    <div class="booking-modal__body">
+      <section class="dashboard-stack">
+        <article class="panel-card">
+          <h2>Bloqueos masivos</h2>
+          <form method="post" action="{% url 'bookings:calendar_bulk_blocks' %}" class="entity-form">
+            {% csrf_token %}
+            <div class="form-grid">
+              <div class="field">
+                <label for="bulk_block_employee_ids">Empleados</label>
+                <select class="input" id="bulk_block_employee_ids" name="employee_ids" multiple size="5" required>
+                  {% for employee in calendar_employees %}
+                    <option value="{{ employee.pk }}">{{ employee.full_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="field">
+                <label for="bulk_block_date_from">Desde</label>
+                <input class="input" id="bulk_block_date_from" type="date" name="date_from" value="{{ current_date|date:'Y-m-d' }}" required>
+              </div>
+              <div class="field">
+                <label for="bulk_block_date_to">Hasta</label>
+                <input class="input" id="bulk_block_date_to" type="date" name="date_to" value="{{ current_date|date:'Y-m-d' }}" required>
+              </div>
+              <div class="field">
+                <label for="bulk_block_start_time">Inicio</label>
+                <input class="input" id="bulk_block_start_time" type="time" name="start_time" step="300" required>
+              </div>
+              <div class="field">
+                <label for="bulk_block_end_time">Fin</label>
+                <input class="input" id="bulk_block_end_time" type="time" name="end_time" step="300" required>
+              </div>
+              <div class="field">
+                <label for="bulk_block_label">Motivo</label>
+                <select class="input" id="bulk_block_label" name="label">
+                  <option value="Comida">Comida</option>
+                  <option value="Médico">Médico</option>
+                  <option value="Descanso">Descanso</option>
+                  <option value="Reunión">Reunión</option>
+                  <option value="Bloqueo">Bloqueo</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <label class="switch-row">
+                <input type="checkbox" class="checkbox" name="weekdays_only">
+                <span>Solo lunes a viernes</span>
+              </label>
+              <input type="hidden" name="color" value="#111111">
+              <button type="submit" class="btn btn-small">Crear bloqueos</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="panel-card">
+          <h2>Estado masivo</h2>
+          <form method="post" action="{% url 'bookings:calendar_bulk_status' %}" class="entity-form">
+            {% csrf_token %}
+            <div class="form-grid">
+              <div class="field">
+                <label for="bulk_status_date">Fecha</label>
+                <input class="input" id="bulk_status_date" type="date" name="date" value="{{ current_date|date:'Y-m-d' }}" required>
+              </div>
+              <div class="field">
+                <label for="bulk_status_employee">Empleado</label>
+                <select class="input" id="bulk_status_employee" name="employee_id">
+                  <option value="">Todos los visibles</option>
+                  {% for employee in calendar_employees %}
+                    <option value="{{ employee.pk }}">{{ employee.full_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="field">
+                <label for="bulk_status_from">Estado actual</label>
+                <select class="input" id="bulk_status_from" name="from_status">
+                  <option value="">Cualquier estado</option>
+                  {% for value, label in status_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="field">
+                <label for="bulk_status_to">Cambiar a</label>
+                <select class="input" id="bulk_status_to" name="to_status" required>
+                  {% for value, label in status_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-small">Actualizar reservas</button>
+            </div>
+          </form>
+        </article>
+      </section>
+    </div>
+  </div>
+</div>
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  const bulkPanelToggle = document.querySelector("[data-bulk-panel-toggle]");
+  const bulkOpsModal = document.querySelector("[data-bulk-ops-modal]");
+  const bulkOpsCloseButtons = document.querySelectorAll("[data-bulk-ops-close]");
   const grids = document.querySelectorAll(".calendar-grid[data-date]");
   const cards = document.querySelectorAll(".booking-card[data-booking-id]");
   const timeBlockNodes = document.querySelectorAll(".calendar-time-block[data-time-block-id]");
@@ -756,6 +875,28 @@ document.addEventListener("DOMContentLoaded", function () {
   let pendingGridAction = null;
   let editingTimeBlockId = null;
   const teamFilterStorageKey = "anna-calendar-team-filter";
+
+  function openBulkOpsModal() {
+    if (!bulkOpsModal || !bulkPanelToggle) return;
+    bulkOpsModal.hidden = false;
+    bulkPanelToggle.setAttribute("aria-expanded", "true");
+  }
+
+  if (bulkPanelToggle) {
+    bulkPanelToggle.addEventListener("click", function () {
+      openBulkOpsModal();
+    });
+  }
+
+  function closeBulkOpsModal() {
+    if (!bulkOpsModal || !bulkPanelToggle) return;
+    bulkOpsModal.hidden = true;
+    bulkPanelToggle.setAttribute("aria-expanded", "false");
+  }
+
+  bulkOpsCloseButtons.forEach((button) => {
+    button.addEventListener("click", closeBulkOpsModal);
+  });
 
   function getCookie(name) {
     const cookies = document.cookie ? document.cookie.split(";") : [];
@@ -1810,6 +1951,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     if (event.key === "Escape" && !timeBlockModal.hidden) {
       closeTimeBlockModal();
+    }
+    if (event.key === "Escape" && bulkOpsModal && !bulkOpsModal.hidden) {
+      closeBulkOpsModal();
     }
   });
 

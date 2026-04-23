@@ -8,6 +8,8 @@ from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
 
+from accounts.permissions import admin_required
+from auditlog.services import log_event
 from bookings.models import Booking
 
 from .forms import EmployeeForm, WeeklyShiftFormSet
@@ -34,6 +36,7 @@ def build_weekly_shift_formset(request=None, instance=None):
 
 
 @login_required
+@admin_required
 def employee_list(request):
     query = request.GET.get("q", "").strip()
     sort = request.GET.get("sort", "revenue_desc").strip() or "revenue_desc"
@@ -201,6 +204,7 @@ def employee_list(request):
 
 
 @login_required
+@admin_required
 def employee_create(request):
     employee = Employee()
 
@@ -212,6 +216,13 @@ def employee_create(request):
                 employee = form.save()
                 weekly_formset.instance = employee
                 weekly_formset.save()
+            log_event(
+                actor=request.user,
+                section="employee",
+                action="create",
+                instance=employee,
+                message=f"Empleado creado: {employee.full_name}.",
+            )
             messages.success(request, f"Empleado creado: {employee.full_name}")
             return redirect("employees:update", pk=employee.pk)
     else:
@@ -228,6 +239,7 @@ def employee_create(request):
 
 
 @login_required
+@admin_required
 def employee_update(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
     ensure_weekly_shifts(employee)
@@ -239,6 +251,13 @@ def employee_update(request, pk):
             with transaction.atomic():
                 employee = form.save()
                 weekly_formset.save()
+            log_event(
+                actor=request.user,
+                section="employee",
+                action="update",
+                instance=employee,
+                message=f"Empleado actualizado: {employee.full_name}.",
+            )
             messages.success(request, f"Empleado actualizado: {employee.full_name}")
             return redirect("employees:list")
     else:
@@ -256,6 +275,7 @@ def employee_update(request, pk):
 
 
 @login_required
+@admin_required
 def employee_delete(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
 
@@ -263,6 +283,12 @@ def employee_delete(request, pk):
         employee_name = employee.full_name
         try:
             employee.delete()
+            log_event(
+                actor=request.user,
+                section="employee",
+                action="delete",
+                message=f"Empleado eliminado: {employee_name}.",
+            )
             messages.success(request, f"Empleado eliminado: {employee_name}")
         except ProtectedError:
             messages.error(

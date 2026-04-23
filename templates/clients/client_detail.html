@@ -33,21 +33,12 @@
     <strong class="stat-value">{{ referred_clients_count }}</strong>
   </article>
 
-  <article class="stat-card">
-		{% if available_rewards > 0 %}
-		<section class="panel-card">
-		  <h2>Premio disponible</h2>
-		  <p class="muted-text">
-			Este cliente tiene {{ available_rewards }} premio(s) disponible(s).
-		  </p>
-		  <div class="form-actions">
-			<a class="btn btn-danger" href="{% url 'clients:use_reward' client.pk %}">
-			  Usar premio ahora
-			</a>
-		  </div>
-		</section>
-		{% endif %}
-  </article>
+  {% if request.user.can_manage_staff and available_rewards > 0 %}
+    <article class="stat-card">
+      <span class="stat-label">Premios</span>
+      <strong class="stat-value">{{ available_rewards }}</strong>
+    </article>
+  {% endif %}
 </section>
 
 <section class="content-grid">
@@ -58,8 +49,10 @@
     <p><strong>Email:</strong> {{ client.email|default:"—" }}</p>
     <p><strong>Fecha de nacimiento:</strong> {{ client.birth_date|default:"—" }}</p>
     <p><strong>Recomendado por:</strong>
-      {% if client.referred_by %}
+      {% if client.referred_by and request.user.can_manage_staff %}
         <a href="{% url 'clients:detail' client.referred_by.id %}">{{ client.referred_by.full_name }}</a>
+      {% elif client.referred_by %}
+        {{ client.referred_by.full_name }}
       {% else %}
         —
       {% endif %}
@@ -71,9 +64,13 @@
     <p>
       <strong>Última visita:</strong>
       {% if last_visit %}
-        <a href="{% url 'bookings:update' last_visit.id %}">
+        {% if request.user.can_manage_staff %}
+          <a href="{% url 'bookings:update' last_visit.id %}">
+            {{ last_visit.start_at|date:"d/m/Y H:i" }}
+          </a>
+        {% else %}
           {{ last_visit.start_at|date:"d/m/Y H:i" }}
-        </a><br>
+        {% endif %}<br>
         <span class="muted-text">{{ last_visit.service }} · {{ last_visit.employee }}</span>
       {% else %}
         —
@@ -82,9 +79,13 @@
     <p>
       <strong>Próxima cita:</strong>
       {% if next_booking %}
-        <a href="{% url 'bookings:update' next_booking.id %}">
+        {% if request.user.can_manage_staff %}
+          <a href="{% url 'bookings:update' next_booking.id %}">
+            {{ next_booking.start_at|date:"d/m/Y H:i" }}
+          </a>
+        {% else %}
           {{ next_booking.start_at|date:"d/m/Y H:i" }}
-        </a><br>
+        {% endif %}<br>
         <span class="muted-text">{{ next_booking.service }} · {{ next_booking.employee }}</span>
       {% else %}
         —
@@ -92,10 +93,14 @@
     </p>
     <p>
       <strong>Para próximo premio:</strong>
-      {% if remaining_for_next_reward == 0 %}
-        Ya disponible
+      {% if request.user.can_manage_staff %}
+        {% if remaining_for_next_reward == 0 %}
+          Ya disponible
+        {% else %}
+          Faltan {{ remaining_for_next_reward }} clientes
+        {% endif %}
       {% else %}
-        Faltan {{ remaining_for_next_reward }} clientes
+        Visible solo para administración
       {% endif %}
 	  
     </p>
@@ -159,7 +164,11 @@
               {% endif %}
             </div>
             <p class="muted-text">
-              <a href="{% url 'bookings:update' photo.booking.id %}">{{ photo.booking.start_at|date:"d/m/Y H:i" }}</a>
+              {% if request.user.can_manage_staff %}
+                <a href="{% url 'bookings:update' photo.booking.id %}">{{ photo.booking.start_at|date:"d/m/Y H:i" }}</a>
+              {% else %}
+                {{ photo.booking.start_at|date:"d/m/Y H:i" }}
+              {% endif %}
               · {{ photo.booking.service }} · {{ photo.booking.employee }}
             </p>
             {% if photo.notes %}
@@ -187,7 +196,13 @@
     {% for item in photo_comparisons %}
       <article class="photo-compare-card">
         <div class="photo-compare-card__head">
-          <strong><a href="{% url 'bookings:update' item.booking.id %}">{{ item.booking.start_at|date:"d/m/Y H:i" }}</a></strong>
+          <strong>
+            {% if request.user.can_manage_staff %}
+              <a href="{% url 'bookings:update' item.booking.id %}">{{ item.booking.start_at|date:"d/m/Y H:i" }}</a>
+            {% else %}
+              {{ item.booking.start_at|date:"d/m/Y H:i" }}
+            {% endif %}
+          </strong>
           <span class="muted-text">{{ item.booking.service }} · {{ item.booking.employee }}</span>
         </div>
         <div
