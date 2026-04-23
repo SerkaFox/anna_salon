@@ -98,13 +98,17 @@
 
 <section class="content-grid">
   <article class="panel-card">
-    <h2>Registrar pago</h2>
-    <form method="post" action="{% url 'documents:payment_create' document.id %}" class="entity-form">
+    <h2>{% if editing_payment %}Editar movimiento{% else %}Registrar movimiento{% endif %}</h2>
+    <form method="post" action="{% if editing_payment %}{% url 'documents:payment_edit' editing_payment.id %}{% else %}{% url 'documents:payment_create' document.id %}{% endif %}" class="entity-form">
       {% csrf_token %}
       <div class="form-grid">
         <div class="field">
           <label for="{{ payment_form.paid_at.id_for_label }}">Fecha de pago</label>
           {{ payment_form.paid_at }}
+        </div>
+        <div class="field">
+          <label for="{{ payment_form.entry_type.id_for_label }}">Tipo</label>
+          {{ payment_form.entry_type }}
         </div>
         <div class="field">
           <label for="{{ payment_form.amount.id_for_label }}">Importe</label>
@@ -124,7 +128,10 @@
         {{ payment_form.notes }}
       </div>
       <div class="form-actions">
-        <button type="submit" class="btn" {% if document.balance_due <= 0 %}disabled{% endif %}>Registrar pago</button>
+        <button type="submit" class="btn">{% if editing_payment %}Guardar movimiento{% else %}Registrar movimiento{% endif %}</button>
+        {% if editing_payment %}
+          <a class="btn btn-light" href="{% url 'documents:detail' document.id %}">Cancelar</a>
+        {% endif %}
       </div>
     </form>
   </article>
@@ -136,22 +143,34 @@
         <thead>
           <tr>
             <th>Fecha</th>
+            <th>Tipo</th>
             <th>Método</th>
             <th>Referencia</th>
             <th>Importe</th>
+            <th class="actions-cell">Acciones</th>
           </tr>
         </thead>
         <tbody>
           {% for payment in document.payments.all %}
             <tr>
               <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+              <td>{{ payment.get_entry_type_display }}</td>
               <td>{{ payment.get_method_display }}</td>
               <td>{{ payment.reference|default:"-" }}</td>
-              <td><strong>{{ payment.amount }} €</strong></td>
+              <td><strong>{{ payment.signed_amount }} €</strong></td>
+              <td class="actions-cell">
+                <div class="actions-inline">
+                  <a class="btn btn-light btn-small" href="{% url 'documents:payment_edit' payment.id %}">Editar</a>
+                  <form method="post" action="{% url 'documents:payment_delete' payment.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-light btn-small">Eliminar</button>
+                  </form>
+                </div>
+              </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="4">
+              <td colspan="6">
                 <div class="empty-state">
                   <h2>Sin pagos</h2>
                   <p>Todavía no se registró ningún cobro para este documento.</p>

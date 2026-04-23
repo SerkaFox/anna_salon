@@ -6,13 +6,14 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from bookings.models import Booking
 
 from .forms import PaymentForm
-from .models import FiscalDocument, Payment
+from .models import CashClosure, FiscalDocument, Payment
 
 
 def _filtered_documents(request):
@@ -134,6 +135,7 @@ def document_detail(request, pk):
             "active_section": "documents",
             "document": document,
             "payment_form": PaymentForm(initial={"paid_at": initial_paid_at, "amount": initial_amount}),
+            "editing_payment": None,
         },
     )
 
@@ -211,18 +213,28 @@ def payment_create(request, document_pk):
     payment.fiscal_document = document
     payment.booking = document.booking
 
-    if payment.amount > document.balance_due and document.balance_due > Decimal("0.00"):
+    if (
+        payment.entry_type == Payment.EntryTypes.PAYMENT
+        and payment.amount > document.balance_due
+        and document.balance_due > Decimal("0.00")
+    ):
         messages.error(request, "El pago supera el saldo pendiente del documento.")
         return redirect("documents:detail", pk=document.pk)
 
+    if payment.entry_type == Payment.EntryTypes.REFUND and payment.amount > document.payments_total:
+        messages.error(request, "La devolución supera lo ya cobrado en el documento.")
+        return redirect("documents:detail", pk=document.pk)
+
     payment.save()
-    messages.success(request, f"Pago registrado: {payment.amount} € por {payment.get_method_display()}.")
+    messages.success(request, f"{payment.get_entry_type_display()} registrada: {payment.amount} € por {payment.get_method_display()}.")
     return redirect("documents:detail", pk=document.pk)
 
 
 @login_required
 def cashbox(request):
     date_value = request.GET.get("date", "").strip()
+    method_value = request.GET.get("method", "").strip()
+    entry_type_value = request.GET.get("entry_type", "").strip()
     if date_value:
         try:
             selected_date = timezone.datetime.strptime(date_value, "%Y-%m-%d").date()
@@ -238,9 +250,17 @@ def cashbox(request):
         "fiscal_document",
     ).filter(paid_at__date=selected_date)
 
-    totals = payments.aggregate(total=Sum("amount"))
+    if method_value:
+        payments = payments.filter(method=method_value)
+
+    if entry_type_value:
+        payments = payments.filter(entry_type=entry_type_value)
+
+    closure = CashClosure.objects.filter(closure_date=selected_date).select_related("closed_by").first()
+    payments_list = list(payments)
+    payments_total = sum((payment.signed_amount for payment in payments_list), Decimal("0.00"))
     totals_by_method = {
-        method: payments.filter(method=method).aggregate(total=Sum("amount")).get("total") or Decimal("0.00")
+        method: sum((payment.signed_amount for payment in payments_list if payment.method == method), Decimal("0.00"))
         for method, _label in Payment.Methods.choices
     }
     pending_documents = FiscalDocument.objects.select_related(
@@ -258,11 +278,121 @@ def cashbox(request):
         {
             "active_section": "cashbox",
             "selected_date": selected_date,
-            "payments": payments,
-            "payments_count": payments.count(),
-            "payments_total": totals.get("total") or Decimal("0.00"),
+            "payments": payments_list,
+            "payments_count": len(payments_list),
+            "payments_total": payments_total,
             "totals_by_method": totals_by_method,
             "pending_documents": pending_documents[:12],
             "pending_total": pending_total,
+            "cash_closure": closure,
+            "payment_method_choices": Payment.Methods.choices,
+            "entry_type_choices": Payment.EntryTypes.choices,
+            "method_value": method_value,
+            "entry_type_value": entry_type_value,
         },
     )
+
+
+@login_required
+def payment_edit(request, pk):
+    payment = get_object_or_404(
+        Payment.objects.select_related("fiscal_document", "booking", "booking__client"),
+        pk=pk,
+    )
+    document = FiscalDocument.objects.select_related(
+        "booking",
+        "booking__client",
+        "booking__employee",
+        "booking__service",
+        "booking__zone",
+    ).prefetch_related("payments").get(pk=payment.fiscal_document_id)
+
+    if request.method == "POST":
+        form = PaymentForm(request.POST, instance=payment)
+        if form.is_valid():
+            updated_payment = form.save(commit=False)
+            updated_payment.fiscal_document = document
+            updated_payment.booking = document.booking
+
+            other_payments = [item for item in document.payments.all() if item.pk != payment.pk]
+            other_total = sum((item.signed_amount for item in other_payments), Decimal("0.00"))
+            projected_total = other_total + updated_payment.signed_amount
+
+            if projected_total > document.total_amount:
+                messages.error(request, "El total cobrado no puede superar el total del documento.")
+            elif projected_total < Decimal("0.00"):
+                messages.error(request, "La devolución total no puede dejar el documento en saldo cobrado negativo.")
+            else:
+                updated_payment.save()
+                messages.success(request, "Movimiento actualizado correctamente.")
+                return redirect("documents:detail", pk=document.pk)
+    else:
+        form = PaymentForm(
+            instance=payment,
+            initial={"paid_at": timezone.localtime(payment.paid_at).strftime("%Y-%m-%dT%H:%M")},
+        )
+
+    return render(
+        request,
+        "documents/document_detail.html",
+        {
+            "active_section": "documents",
+            "document": document,
+            "payment_form": form,
+            "editing_payment": payment,
+        },
+    )
+
+
+@login_required
+@require_POST
+def payment_delete(request, pk):
+    payment = get_object_or_404(Payment.objects.select_related("fiscal_document"), pk=pk)
+    document_pk = payment.fiscal_document_id
+    payment.delete()
+    messages.success(request, "Movimiento eliminado correctamente.")
+    return redirect("documents:detail", pk=document_pk)
+
+
+@login_required
+@require_POST
+def cashbox_close(request):
+    date_str = request.POST.get("date", "").strip()
+    notes = request.POST.get("notes", "").strip()
+
+    if not date_str:
+        messages.error(request, "Indica una fecha para cerrar caja.")
+        return redirect("documents:cashbox")
+
+    try:
+        closure_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        messages.error(request, "Fecha inválida para el cierre de caja.")
+        return redirect("documents:cashbox")
+
+    payments = list(Payment.objects.filter(paid_at__date=closure_date))
+    totals_by_method = {
+        method: sum((payment.signed_amount for payment in payments if payment.method == method), Decimal("0.00"))
+        for method, _label in Payment.Methods.choices
+    }
+    total_amount = sum((payment.signed_amount for payment in payments), Decimal("0.00"))
+
+    closure, created = CashClosure.objects.update_or_create(
+        closure_date=closure_date,
+        defaults={
+            "total_amount": total_amount,
+            "cash_amount": totals_by_method[Payment.Methods.CASH],
+            "card_amount": totals_by_method[Payment.Methods.CARD],
+            "bizum_amount": totals_by_method[Payment.Methods.BIZUM],
+            "transfer_amount": totals_by_method[Payment.Methods.TRANSFER],
+            "payments_count": len(payments),
+            "notes": notes,
+            "closed_by": request.user,
+        },
+    )
+
+    messages.success(
+        request,
+        "Caja cerrada correctamente." if created else "Cierre de caja actualizado correctamente.",
+    )
+    return redirect(f"{reverse('documents:cashbox')}?date={closure.closure_date:%Y-%m-%d}")

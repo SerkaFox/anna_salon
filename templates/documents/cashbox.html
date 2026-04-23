@@ -16,6 +16,24 @@
       <label for="date">Fecha</label>
       <input class="input" type="date" id="date" name="date" value="{{ selected_date|date:'Y-m-d' }}">
     </div>
+    <div class="field-inline">
+      <label for="method">Método</label>
+      <select class="input" id="method" name="method">
+        <option value="">Todos</option>
+        {% for value, label in payment_method_choices %}
+          <option value="{{ value }}" {% if method_value == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field-inline">
+      <label for="entry_type">Tipo</label>
+      <select class="input" id="entry_type" name="entry_type">
+        <option value="">Todos</option>
+        {% for value, label in entry_type_choices %}
+          <option value="{{ value }}" {% if entry_type_value == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="form-actions">
       <button type="submit" class="btn">Ver caja</button>
       <a href="{% url 'documents:cashbox' %}" class="btn btn-light">Hoy</a>
@@ -57,6 +75,29 @@
   </article>
 </section>
 
+<section class="panel-card">
+  <div class="dashboard-section-head">
+    <div>
+      <h2>Cierre de caja</h2>
+      <p class="muted-text">Guarda un snapshot del día con sus importes por método.</p>
+    </div>
+    {% if cash_closure %}
+      <span class="badge">Cerrada {{ cash_closure.closed_at|date:"d/m H:i" }}</span>
+    {% endif %}
+  </div>
+  <form method="post" action="{% url 'documents:cashbox_close' %}" class="entity-form">
+    {% csrf_token %}
+    <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+    <div class="field">
+      <label for="cashbox_notes">Notas de cierre</label>
+      <textarea class="textarea" id="cashbox_notes" name="notes" rows="3" placeholder="Observaciones del cierre">{% if cash_closure %}{{ cash_closure.notes }}{% endif %}</textarea>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn">{% if cash_closure %}Actualizar cierre{% else %}Cerrar caja{% endif %}</button>
+    </div>
+  </form>
+</section>
+
 <section class="content-grid">
   <article class="panel-card">
     <h2>Pagos del día</h2>
@@ -67,8 +108,10 @@
             <th>Hora</th>
             <th>Cliente</th>
             <th>Documento</th>
+            <th>Tipo</th>
             <th>Método</th>
             <th>Importe</th>
+            <th class="actions-cell">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -77,12 +120,19 @@
               <td>{{ payment.paid_at|date:"H:i" }}</td>
               <td>{{ payment.booking.client }}</td>
               <td><a href="{% url 'documents:detail' payment.fiscal_document.id %}">{{ payment.fiscal_document.number }}</a></td>
+              <td>{{ payment.get_entry_type_display }}</td>
               <td>{{ payment.get_method_display }}</td>
-              <td><strong>{{ payment.amount }} €</strong></td>
+              <td><strong>{{ payment.signed_amount }} €</strong></td>
+              <td class="actions-cell">
+                <div class="actions-inline">
+                  <a class="btn btn-light btn-small" href="{% url 'documents:payment_edit' payment.id %}">Editar</a>
+                  <a class="btn btn-light btn-small" href="{% url 'documents:detail' payment.fiscal_document.id %}">Documento</a>
+                </div>
+              </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="5">
+              <td colspan="7">
                 <div class="empty-state">
                   <h2>Sin pagos</h2>
                   <p>No se registraron cobros para la fecha seleccionada.</p>

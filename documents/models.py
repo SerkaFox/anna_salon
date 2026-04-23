@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -131,6 +132,10 @@ class FiscalDocument(models.Model):
 
 
 class Payment(models.Model):
+    class EntryTypes(models.TextChoices):
+        PAYMENT = "payment", "Pago"
+        REFUND = "refund", "Devolución"
+
     class Methods(models.TextChoices):
         CASH = "cash", "Efectivo"
         CARD = "card", "Tarjeta"
@@ -148,6 +153,12 @@ class Payment(models.Model):
         on_delete=models.PROTECT,
         related_name="payments",
         verbose_name="Reserva",
+    )
+    entry_type = models.CharField(
+        "Tipo movimiento",
+        max_length=20,
+        choices=EntryTypes.choices,
+        default=EntryTypes.PAYMENT,
     )
     paid_at = models.DateTimeField("Fecha de pago", default=timezone.now)
     amount = models.DecimalField("Importe", max_digits=10, decimal_places=2)
@@ -169,7 +180,41 @@ class Payment(models.Model):
     def __str__(self):
         return f"{self.get_method_display()} · {self.amount} € · {self.booking.client}"
 
+    @property
+    def signed_amount(self):
+        if self.entry_type == self.EntryTypes.REFUND:
+            return -self.amount
+        return self.amount
+
     def save(self, *args, **kwargs):
         if self.fiscal_document_id and not self.booking_id:
             self.booking = self.fiscal_document.booking
         super().save(*args, **kwargs)
+
+
+class CashClosure(models.Model):
+    closure_date = models.DateField("Fecha", unique=True)
+    total_amount = models.DecimalField("Total", max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    cash_amount = models.DecimalField("Efectivo", max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    card_amount = models.DecimalField("Tarjeta", max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    bizum_amount = models.DecimalField("Bizum", max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    transfer_amount = models.DecimalField("Transferencia", max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    payments_count = models.PositiveIntegerField("Movimientos", default=0)
+    notes = models.TextField("Notas", blank=True)
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_closures",
+        verbose_name="Cerrado por",
+    )
+    closed_at = models.DateTimeField("Cerrado el", auto_now_add=True)
+
+    class Meta:
+        ordering = ["-closure_date", "-id"]
+        verbose_name = "Cierre de caja"
+        verbose_name_plural = "Cierres de caja"
+
+    def __str__(self):
+        return f"Caja {self.closure_date:%d/%m/%Y}"

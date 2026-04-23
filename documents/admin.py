@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import FiscalDocument, Payment
+from .models import CashClosure, FiscalDocument, Payment
 
 
 @admin.register(FiscalDocument)
@@ -36,8 +36,8 @@ class FiscalDocumentAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ("paid_at", "method", "amount", "client_name", "document_number")
-    list_filter = ("method", "paid_at")
+    list_display = ("paid_at", "entry_type", "method", "amount", "client_name", "document_number")
+    list_filter = ("entry_type", "method", "paid_at")
     search_fields = (
         "fiscal_document__number",
         "booking__client__first_name",
@@ -54,3 +54,9 @@ class PaymentAdmin(admin.ModelAdmin):
         return obj.fiscal_document.number
 
     document_number.short_description = "Documento"
+
+
+@admin.register(CashClosure)
+class CashClosureAdmin(admin.ModelAdmin):
+    list_display = ("closure_date", "total_amount", "payments_count", "closed_by", "closed_at")
+    search_fields = ("closure_date", "closed_by__username")

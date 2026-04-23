@@ -6,12 +6,13 @@ from .models import Payment
 class PaymentForm(forms.ModelForm):
     class Meta:
         model = Payment
-        fields = ["paid_at", "amount", "method", "reference", "notes"]
+        fields = ["paid_at", "entry_type", "amount", "method", "reference", "notes"]
         widgets = {
             "paid_at": forms.DateTimeInput(
                 attrs={"class": "input", "type": "datetime-local"},
                 format="%Y-%m-%dT%H:%M",
             ),
+            "entry_type": forms.Select(attrs={"class": "input"}),
             "amount": forms.NumberInput(attrs={"class": "input", "step": "0.01", "min": "0.01"}),
             "method": forms.Select(attrs={"class": "input"}),
             "reference": forms.TextInput(attrs={"class": "input", "placeholder": "Ticket, id Bizum, transferencia"}),
