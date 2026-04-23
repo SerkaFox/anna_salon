@@ -7,6 +7,9 @@
 
 {% block panel_actions %}
   <a class="btn btn-light" href="{% url 'documents:list' %}">Documentos</a>
+  <a class="btn btn-light" href="{% url 'documents:unpaid' %}">Pendientes</a>
+  <a class="btn btn-light" href="{% url 'documents:cashbox_print' %}?date={{ selected_date|date:'Y-m-d' }}" target="_blank" rel="noopener">Imprimir cierre</a>
+  <a class="btn btn-light" href="{% url 'documents:cashbox_export_csv' %}?date={{ selected_date|date:'Y-m-d' }}{% if method_value %}&method={{ method_value }}{% endif %}{% if entry_type_value %}&entry_type={{ entry_type_value }}{% endif %}">Exportar CSV</a>
 {% endblock %}
 
 {% block panel_content %}
@@ -136,6 +139,41 @@
                 <div class="empty-state">
                   <h2>Sin pagos</h2>
                   <p>No se registraron cobros para la fecha seleccionada.</p>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="panel-card">
+    <h2>Historial de cierres</h2>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Movimientos</th>
+            <th>Total</th>
+            <th>Cerrado por</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for closure in recent_closures %}
+            <tr>
+              <td>{{ closure.closure_date|date:"d/m/Y" }}</td>
+              <td>{{ closure.payments_count }}</td>
+              <td><strong>{{ closure.total_amount }} €</strong></td>
+              <td>{% if closure.closed_by %}{{ closure.closed_by }}{% else %}-{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4">
+                <div class="empty-state">
+                  <h2>Sin cierres</h2>
+                  <p>Todavía no hay cierres de caja registrados.</p>
                 </div>
               </td>
             </tr>

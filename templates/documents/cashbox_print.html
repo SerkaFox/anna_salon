@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Cierre de caja {{ selected_date|date:"d/m/Y" }} | Anna Salon</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #1f2937; margin: 32px; }
+    h1, h2 { margin: 0 0 12px; }
+    .meta { margin-bottom: 24px; color: #4b5563; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 24px; }
+    .card { border: 1px solid #d1d5db; border-radius: 8px; padding: 12px; }
+    .label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 6px; text-transform: uppercase; }
+    .value { font-size: 20px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
+    th { background: #f3f4f6; }
+    @media print {
+      body { margin: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Cierre de caja</h1>
+  <div class="meta">
+    <div>Fecha: {{ selected_date|date:"d/m/Y" }}</div>
+    <div>Movimientos: {{ payments_count }}</div>
+    {% if cash_closure %}
+      <div>Cerrado por: {% if cash_closure.closed_by %}{{ cash_closure.closed_by }}{% else %}-{% endif %}</div>
+      <div>Hora de cierre: {{ cash_closure.closed_at|date:"d/m/Y H:i" }}</div>
+    {% endif %}
+  </div>
+
+  <div class="grid" style="grid-template-columns: repeat(5, 1fr);">
+    <div class="card">
+      <span class="label">Total</span>
+      <div class="value">{{ payments_total }} €</div>
+    </div>
+    <div class="card">
+      <span class="label">Efectivo</span>
+      <div class="value">{{ totals_by_method.cash }} €</div>
+    </div>
+    <div class="card">
+      <span class="label">Tarjeta</span>
+      <div class="value">{{ totals_by_method.card }} €</div>
+    </div>
+    <div class="card">
+      <span class="label">Bizum</span>
+      <div class="value">{{ totals_by_method.bizum }} €</div>
+    </div>
+    <div class="card">
+      <span class="label">Transferencia</span>
+      <div class="value">{{ totals_by_method.transfer }} €</div>
+    </div>
+  </div>
+
+  <h2>Movimientos</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Hora</th>
+        <th>Cliente</th>
+        <th>Documento</th>
+        <th>Tipo</th>
+        <th>Método</th>
+        <th>Importe</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for payment in payments %}
+        <tr>
+          <td>{{ payment.paid_at|date:"H:i" }}</td>
+          <td>{{ payment.booking.client }}</td>
+          <td>{{ payment.fiscal_document.number }}</td>
+          <td>{{ payment.get_entry_type_display }}</td>
+          <td>{{ payment.get_method_display }}</td>
+          <td>{{ payment.signed_amount }} €</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="6">No hay movimientos para esta fecha.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if cash_closure and cash_closure.notes %}
+    <h2>Notas</h2>
+    <p>{{ cash_closure.notes }}</p>
+  {% endif %}
+
+  <script>
+    window.addEventListener("load", function () {
+      window.print();
+    });
+  </script>
+</body>
+</html>

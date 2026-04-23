@@ -70,7 +70,7 @@ def booking_list(request):
 
     bookings = Booking.objects.select_related(
         "client", "employee", "service", "zone"
-    ).all()
+    ).prefetch_related("fiscal_documents__payments").all()
 
     if query:
         bookings = bookings.filter(
@@ -87,13 +87,29 @@ def booking_list(request):
     if source:
         bookings = bookings.filter(source=source)
 
+    bookings = list(bookings)
+    for booking in bookings:
+        active_documents = [
+            document
+            for document in booking.fiscal_documents.all()
+            if document.status in {document.Statuses.DRAFT, document.Statuses.ISSUED}
+        ]
+        payable_document = None
+        for document_type in ("invoice", "receipt"):
+            payable_document = next((doc for doc in active_documents if doc.document_type == document_type), None)
+            if payable_document:
+                break
+        booking.payable_document = payable_document
+        booking.balance_due = payable_document.balance_due if payable_document else booking.client_price_snapshot
+        booking.is_fully_paid = booking.balance_due <= 0
+
     context = {
         "active_section": "bookings",
         "bookings": bookings,
         "query": query,
         "status": status,
         "source": source,
-        "bookings_count": bookings.count(),
+        "bookings_count": len(bookings),
         "status_choices": Booking.Statuses.choices,
         "source_choices": Booking.Sources.choices,
     }

@@ -69,7 +69,7 @@ class FiscalDocument(models.Model):
 
     @property
     def payments_total(self):
-        total = sum((payment.amount for payment in self.payments.all()), Decimal("0.00"))
+        total = sum((payment.signed_amount for payment in self.payments.all()), Decimal("0.00"))
         return total
 
     @property

@@ -1,13 +1,13 @@
 {% extends "panel_base.html" %}
 
-{% block title %}Documentos | Anna Salon{% endblock %}
+{% block title %}Pendientes | Anna Salon{% endblock %}
 
-{% block panel_title %}Documentos{% endblock %}
-{% block panel_subtitle %}Recibos, facturas, proformas y exportación para contabilidad.{% endblock %}
+{% block panel_title %}Documentos pendientes{% endblock %}
+{% block panel_subtitle %}Saldo por cobrar con acceso rápido a cobro y revisión.{% endblock %}
 
 {% block panel_actions %}
-  <a class="btn btn-light" href="{% url 'documents:unpaid' %}">Pendientes</a>
-  <a class="btn btn-light" href="{% url 'documents:export_csv' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}">Exportar CSV</a>
+  <a class="btn btn-light" href="{% url 'documents:list' %}">Todos los documentos</a>
+  <a class="btn btn-light" href="{% url 'documents:cashbox' %}">Caja</a>
 {% endblock %}
 
 {% block panel_content %}
@@ -17,20 +17,8 @@
     <strong class="stat-value">{{ document_count }}</strong>
   </article>
   <article class="stat-card">
-    <span class="stat-label">Base</span>
-    <strong class="stat-value">{{ totals.subtotal|default:"0.00" }} €</strong>
-  </article>
-  <article class="stat-card">
-    <span class="stat-label">IVA</span>
-    <strong class="stat-value">{{ totals.tax|default:"0.00" }} €</strong>
-  </article>
-  <article class="stat-card">
-    <span class="stat-label">Total</span>
-    <strong class="stat-value">{{ totals.total|default:"0.00" }} €</strong>
-  </article>
-  <article class="stat-card">
-    <span class="stat-label">Pendiente</span>
-    <strong class="stat-value">{{ pending_total|default:"0.00" }} €</strong>
+    <span class="stat-label">Pendiente total</span>
+    <strong class="stat-value">{{ pending_total }} €</strong>
   </article>
 </section>
 
@@ -52,16 +40,6 @@
     </div>
 
     <div class="field-inline">
-      <label for="status">Estado</label>
-      <select class="input" name="status" id="status">
-        <option value="">Todos</option>
-        {% for value, label in status_choices %}
-          <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="field-inline">
       <label for="date_from">Desde</label>
       <input class="input" type="date" name="date_from" id="date_from" value="{{ date_from }}">
     </div>
@@ -73,7 +51,7 @@
 
     <div class="form-actions">
       <button type="submit" class="btn">Filtrar</button>
-      <a href="{% url 'documents:list' %}" class="btn btn-light">Limpiar</a>
+      <a href="{% url 'documents:unpaid' %}" class="btn btn-light">Limpiar</a>
     </div>
   </form>
 </section>
@@ -84,16 +62,12 @@
       <thead>
         <tr>
           <th>Número</th>
-          <th>Tipo</th>
           <th>Fecha</th>
           <th>Cliente</th>
           <th>Servicio</th>
-          <th>Base</th>
-          <th>IVA</th>
           <th>Total</th>
           <th>Cobrado</th>
           <th>Pendiente</th>
-          <th>Estado</th>
           <th class="actions-cell">Acciones</th>
         </tr>
       </thead>
@@ -101,16 +75,12 @@
         {% for document in documents %}
           <tr>
             <td>{{ document.number }}</td>
-            <td>{{ document.get_document_type_display }}</td>
             <td>{{ document.issue_date|date:"d/m/Y" }}</td>
             <td>{{ document.booking.client }}</td>
             <td>{{ document.booking.service }}</td>
-            <td>{{ document.subtotal_amount }} €</td>
-            <td>{{ document.tax_amount }} €</td>
-            <td><strong>{{ document.total_amount }} €</strong></td>
+            <td>{{ document.total_amount }} €</td>
             <td>{{ document.payments_total }} €</td>
             <td><strong>{{ document.balance_due }} €</strong></td>
-            <td>{{ document.get_status_display }}</td>
             <td class="actions-cell">
               <div class="actions-inline">
                 <a class="btn btn-light btn-small" href="{% url 'documents:detail' document.id %}">Abrir</a>
@@ -120,10 +90,10 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="12">
+            <td colspan="8">
               <div class="empty-state">
-                <h2>No hay documentos</h2>
-                <p>Crea un recibo o una factura desde la lista de reservas.</p>
+                <h2>Todo cobrado</h2>
+                <p>No hay documentos con saldo pendiente para los filtros actuales.</p>
               </div>
             </td>
           </tr>

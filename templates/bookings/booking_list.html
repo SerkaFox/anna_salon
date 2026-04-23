@@ -90,6 +90,18 @@
               <div class="booking-actions">
                 <span class="booking-actions__label">Acciones</span>
                 <a class="btn btn-light btn-small" href="{% url 'bookings:update' booking.id %}">Editar</a>
+                <form method="post" action="{% url 'documents:booking_quick_payment' booking.id %}" class="booking-pay-form">
+                  {% csrf_token %}
+                  <select class="input booking-pay-form__select" name="method" {% if booking.is_fully_paid %}disabled{% endif %}>
+                    <option value="cash">Efectivo</option>
+                    <option value="card">Tarjeta</option>
+                    <option value="bizum">Bizum</option>
+                    <option value="transfer">Transferencia</option>
+                  </select>
+                  <button class="btn btn-small" type="submit" {% if booking.is_fully_paid %}disabled{% endif %}>
+                    {% if booking.is_fully_paid %}Cobrado{% else %}Cobrar {{ booking.balance_due }} €{% endif %}
+                  </button>
+                </form>
                 <form method="post" action="{% url 'documents:create_from_booking' booking.id 'receipt' %}">
                   {% csrf_token %}
                   <button class="btn btn-light btn-small" type="submit">Recibo</button>
@@ -102,6 +114,11 @@
                   {% csrf_token %}
                   <button class="btn btn-light btn-small" type="submit">Proforma</button>
                 </form>
+                {% if booking.payable_document %}
+                  <a class="btn btn-light btn-small" href="{% url 'documents:detail' booking.payable_document.id %}">
+                    {{ booking.payable_document.number }}
+                  </a>
+                {% endif %}
                 <a class="btn btn-light btn-small" href="{% url 'bookings:delete' booking.id %}">Eliminar</a>
               </div>
             </td>

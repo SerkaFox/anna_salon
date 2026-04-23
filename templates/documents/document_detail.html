@@ -7,6 +7,7 @@
 
 {% block panel_actions %}
   <a class="btn btn-light" href="{% url 'documents:list' %}">Volver</a>
+  <a class="btn btn-light" href="{% url 'documents:unpaid' %}">Pendientes</a>
   <a class="btn btn-light" href="{% url 'documents:cashbox' %}">Caja</a>
   {% if document.booking.client.email %}
     <a class="btn btn-light" href="mailto:{{ document.booking.client.email }}?subject={{ document.get_document_type_display }}%20{{ document.number }}%20Anna%20Salon">Enviar al cliente</a>
@@ -99,88 +100,130 @@
 <section class="content-grid">
   <article class="panel-card">
     <h2>{% if editing_payment %}Editar movimiento{% else %}Registrar movimiento{% endif %}</h2>
-    <form method="post" action="{% if editing_payment %}{% url 'documents:payment_edit' editing_payment.id %}{% else %}{% url 'documents:payment_create' document.id %}{% endif %}" class="entity-form">
-      {% csrf_token %}
-      <div class="form-grid">
-        <div class="field">
-          <label for="{{ payment_form.paid_at.id_for_label }}">Fecha de pago</label>
-          {{ payment_form.paid_at }}
+    {% if editing_payment or can_register_payment %}
+      <form method="post" action="{% if editing_payment %}{% url 'documents:payment_edit' editing_payment.id %}{% else %}{% url 'documents:payment_create' document.id %}{% endif %}" class="entity-form">
+        {% csrf_token %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ payment_form.paid_at.id_for_label }}">Fecha de pago</label>
+            {{ payment_form.paid_at }}
+          </div>
+          <div class="field">
+            <label for="{{ payment_form.entry_type.id_for_label }}">Tipo</label>
+            {{ payment_form.entry_type }}
+          </div>
+          <div class="field">
+            <label for="{{ payment_form.amount.id_for_label }}">Importe</label>
+            {{ payment_form.amount }}
+          </div>
+          <div class="field">
+            <label for="{{ payment_form.method.id_for_label }}">Método</label>
+            {{ payment_form.method }}
+          </div>
+          <div class="field">
+            <label for="{{ payment_form.reference.id_for_label }}">Referencia</label>
+            {{ payment_form.reference }}
+          </div>
         </div>
         <div class="field">
-          <label for="{{ payment_form.entry_type.id_for_label }}">Tipo</label>
-          {{ payment_form.entry_type }}
+          <label for="{{ payment_form.notes.id_for_label }}">Notas</label>
+          {{ payment_form.notes }}
         </div>
-        <div class="field">
-          <label for="{{ payment_form.amount.id_for_label }}">Importe</label>
-          {{ payment_form.amount }}
+        <div class="form-actions">
+          <button type="submit" class="btn">{% if editing_payment %}Guardar movimiento{% else %}Registrar movimiento{% endif %}</button>
+          {% if editing_payment %}
+            <a class="btn btn-light" href="{% url 'documents:detail' document.id %}">Cancelar</a>
+          {% endif %}
         </div>
-        <div class="field">
-          <label for="{{ payment_form.method.id_for_label }}">Método</label>
-          {{ payment_form.method }}
-        </div>
-        <div class="field">
-          <label for="{{ payment_form.reference.id_for_label }}">Referencia</label>
-          {{ payment_form.reference }}
-        </div>
+      </form>
+    {% else %}
+      <div class="empty-state">
+        <h2>Documento ya cobrado</h2>
+        <p>Este documento está totalmente pagado. No se permiten nuevos cobros manuales; si necesitas corregirlo, usa una devolución.</p>
       </div>
-      <div class="field">
-        <label for="{{ payment_form.notes.id_for_label }}">Notas</label>
-        {{ payment_form.notes }}
-      </div>
-      <div class="form-actions">
-        <button type="submit" class="btn">{% if editing_payment %}Guardar movimiento{% else %}Registrar movimiento{% endif %}</button>
-        {% if editing_payment %}
-          <a class="btn btn-light" href="{% url 'documents:detail' document.id %}">Cancelar</a>
-        {% endif %}
-      </div>
-    </form>
+    {% endif %}
   </article>
 
   <article class="panel-card">
-    <h2>Historial de pagos</h2>
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Tipo</th>
-            <th>Método</th>
-            <th>Referencia</th>
-            <th>Importe</th>
-            <th class="actions-cell">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for payment in document.payments.all %}
-            <tr>
-              <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
-              <td>{{ payment.get_entry_type_display }}</td>
-              <td>{{ payment.get_method_display }}</td>
-              <td>{{ payment.reference|default:"-" }}</td>
-              <td><strong>{{ payment.signed_amount }} €</strong></td>
-              <td class="actions-cell">
-                <div class="actions-inline">
-                  <a class="btn btn-light btn-small" href="{% url 'documents:payment_edit' payment.id %}">Editar</a>
-                  <form method="post" action="{% url 'documents:payment_delete' payment.id %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-light btn-small">Eliminar</button>
-                  </form>
-                </div>
-              </td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="6">
-                <div class="empty-state">
-                  <h2>Sin pagos</h2>
-                  <p>Todavía no se registró ningún cobro para este documento.</p>
-                </div>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    <h2>Devolución rápida</h2>
+    {% if can_register_refund %}
+      <form method="post" action="{% url 'documents:quick_refund' document.id %}" class="entity-form">
+        {% csrf_token %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="quick_refund_amount">Importe</label>
+            <input class="input" id="quick_refund_amount" name="amount" type="number" step="0.01" min="0.01" max="{{ document.payments_total }}" value="{{ document.payments_total }}">
+          </div>
+          <div class="field">
+            <label for="quick_refund_method">Método</label>
+            <select class="input" id="quick_refund_method" name="method">
+              {% for value, label in payment_form.method.field.choices %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="quick_refund_notes">Notas</label>
+          <textarea class="textarea" id="quick_refund_notes" name="notes" rows="3" placeholder="Motivo de la devolución"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-light">Registrar devolución</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="empty-state">
+        <h2>Sin saldo para devolver</h2>
+        <p>Primero debe existir al menos un cobro en el documento.</p>
+      </div>
+    {% endif %}
   </article>
+</section>
+
+<section class="panel-card">
+  <h2>Historial de pagos</h2>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Tipo</th>
+          <th>Método</th>
+          <th>Referencia</th>
+          <th>Importe</th>
+          <th class="actions-cell">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for payment in document.payments.all %}
+          <tr>
+            <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ payment.get_entry_type_display }}</td>
+            <td>{{ payment.get_method_display }}</td>
+            <td>{{ payment.reference|default:"-" }}</td>
+            <td><strong>{{ payment.signed_amount }} €</strong></td>
+            <td class="actions-cell">
+              <div class="actions-inline">
+                <a class="btn btn-light btn-small" href="{% url 'documents:payment_edit' payment.id %}">Editar</a>
+                <form method="post" action="{% url 'documents:payment_delete' payment.id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-light btn-small">Eliminar</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6">
+              <div class="empty-state">
+                <h2>Sin pagos</h2>
+                <p>Todavía no se registró ningún cobro para este documento.</p>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endblock %}

@@ -314,6 +314,20 @@
   margin: 0;
 }
 
+.booking-pay-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.booking-pay-form__select {
+  min-width: 132px;
+  min-height: 38px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .booking-actions__label {
   color: var(--muted);
   font-size: 0.86rem;
