@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'salon', # — зоны, кабинеты, ресурсы
     'services_app', #— услуги и цены
     'bookings', #  — записи и календарь 
@@ -96,6 +97,7 @@ INSTALLED_APPS = [
     'documents', # — recibos, facturas y exportación fiscal
     'auditlog', # — journal de cambios
     'core',
+    'mobile_api',
 ]
 
 MIDDLEWARE = [
@@ -162,3 +164,13 @@ AUTH_USER_MODEL = 'accounts.User'
 LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = 'dashboard:home'
 LOGOUT_REDIRECT_URL = 'accounts:login'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}

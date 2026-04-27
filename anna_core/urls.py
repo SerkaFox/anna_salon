@@ -12,6 +12,7 @@ def root_redirect(request):
 urlpatterns = [
     path("", root_redirect),
     path("", include("accounts.urls")),
+    path("api/v1/", include("mobile_api.urls")),
     path("panel/", include("dashboard.urls")),
     path("panel/clientes/", include("clients.urls")),
     path("panel/empleados/", include("employees.urls")),
