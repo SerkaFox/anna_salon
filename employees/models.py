@@ -137,3 +137,28 @@ class EmployeeTimeBlock(models.Model):
 
     def __str__(self):
         return f"{self.employee} · {self.date:%d/%m/%Y} · {self.start_time:%H:%M}-{self.end_time:%H:%M}"
+
+
+class EmployeeRecurringTimeBlock(models.Model):
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="recurring_time_blocks",
+        verbose_name="Empleado",
+    )
+    weekday = models.PositiveSmallIntegerField("Día de la semana", choices=Weekday.choices)
+    start_time = models.TimeField("Inicio")
+    end_time = models.TimeField("Fin")
+    label = models.CharField("Motivo", max_length=140, blank=True)
+    color = models.CharField("Color", max_length=20, default="#111111")
+    active = models.BooleanField("Activo", default=True)
+    date_from = models.DateField("Desde")
+    date_to = models.DateField("Hasta", null=True, blank=True)
+
+    class Meta:
+        ordering = ["employee", "weekday", "start_time", "end_time", "pk"]
+        verbose_name = "Bloqueo horario recurrente"
+        verbose_name_plural = "Bloqueos horarios recurrentes"
+
+    def __str__(self):
+        return f"{self.employee} · {self.get_weekday_display()} · {self.start_time:%H:%M}-{self.end_time:%H:%M}"

@@ -6,18 +6,26 @@ from rest_framework import generics, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import can_access_booking, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
+from accounts.permissions import can_access_booking, can_access_employee, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
 from auditlog.services import log_event
 from bookings.models import Booking
-from bookings.utils import get_bookings_for_day, get_day_bounds, get_employee_schedule, get_employee_time_blocks
+from bookings.utils import (
+    MOBILE_SLOT_STEP_MINUTES,
+    build_available_slots_for_day,
+    get_bookings_for_day,
+    get_day_bounds,
+    get_employee_schedule,
+    get_employee_time_block_occurrences,
+)
 from clients.models import Client
-from employees.models import Employee
+from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
 from salon.models import Zone
 from services_app.models import Service
 
 from .permissions import IsAuthenticatedMobileUser
 from .serializers import (
     AvailabilityCheckSerializer,
+    AvailabilitySlotsQuerySerializer,
     BookingSerializer,
     BookingStatusSerializer,
     BookingWriteSerializer,
@@ -25,6 +33,7 @@ from .serializers import (
     EmployeeSerializer,
     ServiceSerializer,
     TimeBlockSerializer,
+    TimeBlockWriteSerializer,
     ZoneSerializer,
     _format_local_datetime,
 )
@@ -51,6 +60,23 @@ def _parse_date_param(request):
         return datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError as exc:
         raise serializers.ValidationError({"date": ["Fecha inválida. Usa el formato YYYY-MM-DD."]}) from exc
+
+
+def _first_error_message(errors):
+    if isinstance(errors, dict):
+        for value in errors.values():
+            message = _first_error_message(value)
+            if message:
+                return message
+    if isinstance(errors, list) and errors:
+        return _first_error_message(errors[0])
+    if errors:
+        return str(errors)
+    return "Datos inválidos."
+
+
+def _format_api_datetime(value):
+    return timezone.localtime(value).isoformat()
 
 
 class MobileApiMixin:
@@ -165,17 +191,69 @@ class BookingDetailView(MobileApiMixin, APIView):
 class BookingAvailabilityCheckView(MobileApiMixin, APIView):
     def post(self, request):
         serializer = AvailabilityCheckSerializer(data=_normalize_id_aliases(request.data), context={"request": request})
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return Response(
+                {
+                    "ok": False,
+                    "available": False,
+                    "message": _first_error_message(serializer.errors),
+                    "errors": serializer.errors,
+                },
+                status=status.HTTP_200_OK,
+            )
         data = serializer.validated_data
         return Response(
             {
                 "ok": True,
+                "available": True,
                 "message": "Horario disponible.",
                 "employee": data["employee"].pk,
                 "service": data["service"].pk,
                 "zone": data["zone"].pk if data.get("zone") else None,
                 "start_at": _format_local_datetime(data["start_at"]),
                 "end_at": _format_local_datetime(data["end_at"]),
+            }
+        )
+
+
+class AvailabilitySlotsView(MobileApiMixin, APIView):
+    def get(self, request):
+        serializer = AvailabilitySlotsQuerySerializer(data=request.query_params, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        booking = data.get("booking")
+        slots, blocked = build_available_slots_for_day(
+            date_obj=data["date"],
+            employee=data["employee"],
+            service=data["service"],
+            zone=data.get("zone"),
+            exclude_booking_id=booking.pk if booking else None,
+            step_minutes=MOBILE_SLOT_STEP_MINUTES,
+        )
+        return Response(
+            {
+                "date": data["date"].isoformat(),
+                "employee": data["employee"].pk,
+                "service": data["service"].pk,
+                "zone": data["zone"].pk if data.get("zone") else None,
+                "duration": data["service"].duration_minutes,
+                "step_minutes": MOBILE_SLOT_STEP_MINUTES,
+                "slots": [
+                    {
+                        "start_at": _format_api_datetime(slot["start_at"]),
+                        "end_at": _format_api_datetime(slot["end_at"]),
+                        "label": timezone.localtime(slot["start_at"]).strftime("%H:%M"),
+                    }
+                    for slot in slots
+                ],
+                "blocked": [
+                    {
+                        "start_at": _format_api_datetime(item["start_at"]),
+                        "end_at": _format_api_datetime(item["end_at"]),
+                        "reason": item["reason"],
+                    }
+                    for item in blocked
+                ],
             }
         )
 
@@ -222,6 +300,148 @@ class BookingStatusView(MobileApiMixin, APIView):
         return Response(BookingSerializer(booking, context={"request": request}).data)
 
 
+class TimeBlockListCreateView(MobileApiMixin, APIView):
+    def get(self, request):
+        selected_date = _parse_date_param(request)
+        employee_id = request.query_params.get("employee")
+        employees = scope_employees_queryset(Employee.objects.filter(is_active=True), request.user)
+        if employee_id:
+            employees = employees.filter(pk=employee_id)
+        occurrences = []
+        for employee in employees.order_by("first_name", "last_name"):
+            occurrences.extend(get_employee_time_block_occurrences(employee, selected_date))
+        return Response(
+            {
+                "date": selected_date.isoformat(),
+                "results": TimeBlockSerializer(occurrences, many=True).data,
+            }
+        )
+
+    def post(self, request):
+        serializer = TimeBlockWriteSerializer(data=_normalize_id_aliases(request.data), context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        block = serializer.save()
+        if isinstance(block, EmployeeTimeBlock):
+            log_event(
+                actor=request.user,
+                section="calendar",
+                action="time_block_create",
+                instance=block,
+                message=f"Bloqueo creado desde API móvil para {block.employee.full_name}.",
+                metadata={"label": block.label},
+            )
+            return Response(TimeBlockSerializer(block).data, status=status.HTTP_201_CREATED)
+
+        log_event(
+            actor=request.user,
+            section="calendar",
+            action="recurring_time_block_create",
+            instance=block,
+            message=f"Bloqueo recurrente creado desde API móvil para {block.employee.full_name}.",
+            metadata={"label": block.label},
+        )
+        return Response(
+            _serialize_recurring_time_block(block),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+def _parse_recurring_time_block_id(pk):
+    value = str(pk)
+    if not value.startswith("recurring-"):
+        return None
+    try:
+        return int(value.removeprefix("recurring-"))
+    except ValueError:
+        return None
+
+
+def _serialize_recurring_time_block(block):
+    return {
+        "id": f"recurring-{block.pk}",
+        "employee": block.employee_id,
+        "weekday": block.weekday,
+        "start_time": block.start_time.strftime("%H:%M:%S"),
+        "end_time": block.end_time.strftime("%H:%M:%S"),
+        "reason": block.label or "Bloqueo",
+        "label": block.label or "Bloqueo",
+        "color": block.color,
+        "active": block.active,
+        "date_from": block.date_from.isoformat(),
+        "date_to": block.date_to.isoformat() if block.date_to else None,
+        "is_recurring": True,
+    }
+
+
+class TimeBlockDetailView(MobileApiMixin, APIView):
+    def get_object(self, request, pk):
+        recurring_id = _parse_recurring_time_block_id(pk)
+        if recurring_id is not None:
+            block = generics.get_object_or_404(EmployeeRecurringTimeBlock.objects.select_related("employee"), pk=recurring_id)
+            if not can_access_employee(request.user, block.employee):
+                raise PermissionDenied("Sin acceso a este bloqueo.")
+            return block
+
+        block = generics.get_object_or_404(EmployeeTimeBlock.objects.select_related("employee"), pk=pk)
+        if not can_access_employee(request.user, block.employee):
+            raise PermissionDenied("Sin acceso a este bloqueo.")
+        return block
+
+    def patch(self, request, pk):
+        block = self.get_object(request, pk)
+        if isinstance(block, EmployeeRecurringTimeBlock):
+            serializer = TimeBlockWriteSerializer(
+                instance=block,
+                data={**_normalize_id_aliases(request.data), "recurring": True},
+                partial=True,
+                context={"request": request},
+            )
+            serializer.is_valid(raise_exception=True)
+            block = serializer.save()
+            log_event(
+                actor=request.user,
+                section="calendar",
+                action="recurring_time_block_update",
+                instance=block,
+                message=f"Bloqueo recurrente actualizado desde API móvil para {block.employee.full_name}.",
+                metadata={"label": block.label},
+            )
+            return Response(_serialize_recurring_time_block(block))
+
+        serializer = TimeBlockWriteSerializer(
+            instance=block,
+            data=_normalize_id_aliases(request.data),
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        block = serializer.save()
+        log_event(
+            actor=request.user,
+            section="calendar",
+            action="time_block_update",
+            instance=block,
+            message=f"Bloqueo actualizado desde API móvil para {block.employee.full_name}.",
+            metadata={"label": block.label},
+        )
+        return Response(TimeBlockSerializer(block).data)
+
+    def delete(self, request, pk):
+        block = self.get_object(request, pk)
+        employee_name = block.employee.full_name
+        label = block.label
+        is_recurring = isinstance(block, EmployeeRecurringTimeBlock)
+        block.delete()
+        log_event(
+            actor=request.user,
+            section="calendar",
+            action="recurring_time_block_delete" if is_recurring else "time_block_delete",
+            message=f"Bloqueo eliminado desde API móvil para {employee_name}.",
+            metadata={"label": label},
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class CalendarDayView(MobileApiMixin, APIView):
     def get(self, request):
         selected_date = _parse_date_param(request)
@@ -244,7 +464,7 @@ class CalendarDayView(MobileApiMixin, APIView):
                     }
                     if schedule
                     else None,
-                    "time_blocks": TimeBlockSerializer(get_employee_time_blocks(employee, selected_date), many=True).data,
+                    "time_blocks": TimeBlockSerializer(get_employee_time_block_occurrences(employee, selected_date), many=True).data,
                 }
             )
 

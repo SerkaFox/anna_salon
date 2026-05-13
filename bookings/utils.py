@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta, time
 
+from django.db.models import Q
 from django.utils import timezone
 
-from employees.models import EmployeeTimeBlock
+from employees.models import EmployeeRecurringTimeBlock, EmployeeTimeBlock
 
 from .models import Booking
 
@@ -10,6 +11,7 @@ from .models import Booking
 DEFAULT_WORK_START_HOUR = 9
 DEFAULT_WORK_END_HOUR = 20
 SLOT_STEP_MINUTES = 30
+MOBILE_SLOT_STEP_MINUTES = 15
 CALENDAR_DAY_SPAN = 5  # сколько дней показывать сверху
 
 SERVICE_COLOR_PALETTE = [
@@ -100,11 +102,11 @@ def fits_employee_schedule(employee, start_at, end_at):
     if break_start and break_end and overlaps(start_at, end_at, break_start, break_end):
         return False, "La reserva cae dentro de la pausa del empleado."
 
-    for block in get_employee_time_blocks(employee, local_start.date()):
-        block_start = combine_local(local_start.date(), block.start_time)
-        block_end = combine_local(local_start.date(), block.end_time)
+    for block in get_employee_time_block_occurrences(employee, local_start.date()):
+        block_start = combine_local(local_start.date(), block["start_time"])
+        block_end = combine_local(local_start.date(), block["end_time"])
         if overlaps(start_at, end_at, block_start, block_end):
-            label = block.label or "bloqueo horario"
+            label = block["label"] or "bloqueo horario"
             return False, f"La reserva cae dentro de un bloqueo del empleado: {label}."
 
     return True, ""
@@ -118,6 +120,93 @@ def get_employee_time_blocks(employee, date_obj):
     return list(
         employee.time_blocks.filter(date=date_obj).order_by("start_time", "end_time", "pk")
     )
+
+
+def get_employee_recurring_time_blocks(employee, date_obj):
+    return list(
+        employee.recurring_time_blocks.filter(
+            active=True,
+            weekday=date_obj.weekday(),
+            date_from__lte=date_obj,
+        )
+        .filter(Q(date_to__isnull=True) | Q(date_to__gte=date_obj))
+        .order_by("start_time", "end_time", "pk")
+    )
+
+
+def get_employee_time_block_occurrences(employee, date_obj):
+    occurrences = []
+    for block in get_employee_time_blocks(employee, date_obj):
+        occurrences.append(
+            {
+                "id": block.pk,
+                "employee": block.employee,
+                "employee_id": block.employee_id,
+                "date": block.date,
+                "start_time": block.start_time,
+                "end_time": block.end_time,
+                "label": block.label,
+                "color": block.color,
+                "is_recurring": False,
+                "recurring_id": None,
+                "editable": True,
+            }
+        )
+    for block in get_employee_recurring_time_blocks(employee, date_obj):
+        occurrences.append(
+            {
+                "id": f"recurring-{block.pk}",
+                "employee": block.employee,
+                "employee_id": block.employee_id,
+                "date": date_obj,
+                "start_time": block.start_time,
+                "end_time": block.end_time,
+                "label": block.label,
+                "color": block.color,
+                "is_recurring": True,
+                "recurring_id": block.pk,
+                "editable": True,
+            }
+        )
+    return sorted(occurrences, key=lambda item: (item["start_time"], item["end_time"], str(item["id"])))
+
+
+def time_block_conflicts(employee, date_obj, start_time, end_time, exclude_time_block_id=None):
+    one_time_conflict = EmployeeTimeBlock.objects.filter(
+        employee=employee,
+        date=date_obj,
+        start_time__lt=end_time,
+        end_time__gt=start_time,
+    )
+    if exclude_time_block_id:
+        one_time_conflict = one_time_conflict.exclude(pk=exclude_time_block_id)
+    if one_time_conflict.exists():
+        return True
+
+    return EmployeeRecurringTimeBlock.objects.filter(
+        active=True,
+        employee=employee,
+        weekday=date_obj.weekday(),
+        date_from__lte=date_obj,
+        start_time__lt=end_time,
+        end_time__gt=start_time,
+    ).filter(Q(date_to__isnull=True) | Q(date_to__gte=date_obj)).exists()
+
+
+def recurring_time_block_conflicts(employee, weekday, start_time, end_time, date_from, date_to=None, exclude_recurring_id=None):
+    recurring_conflict = EmployeeRecurringTimeBlock.objects.filter(
+        active=True,
+        employee=employee,
+        weekday=weekday,
+        start_time__lt=end_time,
+        end_time__gt=start_time,
+    )
+    if exclude_recurring_id:
+        recurring_conflict = recurring_conflict.exclude(pk=exclude_recurring_id)
+    if date_to:
+        recurring_conflict = recurring_conflict.filter(date_from__lte=date_to)
+    recurring_conflict = recurring_conflict.filter(Q(date_to__isnull=True) | Q(date_to__gte=date_from))
+    return recurring_conflict.exists()
 
 
 def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking_id=None):
@@ -139,14 +228,12 @@ def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking
     if employee_conflict:
         return False
 
-    block_conflict = EmployeeTimeBlock.objects.filter(
-        employee=employee,
-        date=timezone.localtime(start_at).date(),
-        start_time__lt=timezone.localtime(end_at).time(),
-        end_time__gt=timezone.localtime(start_at).time(),
-    ).exists()
-
-    if block_conflict:
+    if time_block_conflicts(
+        employee,
+        timezone.localtime(start_at).date(),
+        timezone.localtime(start_at).time(),
+        timezone.localtime(end_at).time(),
+    ):
         return False
 
     if service.requires_zone and zone:
@@ -163,19 +250,91 @@ def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking
 
 
 def find_available_slots_for_day(date_obj, employee, service, zone=None, exclude_booking_id=None):
+    slots, _blocked = build_available_slots_for_day(
+        date_obj=date_obj,
+        employee=employee,
+        service=service,
+        zone=zone,
+        exclude_booking_id=exclude_booking_id,
+        step_minutes=SLOT_STEP_MINUTES,
+    )
+    return slots
+
+
+def build_available_slots_for_day(date_obj, employee, service, zone=None, exclude_booking_id=None, step_minutes=SLOT_STEP_MINUTES):
     schedule = get_employee_schedule(employee, date_obj)
+    default_start, default_end = get_work_bounds(date_obj)
     if not schedule:
-        return []
+        return [], [
+            {
+                "start_at": default_start,
+                "end_at": default_end,
+                "reason": "Fuera de horario",
+            }
+        ]
 
     work_start = schedule["start_at"]
     work_end = schedule["end_at"]
     break_start = schedule["break_start_at"]
     break_end = schedule["break_end_at"]
-    time_blocks = get_employee_time_blocks(employee, date_obj)
+    time_blocks = get_employee_time_block_occurrences(employee, date_obj)
     duration = timedelta(minutes=service.duration_minutes)
-    step = timedelta(minutes=SLOT_STEP_MINUTES)
+    step = timedelta(minutes=step_minutes)
+    day_start, day_end = get_day_bounds(date_obj)
 
     slots = []
+    blocked = []
+
+    if default_start < work_start:
+        blocked.append({"start_at": default_start, "end_at": work_start, "reason": "Fuera de horario"})
+    if work_end < default_end:
+        blocked.append({"start_at": work_end, "end_at": default_end, "reason": "Fuera de horario"})
+
+    if break_start and break_end:
+        blocked.append(
+            {
+                "start_at": break_start,
+                "end_at": break_end,
+                "reason": schedule.get("break_label") or "Pausa",
+            }
+        )
+
+    for item in time_blocks:
+        blocked.append(
+            {
+                "start_at": combine_local(date_obj, item["start_time"]),
+                "end_at": combine_local(date_obj, item["end_time"]),
+                "reason": item["label"] or "Bloqueo",
+            }
+        )
+
+    booking_qs = Booking.objects.exclude(status=Booking.Statuses.CANCELLED)
+    if exclude_booking_id:
+        booking_qs = booking_qs.exclude(pk=exclude_booking_id)
+
+    for booking in booking_qs.filter(employee=employee, start_at__lt=day_end, end_at__gt=day_start).order_by("start_at", "pk"):
+        blocked.append(
+            {
+                "start_at": max(booking.start_at, day_start),
+                "end_at": min(booking.end_at, day_end),
+                "reason": "Reserva",
+            }
+        )
+
+    if service.requires_zone and zone:
+        for booking in (
+            booking_qs.filter(zone=zone, start_at__lt=day_end, end_at__gt=day_start)
+            .exclude(employee=employee)
+            .order_by("start_at", "pk")
+        ):
+            blocked.append(
+                {
+                    "start_at": max(booking.start_at, day_start),
+                    "end_at": min(booking.end_at, day_end),
+                    "reason": "Zona ocupada",
+                }
+            )
+
     current = work_start
 
     while current + duration <= work_end:
@@ -189,8 +348,8 @@ def find_available_slots_for_day(date_obj, employee, service, zone=None, exclude
             overlaps(
                 current,
                 slot_end,
-                combine_local(date_obj, item.start_time),
-                combine_local(date_obj, item.end_time),
+                combine_local(date_obj, item["start_time"]),
+                combine_local(date_obj, item["end_time"]),
             )
             for item in time_blocks
         )
@@ -213,7 +372,8 @@ def find_available_slots_for_day(date_obj, employee, service, zone=None, exclude
 
         current += step
 
-    return slots
+    blocked.sort(key=lambda item: (item["start_at"], item["end_at"], item["reason"]))
+    return slots, blocked
 
 
 def find_available_slots_nearby(start_date, employee, service, zone=None, days_before=2, days_after=3, exclude_booking_id=None):

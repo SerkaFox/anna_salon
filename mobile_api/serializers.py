@@ -3,12 +3,12 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework import serializers
 
-from accounts.permissions import can_access_employee, get_employee_profile, is_admin_user
+from accounts.permissions import can_access_booking, can_access_employee, get_employee_profile, is_admin_user
 from bookings.forms import BookingForm
 from bookings.models import Booking
-from bookings.utils import fits_employee_schedule, is_slot_available
+from bookings.utils import combine_local, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
 from clients.models import Client
-from employees.models import Employee, EmployeeTimeBlock
+from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
 from salon.models import Zone
 from services_app.models import Service
 
@@ -156,6 +156,10 @@ class BookingWriteSerializer(serializers.Serializer):
             values["notes"] = ""
 
         service = values["service"]
+        employee = values["employee"]
+        if not employee.services.filter(pk=service.pk).exists():
+            raise serializers.ValidationError({"employee": ["Este empleado no realiza el servicio seleccionado."]})
+
         start_at = values["start_at"]
         if not values.get("end_at") or "start_at" in attrs or "service" in attrs:
             values["end_at"] = start_at + timedelta(minutes=service.duration_minutes)
@@ -232,11 +236,251 @@ class AvailabilityCheckSerializer(serializers.Serializer):
         return attrs
 
 
+class AvailabilitySlotsQuerySerializer(serializers.Serializer):
+    date = serializers.DateField(required=True, input_formats=["%Y-%m-%d"])
+    employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True))
+    service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.filter(is_active=True))
+    zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.filter(is_active=True), allow_null=True, required=False)
+    booking = serializers.PrimaryKeyRelatedField(queryset=Booking.objects.select_related("employee"), required=False)
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        employee = attrs["employee"]
+        service = attrs["service"]
+        zone = attrs.get("zone")
+        booking = attrs.get("booking")
+
+        if not can_access_employee(request.user, employee):
+            raise serializers.ValidationError({"employee": ["Sin acceso a este empleado."]})
+
+        if booking and not can_access_booking(request.user, booking):
+            raise serializers.ValidationError({"booking": ["Sin acceso a esta reserva."]})
+
+        if not employee.services.filter(pk=service.pk).exists():
+            raise serializers.ValidationError({"employee": ["Este empleado no realiza el servicio seleccionado."]})
+
+        if service.requires_zone:
+            if not zone:
+                raise serializers.ValidationError({"zone": ["Este servicio requiere una zona."]})
+            if not service.allowed_zones.filter(pk=zone.pk).exists():
+                raise serializers.ValidationError({"zone": ["La zona seleccionada no está permitida para este servicio."]})
+        else:
+            zone = None
+
+        attrs["zone"] = zone
+        return attrs
+
+
 class BookingStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Booking.Statuses.choices)
 
 
-class TimeBlockSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmployeeTimeBlock
-        fields = ["id", "employee", "date", "start_time", "end_time", "label", "color"]
+class TimeBlockSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
+    employee = serializers.IntegerField(read_only=True)
+    date = serializers.DateField(read_only=True)
+    start_time = serializers.TimeField(read_only=True)
+    end_time = serializers.TimeField(read_only=True)
+    start_at = serializers.CharField(read_only=True)
+    end_at = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True)
+    reason = serializers.CharField(read_only=True)
+    color = serializers.CharField(read_only=True)
+    is_recurring = serializers.BooleanField(read_only=True)
+    recurring_id = serializers.IntegerField(read_only=True, allow_null=True)
+    editable = serializers.BooleanField(read_only=True)
+
+    def to_representation(self, instance):
+        if isinstance(instance, dict):
+            data = instance
+            date_value = data["date"]
+            start_time = data["start_time"]
+            end_time = data["end_time"]
+            label = data.get("label") or "Bloqueo"
+            start_at = combine_local(date_value, start_time)
+            end_at = combine_local(date_value, end_time)
+            return {
+                "id": data["id"],
+                "employee": data["employee_id"],
+                "date": date_value.isoformat(),
+                "start_time": start_time.strftime("%H:%M:%S"),
+                "end_time": end_time.strftime("%H:%M:%S"),
+                "start_at": timezone.localtime(start_at).isoformat(),
+                "end_at": timezone.localtime(end_at).isoformat(),
+                "label": label,
+                "reason": label,
+                "color": data.get("color") or "#111111",
+                "is_recurring": data.get("is_recurring", False),
+                "recurring_id": data.get("recurring_id"),
+                "editable": data.get("editable", True),
+            }
+
+        label = instance.label or "Bloqueo"
+        start_at = combine_local(instance.date, instance.start_time)
+        end_at = combine_local(instance.date, instance.end_time)
+        return {
+            "id": instance.pk,
+            "employee": instance.employee_id,
+            "date": instance.date.isoformat(),
+            "start_time": instance.start_time.strftime("%H:%M:%S"),
+            "end_time": instance.end_time.strftime("%H:%M:%S"),
+            "start_at": timezone.localtime(start_at).isoformat(),
+            "end_at": timezone.localtime(end_at).isoformat(),
+            "label": label,
+            "reason": label,
+            "color": instance.color or "#111111",
+            "is_recurring": False,
+            "recurring_id": None,
+            "editable": True,
+        }
+
+
+class TimeBlockWriteSerializer(serializers.Serializer):
+    employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True), required=False)
+    start_at = serializers.DateTimeField(required=False)
+    end_at = serializers.DateTimeField(required=False)
+    reason = serializers.CharField(required=False, allow_blank=True)
+    label = serializers.CharField(required=False, allow_blank=True)
+    color = serializers.CharField(required=False, allow_blank=True)
+    force = serializers.BooleanField(required=False, default=False)
+    recurring = serializers.BooleanField(required=False, default=False)
+    weekday = serializers.IntegerField(required=False, min_value=0, max_value=6)
+    start_time = serializers.TimeField(required=False)
+    end_time = serializers.TimeField(required=False)
+    active = serializers.BooleanField(required=False, default=True)
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        instance = self.instance
+        is_recurring = attrs.get("recurring", isinstance(instance, EmployeeRecurringTimeBlock))
+
+        if isinstance(instance, EmployeeTimeBlock) and is_recurring:
+            raise serializers.ValidationError({"recurring": ["No se puede convertir un bloqueo puntual en recurrente."]})
+
+        employee = attrs.get("employee") or (instance.employee if instance is not None else None)
+        if not employee:
+            raise serializers.ValidationError({"employee": ["Este campo es obligatorio."]})
+        if not can_access_employee(request.user, employee):
+            raise serializers.ValidationError({"employee": ["Sin acceso a este empleado."]})
+
+        label = (attrs.get("reason") or attrs.get("label") or (instance.label if instance is not None else "") or "Bloqueo").strip()
+        color = (attrs.get("color") or (instance.color if instance is not None else "") or "#111111").strip()
+
+        if is_recurring:
+            return self._validate_recurring(attrs, employee, label, color)
+        return self._validate_one_time(attrs, employee, label, color)
+
+    def _validate_one_time(self, attrs, employee, label, color):
+        instance = self.instance
+        start_at = attrs.get("start_at")
+        end_at = attrs.get("end_at")
+
+        if instance is not None:
+            if start_at is None:
+                start_at = combine_local(instance.date, instance.start_time)
+            if end_at is None:
+                end_at = combine_local(instance.date, instance.end_time)
+
+        if not start_at:
+            raise serializers.ValidationError({"start_at": ["Este campo es obligatorio."]})
+        if not end_at:
+            raise serializers.ValidationError({"end_at": ["Este campo es obligatorio."]})
+        if end_at <= start_at:
+            raise serializers.ValidationError({"end_at": ["La hora de fin debe ser posterior al inicio."]})
+
+        local_start = timezone.localtime(start_at)
+        local_end = timezone.localtime(end_at)
+        if local_start.date() != local_end.date():
+            raise serializers.ValidationError({"end_at": ["El bloqueo debe empezar y terminar el mismo día."]})
+
+        exclude_id = instance.pk if instance is not None else None
+        if time_block_conflicts(employee, local_start.date(), local_start.time(), local_end.time(), exclude_time_block_id=exclude_id):
+            raise serializers.ValidationError({"non_field_errors": ["El bloqueo se solapa con otro bloqueo del empleado."]})
+
+        booking_conflict = Booking.objects.exclude(status=Booking.Statuses.CANCELLED).filter(
+            employee=employee,
+            start_at__lt=end_at,
+            end_at__gt=start_at,
+        ).exists()
+        if booking_conflict and not attrs.get("force", False):
+            raise serializers.ValidationError({"non_field_errors": ["El bloqueo se solapa con una reserva existente."]})
+
+        attrs["_employee"] = employee
+        attrs["_date"] = local_start.date()
+        attrs["_start_time"] = local_start.time()
+        attrs["_end_time"] = local_end.time()
+        attrs["_label"] = label
+        attrs["_color"] = color
+        return attrs
+
+    def _validate_recurring(self, attrs, employee, label, color):
+        instance = self.instance
+        required = {}
+        for field in ("weekday", "start_time", "end_time", "date_from"):
+            if field not in attrs and instance is None:
+                required[field] = ["Este campo es obligatorio para un bloqueo recurrente."]
+        if required:
+            raise serializers.ValidationError(required)
+
+        weekday = attrs.get("weekday", instance.weekday if instance is not None else None)
+        start_time = attrs.get("start_time", instance.start_time if instance is not None else None)
+        end_time = attrs.get("end_time", instance.end_time if instance is not None else None)
+        date_from = attrs.get("date_from", instance.date_from if instance is not None else None)
+        date_to = attrs.get("date_to", instance.date_to if instance is not None else None)
+
+        if end_time <= start_time:
+            raise serializers.ValidationError({"end_time": ["La hora de fin debe ser posterior al inicio."]})
+        if date_to and date_to < date_from:
+            raise serializers.ValidationError({"date_to": ["La fecha final debe ser posterior o igual a la inicial."]})
+
+        exclude_id = instance.pk if isinstance(instance, EmployeeRecurringTimeBlock) else None
+        if recurring_time_block_conflicts(employee, weekday, start_time, end_time, date_from, date_to, exclude_recurring_id=exclude_id):
+            raise serializers.ValidationError({"non_field_errors": ["El bloqueo recurrente se solapa con otro bloqueo del empleado."]})
+
+        one_time_blocks = EmployeeTimeBlock.objects.filter(
+            employee=employee,
+            date__gte=date_from,
+            start_time__lt=end_time,
+            end_time__gt=start_time,
+        )
+        if date_to:
+            one_time_blocks = one_time_blocks.filter(date__lte=date_to)
+        if any(block.date.weekday() == weekday for block in one_time_blocks):
+            raise serializers.ValidationError({"non_field_errors": ["El bloqueo recurrente se solapa con otro bloqueo del empleado."]})
+
+        attrs["_employee"] = employee
+        attrs["_weekday"] = weekday
+        attrs["_start_time"] = start_time
+        attrs["_end_time"] = end_time
+        attrs["_date_from"] = date_from
+        attrs["_date_to"] = date_to
+        attrs["_label"] = label
+        attrs["_color"] = color
+        return attrs
+
+    def save(self, **kwargs):
+        if self.validated_data.get("recurring") or isinstance(self.instance, EmployeeRecurringTimeBlock):
+            instance = self.instance or EmployeeRecurringTimeBlock()
+            instance.employee = self.validated_data["_employee"]
+            instance.weekday = self.validated_data["_weekday"]
+            instance.start_time = self.validated_data["_start_time"]
+            instance.end_time = self.validated_data["_end_time"]
+            instance.label = self.validated_data["_label"]
+            instance.color = self.validated_data["_color"]
+            instance.active = self.validated_data.get("active", instance.active if instance.pk else True)
+            instance.date_from = self.validated_data["_date_from"]
+            instance.date_to = self.validated_data["_date_to"]
+            instance.save()
+            return instance
+
+        instance = self.instance or EmployeeTimeBlock()
+        instance.employee = self.validated_data["_employee"]
+        instance.date = self.validated_data["_date"]
+        instance.start_time = self.validated_data["_start_time"]
+        instance.end_time = self.validated_data["_end_time"]
+        instance.label = self.validated_data["_label"]
+        instance.color = self.validated_data["_color"]
+        instance.save()
+        return instance
