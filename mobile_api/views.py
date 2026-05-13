@@ -2,9 +2,11 @@ from datetime import datetime
 from decimal import Decimal
 
 from django.db.models import Count
+from django.http import FileResponse
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 from rest_framework import generics, serializers, status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -36,9 +38,11 @@ from .serializers import (
     EmployeeWriteSerializer,
     EmployeeSerializer,
     ServiceSerializer,
+    ServiceWriteSerializer,
     TimeBlockSerializer,
     TimeBlockWriteSerializer,
     ZoneSerializer,
+    ZoneWriteSerializer,
     _format_local_datetime,
 )
 
@@ -100,7 +104,16 @@ def _serialize_named_count(row, name_fields=None, value_field="total"):
     return {"name": name, "count": row.get(value_field, 0)}
 
 
+def _serialize_employee_count(row):
+    return {
+        "id": row.get("employee_id"),
+        "name": " ".join(str(row.get(field) or "") for field in ("employee__first_name", "employee__last_name")).strip(),
+        "count": row.get("total", 0),
+    }
+
+
 def _serialize_client_photo(photo):
+    image_url = f"/api/v1/photos/{photo.pk}/image/"
     return {
         "id": photo.pk,
         "booking": photo.booking_id,
@@ -111,6 +124,7 @@ def _serialize_client_photo(photo):
         "photo_type_label": photo.get_photo_type_display(),
         "notes": photo.notes,
         "is_key_reference": photo.is_key_reference,
+        "image_url": image_url,
     }
 
 
@@ -255,7 +269,7 @@ class ClientDetailView(MobileApiMixin, APIView):
             .order_by("-total")[:5]
         )
         top_employees = (
-            done_bookings.values("employee__first_name", "employee__last_name")
+            done_bookings.values("employee_id", "employee__first_name", "employee__last_name")
             .annotate(total=Count("id"))
             .order_by("-total")[:3]
         )
@@ -285,10 +299,7 @@ class ClientDetailView(MobileApiMixin, APIView):
                 "last_visit": BookingSerializer(last_visit, context={"request": request}).data if last_visit else None,
                 "next_booking": BookingSerializer(next_booking, context={"request": request}).data if next_booking else None,
                 "top_services": [_serialize_named_count(row) for row in top_services],
-                "top_employees": [
-                    _serialize_named_count(row, name_fields=("employee__first_name", "employee__last_name"))
-                    for row in top_employees
-                ],
+                "top_employees": [_serialize_employee_count(row) for row in top_employees],
                 "referred_clients": ClientSerializer(referred_clients, many=True, context={"request": request}).data,
                 "referred_clients_count": referred_clients.count(),
                 "referral_tree": _build_referral_tree(client),
@@ -300,6 +311,20 @@ class ClientDetailView(MobileApiMixin, APIView):
                 "photo_history_count": len(photo_history),
             }
         )
+
+    def patch(self, request, pk):
+        client = self.get_object(request, pk)
+        serializer = ClientWriteSerializer(instance=client, data=request.data, partial=True, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        client = serializer.save()
+        log_event(
+            actor=request.user,
+            section="client",
+            action="update",
+            instance=client,
+            message=f"Cliente actualizado desde API movil: {client.full_name}.",
+        )
+        return Response(ClientSerializer(client, context={"request": request}).data)
 
 
 class EmployeeListView(MobileApiMixin, generics.ListAPIView):
@@ -360,18 +385,88 @@ class EmployeeDetailView(MobileApiMixin, APIView):
         return Response(_employee_detail_payload(employee, request))
 
 
-class ServiceListView(MobileApiMixin, generics.ListAPIView):
+class ServiceListView(MobileApiMixin, generics.ListCreateAPIView):
     serializer_class = ServiceSerializer
 
     def get_queryset(self):
         return Service.objects.filter(is_active=True).prefetch_related("allowed_zones", "employees").order_by("name")
 
+    def create(self, request, *args, **kwargs):
+        serializer = ServiceWriteSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        service = serializer.save()
+        log_event(
+            actor=request.user,
+            section="service",
+            action="create",
+            instance=service,
+            message=f"Servicio creado desde API movil: {service.name}.",
+        )
+        return Response(ServiceSerializer(service, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
-class ZoneListView(MobileApiMixin, generics.ListAPIView):
+
+class ServiceDetailView(MobileApiMixin, APIView):
+    def get_object(self, pk):
+        return generics.get_object_or_404(Service.objects.prefetch_related("allowed_zones", "employees"), pk=pk)
+
+    def get(self, request, pk):
+        return Response(ServiceSerializer(self.get_object(pk), context={"request": request}).data)
+
+    def patch(self, request, pk):
+        service = self.get_object(pk)
+        serializer = ServiceWriteSerializer(instance=service, data=request.data, partial=True, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        service = serializer.save()
+        log_event(
+            actor=request.user,
+            section="service",
+            action="update",
+            instance=service,
+            message=f"Servicio actualizado desde API movil: {service.name}.",
+        )
+        return Response(ServiceSerializer(service, context={"request": request}).data)
+
+
+class ZoneListView(MobileApiMixin, generics.ListCreateAPIView):
     serializer_class = ZoneSerializer
 
     def get_queryset(self):
         return Zone.objects.filter(is_active=True).order_by("name")
+
+    def create(self, request, *args, **kwargs):
+        serializer = ZoneWriteSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        zone = serializer.save()
+        log_event(
+            actor=request.user,
+            section="zone",
+            action="create",
+            instance=zone,
+            message=f"Zona creada desde API movil: {zone.name}.",
+        )
+        return Response(ZoneSerializer(zone, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class ZoneDetailView(MobileApiMixin, APIView):
+    def get_object(self, pk):
+        return generics.get_object_or_404(Zone, pk=pk)
+
+    def get(self, request, pk):
+        return Response(ZoneSerializer(self.get_object(pk), context={"request": request}).data)
+
+    def patch(self, request, pk):
+        zone = self.get_object(pk)
+        serializer = ZoneWriteSerializer(instance=zone, data=request.data, partial=True, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        zone = serializer.save()
+        log_event(
+            actor=request.user,
+            section="zone",
+            action="update",
+            instance=zone,
+            message=f"Zona actualizada desde API movil: {zone.name}.",
+        )
+        return Response(ZoneSerializer(zone, context={"request": request}).data)
 
 
 class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
@@ -543,6 +638,56 @@ class BookingStatusView(MobileApiMixin, APIView):
             metadata={"status": booking.status},
         )
         return Response(BookingSerializer(booking, context={"request": request}).data)
+
+
+class BookingPhotoListCreateView(MobileApiMixin, APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_booking(self, request, pk):
+        booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
+        if not can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        return booking
+
+    def get(self, request, pk):
+        booking = self.get_booking(request, pk)
+        photos = booking.photos.select_related("booking", "booking__service", "booking__employee").order_by("-created_at")
+        return Response({"results": [_serialize_client_photo(photo) for photo in photos]})
+
+    def post(self, request, pk):
+        booking = self.get_booking(request, pk)
+        image = request.FILES.get("image")
+        if not image:
+            return Response({"image": ["Selecciona una imagen."]}, status=status.HTTP_400_BAD_REQUEST)
+        photo_type = request.data.get("photo_type") or BookingPhoto.PhotoTypes.BEFORE
+        valid_types = {value for value, _label in BookingPhoto.PhotoTypes.choices}
+        if photo_type not in valid_types:
+            return Response({"photo_type": ["Tipo de foto invalido."]}, status=status.HTTP_400_BAD_REQUEST)
+        photo = BookingPhoto.objects.create(
+            booking=booking,
+            client=booking.client,
+            image=image,
+            photo_type=photo_type,
+            notes=request.data.get("notes", ""),
+            is_key_reference=str(request.data.get("is_key_reference", "")).lower() in {"1", "true", "yes", "on"},
+        )
+        log_event(
+            actor=request.user,
+            section="booking_photo",
+            action="upload",
+            instance=booking,
+            message=f"Foto subida desde API movil para {booking.client}.",
+            metadata={"photo_type": photo.photo_type},
+        )
+        return Response(_serialize_client_photo(photo), status=status.HTTP_201_CREATED)
+
+
+class BookingPhotoImageView(MobileApiMixin, APIView):
+    def get(self, request, pk):
+        photo = generics.get_object_or_404(BookingPhoto.objects.select_related("booking"), pk=pk)
+        if not can_access_booking(request.user, photo.booking):
+            raise PermissionDenied("Sin acceso a esta foto.")
+        return FileResponse(photo.image.open("rb"), content_type="image/jpeg")
 
 
 class TimeBlockListCreateView(MobileApiMixin, APIView):

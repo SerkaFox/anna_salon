@@ -147,12 +147,61 @@ class ServiceSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "duration_minutes", "price", "requires_zone", "allowed_zone_ids", "employee_ids", "is_active"]
 
 
+class ServiceWriteSerializer(serializers.ModelSerializer):
+    allowed_zones = serializers.PrimaryKeyRelatedField(
+        queryset=Zone.objects.filter(is_active=True),
+        many=True,
+        required=False,
+    )
+
+    class Meta:
+        model = Service
+        fields = [
+            "name",
+            "description",
+            "duration_minutes",
+            "price",
+            "requires_zone",
+            "allowed_zones",
+            "is_active",
+        ]
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        if not request.user.can_manage_staff:
+            raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar servicios."]})
+        requires_zone = attrs.get("requires_zone", self.instance.requires_zone if self.instance else False)
+        if "allowed_zones" in attrs:
+            has_allowed_zones = bool(attrs["allowed_zones"])
+        elif self.instance:
+            has_allowed_zones = self.instance.allowed_zones.exists()
+        else:
+            has_allowed_zones = False
+        if requires_zone and not has_allowed_zones:
+            raise serializers.ValidationError({"allowed_zones": ["Selecciona al menos una zona para este servicio."]})
+        if not requires_zone:
+            attrs["allowed_zones"] = []
+        return attrs
+
+
 class ZoneSerializer(serializers.ModelSerializer):
     zone_type_label = serializers.CharField(source="get_zone_type_display", read_only=True)
 
     class Meta:
         model = Zone
-        fields = ["id", "name", "zone_type", "zone_type_label", "capacity", "color", "is_active"]
+        fields = ["id", "name", "zone_type", "zone_type_label", "capacity", "color", "notes", "is_active"]
+
+
+class ZoneWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Zone
+        fields = ["name", "zone_type", "capacity", "color", "notes", "is_active"]
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        if not request.user.can_manage_staff:
+            raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar zonas."]})
+        return attrs
 
 
 class BookingSerializer(serializers.ModelSerializer):
