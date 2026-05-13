@@ -33,10 +33,26 @@ def _form_errors_to_validation_error(form):
 
 class ClientSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
+    referred_by_name = serializers.CharField(source="referred_by.full_name", read_only=True, allow_null=True)
 
     class Meta:
         model = Client
-        fields = ["id", "first_name", "last_name", "full_name", "phone", "email", "birth_date", "is_active"]
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "full_name",
+            "phone",
+            "email",
+            "birth_date",
+            "notes",
+            "is_active",
+            "created_at",
+            "updated_at",
+            "referred_by",
+            "referred_by_name",
+            "referral_rewards_used",
+        ]
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
