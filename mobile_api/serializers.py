@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework import serializers
 
-from accounts.permissions import can_access_booking, can_access_employee, get_employee_profile, is_admin_user
+from accounts.permissions import can_access_booking, can_access_employee, get_employee_profile, is_admin_user, scope_clients_queryset
 from bookings.forms import BookingForm
 from bookings.models import Booking
 from bookings.utils import combine_local, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
@@ -55,13 +55,59 @@ class ClientSerializer(serializers.ModelSerializer):
         ]
 
 
+class ClientWriteSerializer(serializers.ModelSerializer):
+    referred_by = serializers.PrimaryKeyRelatedField(queryset=Client.objects.filter(is_active=True), allow_null=True, required=False)
+
+    class Meta:
+        model = Client
+        fields = [
+            "first_name",
+            "last_name",
+            "phone",
+            "email",
+            "birth_date",
+            "notes",
+            "referred_by",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request and not is_admin_user(request.user):
+            self.fields["referred_by"].queryset = scope_clients_queryset(
+                Client.objects.filter(is_active=True),
+                request.user,
+            )
+
+
 class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     service_ids = serializers.PrimaryKeyRelatedField(source="services", many=True, read_only=True)
+    service_names = serializers.SerializerMethodField()
+    username = serializers.CharField(source="user.username", read_only=True, allow_null=True)
 
     class Meta:
         model = Employee
-        fields = ["id", "first_name", "last_name", "full_name", "phone", "email", "calendar_color", "service_ids", "is_active"]
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "full_name",
+            "phone",
+            "email",
+            "calendar_color",
+            "commission_percent",
+            "service_ids",
+            "service_names",
+            "username",
+            "notes",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_service_names(self, obj):
+        return [service.name for service in obj.services.all()]
 
 
 class ServiceSerializer(serializers.ModelSerializer):

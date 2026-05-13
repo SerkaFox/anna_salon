@@ -8,6 +8,7 @@ app_name = "mobile_api"
 urlpatterns = [
     path("me/", views.MeView.as_view(), name="me"),
     path("clients/", views.ClientListView.as_view(), name="clients"),
+    path("clients/<int:pk>/", views.ClientDetailView.as_view(), name="client_detail"),
     path("employees/", views.EmployeeListView.as_view(), name="employees"),
     path("services/", views.ServiceListView.as_view(), name="services"),
     path("zones/", views.ZoneListView.as_view(), name="zones"),

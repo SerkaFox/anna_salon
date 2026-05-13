@@ -1,14 +1,16 @@
 from datetime import datetime
+from decimal import Decimal
 
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 from rest_framework import generics, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import can_access_booking, can_access_employee, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
+from accounts.permissions import can_access_booking, can_access_client, can_access_employee, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
 from auditlog.services import log_event
-from bookings.models import Booking
+from bookings.models import Booking, BookingPhoto
 from bookings.utils import (
     MOBILE_SLOT_STEP_MINUTES,
     build_available_slots_for_day,
@@ -29,6 +31,7 @@ from .serializers import (
     BookingSerializer,
     BookingStatusSerializer,
     BookingWriteSerializer,
+    ClientWriteSerializer,
     ClientSerializer,
     EmployeeSerializer,
     ServiceSerializer,
@@ -79,6 +82,37 @@ def _format_api_datetime(value):
     return timezone.localtime(value).isoformat()
 
 
+def _build_referral_tree(root_client):
+    referred_clients = list(root_client.referred_clients.all().order_by("first_name", "last_name"))
+    return {
+        "id": root_client.pk,
+        "name": root_client.full_name or str(root_client),
+        "children": [_build_referral_tree(client) for client in referred_clients],
+    }
+
+
+def _serialize_named_count(row, name_fields=None, value_field="total"):
+    if name_fields:
+        name = " ".join(str(row.get(field) or "") for field in name_fields).strip()
+    else:
+        name = str(row.get("service__name") or "")
+    return {"name": name, "count": row.get(value_field, 0)}
+
+
+def _serialize_client_photo(photo):
+    return {
+        "id": photo.pk,
+        "booking": photo.booking_id,
+        "booking_start_at": _format_api_datetime(photo.booking.start_at),
+        "service_name": photo.booking.service.name,
+        "employee_name": photo.booking.employee.full_name,
+        "photo_type": photo.photo_type,
+        "photo_type_label": photo.get_photo_type_display(),
+        "notes": photo.notes,
+        "is_key_reference": photo.is_key_reference,
+    }
+
+
 class MobileApiMixin:
     permission_classes = [IsAuthenticatedMobileUser]
 
@@ -101,11 +135,108 @@ class MeView(MobileApiMixin, APIView):
         )
 
 
-class ClientListView(MobileApiMixin, generics.ListAPIView):
+class ClientListView(MobileApiMixin, generics.ListCreateAPIView):
     serializer_class = ClientSerializer
 
     def get_queryset(self):
         return scope_clients_queryset(Client.objects.filter(is_active=True), self.request.user).order_by("first_name", "last_name")
+
+    def create(self, request, *args, **kwargs):
+        serializer = ClientWriteSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        client = serializer.save()
+        log_event(
+            actor=request.user,
+            section="client",
+            action="create",
+            instance=client,
+            message=f"Cliente creado desde API movil: {client.full_name}.",
+        )
+        return Response(ClientSerializer(client, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class ClientDetailView(MobileApiMixin, APIView):
+    def get_object(self, request, pk):
+        client = generics.get_object_or_404(Client.objects.select_related("referred_by"), pk=pk, is_active=True)
+        if not can_access_client(request.user, client):
+            raise PermissionDenied("Sin acceso a este cliente.")
+        return client
+
+    def get(self, request, pk):
+        client = self.get_object(request, pk)
+        bookings = (
+            Booking.objects.select_related("employee", "service", "zone", "client")
+            .prefetch_related("photos")
+            .filter(client=client)
+            .order_by("-start_at")
+        )
+        if not request.user.can_manage_staff:
+            bookings = bookings.filter(employee=request.user.employee_profile)
+
+        booking_history = list(bookings[:20])
+        done_bookings = bookings.filter(status=Booking.Statuses.DONE)
+        total_spent = sum((booking.client_price_snapshot for booking in done_bookings), Decimal("0.00"))
+        total_visits = done_bookings.count()
+        avg_ticket = total_spent / total_visits if total_visits else Decimal("0.00")
+        last_visit = done_bookings.first()
+        next_booking = (
+            bookings.filter(start_at__gte=timezone.now())
+            .exclude(status=Booking.Statuses.CANCELLED)
+            .order_by("start_at")
+            .first()
+        )
+
+        top_services = (
+            done_bookings.values("service__name")
+            .annotate(total=Count("id"))
+            .order_by("-total")[:5]
+        )
+        top_employees = (
+            done_bookings.values("employee__first_name", "employee__last_name")
+            .annotate(total=Count("id"))
+            .order_by("-total")[:3]
+        )
+        referred_clients = scope_clients_queryset(
+            client.referred_clients.all().order_by("first_name", "last_name"),
+            request.user,
+        )
+        successful_referrals_count = referred_clients.filter(bookings__status=Booking.Statuses.DONE).distinct().count()
+        available_rewards = max((successful_referrals_count // 5) - client.referral_rewards_used, 0)
+        remaining_for_next_reward = 5 - (successful_referrals_count % 5) if successful_referrals_count % 5 else 0
+        photo_history = (
+            BookingPhoto.objects.select_related("booking", "booking__service", "booking__employee", "client")
+            .filter(client=client)
+            .order_by("-created_at")[:24]
+        )
+
+        return Response(
+            {
+                "client": ClientSerializer(client, context={"request": request}).data,
+                "stats": {
+                    "total_visits": total_visits,
+                    "total_spent": str(total_spent),
+                    "avg_ticket": str(avg_ticket),
+                    "cancelled": bookings.filter(status=Booking.Statuses.CANCELLED).count(),
+                    "no_show": bookings.filter(status=Booking.Statuses.NO_SHOW).count(),
+                },
+                "last_visit": BookingSerializer(last_visit, context={"request": request}).data if last_visit else None,
+                "next_booking": BookingSerializer(next_booking, context={"request": request}).data if next_booking else None,
+                "top_services": [_serialize_named_count(row) for row in top_services],
+                "top_employees": [
+                    _serialize_named_count(row, name_fields=("employee__first_name", "employee__last_name"))
+                    for row in top_employees
+                ],
+                "referred_clients": ClientSerializer(referred_clients, many=True, context={"request": request}).data,
+                "referred_clients_count": referred_clients.count(),
+                "referral_tree": _build_referral_tree(client),
+                "successful_referrals_count": successful_referrals_count,
+                "available_rewards": available_rewards,
+                "remaining_for_next_reward": remaining_for_next_reward,
+                "bookings": BookingSerializer(booking_history, many=True, context={"request": request}).data,
+                "photo_history": [_serialize_client_photo(photo) for photo in photo_history],
+                "photo_history_count": len(photo_history),
+            }
+        )
 
 
 class EmployeeListView(MobileApiMixin, generics.ListAPIView):
