@@ -110,6 +110,34 @@ class EmployeeSerializer(serializers.ModelSerializer):
         return [service.name for service in obj.services.all()]
 
 
+class EmployeeWriteSerializer(serializers.ModelSerializer):
+    services = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.filter(is_active=True),
+        many=True,
+        required=False,
+    )
+
+    class Meta:
+        model = Employee
+        fields = [
+            "first_name",
+            "last_name",
+            "phone",
+            "email",
+            "services",
+            "calendar_color",
+            "commission_percent",
+            "is_active",
+            "notes",
+        ]
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        if not request.user.can_manage_staff:
+            raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar empleados."]})
+        return attrs
+
+
 class ServiceSerializer(serializers.ModelSerializer):
     allowed_zone_ids = serializers.PrimaryKeyRelatedField(source="allowed_zones", many=True, read_only=True)
     employee_ids = serializers.PrimaryKeyRelatedField(source="employees", many=True, read_only=True)

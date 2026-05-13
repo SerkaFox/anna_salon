@@ -33,6 +33,7 @@ from .serializers import (
     BookingWriteSerializer,
     ClientWriteSerializer,
     ClientSerializer,
+    EmployeeWriteSerializer,
     EmployeeSerializer,
     ServiceSerializer,
     TimeBlockSerializer,
@@ -110,6 +111,68 @@ def _serialize_client_photo(photo):
         "photo_type_label": photo.get_photo_type_display(),
         "notes": photo.notes,
         "is_key_reference": photo.is_key_reference,
+    }
+
+
+def _employee_detail_payload(employee, request):
+    bookings = (
+        Booking.objects.select_related("client", "service", "zone", "employee")
+        .filter(employee=employee)
+        .order_by("-start_at")
+    )
+    done_bookings = bookings.filter(status=Booking.Statuses.DONE)
+    employee_earnings = Decimal("0.00")
+    client_revenue = Decimal("0.00")
+    salon_revenue = Decimal("0.00")
+    clients = {}
+    services = {}
+
+    for booking in done_bookings:
+        client_amount = booking.client_price_snapshot or Decimal("0.00")
+        employee_amount = booking.employee_amount_snapshot or Decimal("0.00")
+        salon_amount = booking.salon_amount_snapshot or Decimal("0.00")
+        client_revenue += client_amount
+        employee_earnings += employee_amount
+        salon_revenue += salon_amount
+        services[booking.service.name] = services.get(booking.service.name, 0) + 1
+        client_stats = clients.setdefault(
+            booking.client_id,
+            {
+                "id": booking.client_id,
+                "name": booking.client.full_name or str(booking.client),
+                "count": 0,
+                "spent": Decimal("0.00"),
+            },
+        )
+        client_stats["count"] += 1
+        client_stats["spent"] += client_amount
+
+    top_clients = sorted(
+        clients.values(),
+        key=lambda item: (-item["count"], -item["spent"], item["name"]),
+    )[:5]
+    top_services = sorted(
+        ({"name": name, "count": count} for name, count in services.items()),
+        key=lambda item: (-item["count"], item["name"]),
+    )[:5]
+    bookings_count = done_bookings.count()
+    return {
+        "employee": EmployeeSerializer(employee, context={"request": request}).data,
+        "stats": {
+            "employee_earnings": str(employee_earnings),
+            "client_revenue": str(client_revenue),
+            "salon_revenue": str(salon_revenue),
+            "bookings_count": bookings_count,
+            "clients_count": len(clients),
+            "repeat_clients_count": sum(1 for item in clients.values() if item["count"] > 1),
+            "avg_ticket": str(client_revenue / bookings_count if bookings_count else Decimal("0.00")),
+        },
+        "top_clients": [
+            {**item, "spent": str(item["spent"])}
+            for item in top_clients
+        ],
+        "top_services": top_services,
+        "bookings": BookingSerializer(list(bookings[:20]), many=True, context={"request": request}).data,
     }
 
 
@@ -249,6 +312,53 @@ class EmployeeListView(MobileApiMixin, generics.ListAPIView):
             .order_by("first_name", "last_name")
         )
 
+    def post(self, request):
+        serializer = EmployeeWriteSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        employee = serializer.save()
+        log_event(
+            actor=request.user,
+            section="employee",
+            action="create",
+            instance=employee,
+            message=f"Empleado creado desde API movil: {employee.full_name}.",
+        )
+        return Response(EmployeeSerializer(employee, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class EmployeeDetailView(MobileApiMixin, APIView):
+    def get_object(self, request, pk):
+        employee = generics.get_object_or_404(
+            Employee.objects.select_related("user").prefetch_related("services"),
+            pk=pk,
+        )
+        if not can_access_employee(request.user, employee):
+            raise PermissionDenied("Sin acceso a este empleado.")
+        return employee
+
+    def get(self, request, pk):
+        employee = self.get_object(request, pk)
+        return Response(_employee_detail_payload(employee, request))
+
+    def patch(self, request, pk):
+        employee = self.get_object(request, pk)
+        serializer = EmployeeWriteSerializer(
+            instance=employee,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        employee = serializer.save()
+        log_event(
+            actor=request.user,
+            section="employee",
+            action="update",
+            instance=employee,
+            message=f"Empleado actualizado desde API movil: {employee.full_name}.",
+        )
+        return Response(_employee_detail_payload(employee, request))
+
 
 class ServiceListView(MobileApiMixin, generics.ListAPIView):
     serializer_class = ServiceSerializer
@@ -298,6 +408,10 @@ class BookingDetailView(MobileApiMixin, APIView):
         if not can_access_booking(request.user, booking):
             raise PermissionDenied("Sin acceso a esta reserva.")
         return booking
+
+    def get(self, request, pk):
+        booking = self.get_object(request, pk)
+        return Response(BookingSerializer(booking, context={"request": request}).data)
 
     def patch(self, request, pk):
         booking = self.get_object(request, pk)
