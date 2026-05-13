@@ -7,6 +7,7 @@ class Service(models.Model):
     description = models.TextField("Descripción", blank=True)
     duration_minutes = models.PositiveIntegerField("Duración (minutos)", default=60)
     price = models.DecimalField("Precio", max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    color = models.CharField("Color", max_length=20, default="#6FD29C")
     requires_zone = models.BooleanField("Requiere zona/recurso", default=False)
     allowed_zones = models.ManyToManyField(
         "salon.Zone",
