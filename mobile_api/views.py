@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
+from django.contrib.auth.password_validation import validate_password
 from django.db.models import Count
 from django.http import FileResponse
 from django.utils import timezone
@@ -72,6 +73,34 @@ class _MeUpdateSerializer(serializers.Serializer):
         max_length=150,
     )
     email = serializers.EmailField(required=False, allow_blank=True)
+    current_password = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+    )
+    new_password = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        min_length=8,
+    )
+
+    def validate(self, attrs):
+        new_password = attrs.get("new_password")
+        current_password = attrs.get("current_password")
+        if not new_password:
+            return attrs
+        user = self.context["request"].user
+        if not current_password:
+            raise serializers.ValidationError(
+                {"current_password": ["Introduce la contraseña actual."]}
+            )
+        if not user.check_password(current_password):
+            raise serializers.ValidationError(
+                {"current_password": ["La contraseña actual no es correcta."]}
+            )
+        validate_password(new_password, user=user)
+        return attrs
 
 
 def _parse_date_param(request):
@@ -227,12 +256,24 @@ class MeView(MobileApiMixin, APIView):
         return Response(self._payload(request))
 
     def patch(self, request):
-        serializer = _MeUpdateSerializer(data=request.data)
+        serializer = _MeUpdateSerializer(
+            data=request.data,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
-        for field, value in serializer.validated_data.items():
+        profile_fields = {
+            key: value
+            for key, value in serializer.validated_data.items()
+            if key in {"first_name", "last_name", "email"}
+        }
+        for field, value in profile_fields.items():
             setattr(request.user, field, value)
-        if serializer.validated_data:
-            request.user.save(update_fields=[*serializer.validated_data.keys()])
+        new_password = serializer.validated_data.get("new_password")
+        if new_password:
+            request.user.set_password(new_password)
+            request.user.save()
+        elif profile_fields:
+            request.user.save(update_fields=[*profile_fields.keys()])
         return Response(self._payload(request))
 
 
