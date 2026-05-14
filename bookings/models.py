@@ -19,6 +19,7 @@ class Booking(models.Model):
         WALK_IN = "walk_in", "En el salón"
         REBOOKING = "rebooking", "Cliente recurrente"
         REFERRAL = "referral", "Recomendación"
+        EMPLOYEE = "employee", "Empleado"
         GOOGLE = "google", "Google / Maps"
         OTHER = "other", "Otro"
 

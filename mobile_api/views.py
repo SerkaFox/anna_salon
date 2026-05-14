@@ -60,6 +60,20 @@ def _normalize_id_aliases(data):
     return normalized
 
 
+class _MeUpdateSerializer(serializers.Serializer):
+    first_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=150,
+    )
+    last_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=150,
+    )
+    email = serializers.EmailField(required=False, allow_blank=True)
+
+
 def _parse_date_param(request):
     date_str = request.query_params.get("date")
     if not date_str:
@@ -195,21 +209,31 @@ class MobileApiMixin:
 
 
 class MeView(MobileApiMixin, APIView):
-    def get(self, request):
+    def _payload(self, request):
         employee = getattr(request.user, "employee_profile", None)
-        return Response(
-            {
-                "id": request.user.pk,
-                "username": request.user.username,
-                "first_name": request.user.first_name,
-                "last_name": request.user.last_name,
-                "email": request.user.email,
-                "role": request.user.role,
-                "can_manage_staff": request.user.can_manage_staff,
-                "employee_id": employee.pk if employee else None,
-                "employee_name": employee.full_name if employee else "",
-            }
-        )
+        return {
+            "id": request.user.pk,
+            "username": request.user.username,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+            "email": request.user.email,
+            "role": request.user.role,
+            "can_manage_staff": request.user.can_manage_staff,
+            "employee_id": employee.pk if employee else None,
+            "employee_name": employee.full_name if employee else "",
+        }
+
+    def get(self, request):
+        return Response(self._payload(request))
+
+    def patch(self, request):
+        serializer = _MeUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        for field, value in serializer.validated_data.items():
+            setattr(request.user, field, value)
+        if serializer.validated_data:
+            request.user.save(update_fields=[*serializer.validated_data.keys()])
+        return Response(self._payload(request))
 
 
 class ClientListView(MobileApiMixin, generics.ListCreateAPIView):
