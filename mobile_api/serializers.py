@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -11,6 +12,8 @@ from clients.models import Client
 from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
 from salon.models import Zone
 from services_app.models import Service
+
+User = get_user_model()
 
 
 def _format_local_datetime(value):
@@ -111,6 +114,17 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
 
 class EmployeeWriteSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+    )
+    password = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        min_length=8,
+    )
     services = serializers.PrimaryKeyRelatedField(
         queryset=Service.objects.filter(is_active=True),
         many=True,
@@ -129,13 +143,90 @@ class EmployeeWriteSerializer(serializers.ModelSerializer):
             "commission_percent",
             "is_active",
             "notes",
+            "username",
+            "password",
         ]
 
     def validate(self, attrs):
         request = self.context["request"]
-        if not request.user.can_manage_staff:
-            raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar empleados."]})
+        if request.user.can_manage_staff:
+            username = (attrs.get("username") or "").strip()
+            password = attrs.get("password") or ""
+            current_user = self.instance.user if self.instance else None
+            if username:
+                exists = User.objects.filter(username=username)
+                if current_user:
+                    exists = exists.exclude(pk=current_user.pk)
+                if exists.exists():
+                    raise serializers.ValidationError(
+                        {"username": ["Este usuario ya existe."]}
+                    )
+                if not current_user and not password:
+                    raise serializers.ValidationError(
+                        {"password": ["Introduce una contraseña inicial."]}
+                    )
+            elif password and not current_user:
+                raise serializers.ValidationError(
+                    {"username": ["Introduce un usuario para crear el acceso."]}
+                )
+            return attrs
+        if self.instance is None:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Sin permiso para crear empleados."]}
+            )
+        if not can_access_employee(request.user, self.instance):
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Sin permiso para editar este empleado."]}
+            )
+        blocked_fields = set(attrs) - {"services"}
+        if blocked_fields:
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        "Solo puedes editar los servicios de tu propia ficha."
+                    ]
+                }
+            )
         return attrs
+
+    def create(self, validated_data):
+        username = validated_data.pop("username", "")
+        password = validated_data.pop("password", "")
+        employee = super().create(validated_data)
+        self._sync_user(employee, username, password)
+        return employee
+
+    def update(self, instance, validated_data):
+        username = validated_data.pop("username", "")
+        password = validated_data.pop("password", "")
+        employee = super().update(instance, validated_data)
+        self._sync_user(employee, username, password)
+        return employee
+
+    def _sync_user(self, employee, username, password):
+        request = self.context["request"]
+        if not request.user.can_manage_staff:
+            return
+        username = (username or "").strip()
+        password = password or ""
+        if not username and not password:
+            return
+        user = employee.user
+        if user is None:
+            user = User(username=username, role=User.ROLE_EMPLOYEE)
+        if username:
+            user.username = username
+        user.first_name = employee.first_name
+        user.last_name = employee.last_name
+        user.email = employee.email
+        user.role = User.ROLE_EMPLOYEE
+        user.is_active = employee.is_active
+        if password:
+            user.set_password(password)
+        user.save()
+        if employee.user_id != user.pk:
+            employee.user = user
+            employee.save(update_fields=["user"])
 
 
 class ServiceSerializer(serializers.ModelSerializer):
