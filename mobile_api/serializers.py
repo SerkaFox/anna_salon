@@ -20,8 +20,16 @@ def _format_local_datetime(value):
     if not value:
         return ""
     if timezone.is_aware(value):
-        value = timezone.localtime(value)
+        value = timezone.localtime(value, timezone.get_default_timezone())
     return value.strftime("%Y-%m-%dT%H:%M")
+
+
+class SalonDateTimeField(serializers.DateTimeField):
+    def enforce_timezone(self, value):
+        salon_timezone = timezone.get_default_timezone()
+        if timezone.is_aware(value):
+            return value.astimezone(salon_timezone)
+        return timezone.make_aware(value, salon_timezone)
 
 
 def _form_errors_to_validation_error(form):
@@ -348,8 +356,8 @@ class BookingWriteSerializer(serializers.Serializer):
     employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True), required=False)
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.filter(is_active=True), required=False)
     zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.filter(is_active=True), allow_null=True, required=False)
-    start_at = serializers.DateTimeField(required=False)
-    end_at = serializers.DateTimeField(required=False, allow_null=True)
+    start_at = SalonDateTimeField(required=False)
+    end_at = SalonDateTimeField(required=False, allow_null=True)
     status = serializers.ChoiceField(choices=Booking.Statuses.choices, required=False)
     source = serializers.ChoiceField(choices=Booking.Sources.choices, required=False)
     notes = serializers.CharField(required=False, allow_blank=True)
@@ -436,7 +444,7 @@ class AvailabilityCheckSerializer(serializers.Serializer):
     employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True))
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.filter(is_active=True))
     zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.filter(is_active=True), allow_null=True, required=False)
-    start_at = serializers.DateTimeField()
+    start_at = SalonDateTimeField()
     exclude_booking_id = serializers.IntegerField(required=False, min_value=1)
 
     def validate(self, attrs):
@@ -544,8 +552,8 @@ class TimeBlockSerializer(serializers.Serializer):
                 "date": date_value.isoformat(),
                 "start_time": start_time.strftime("%H:%M:%S"),
                 "end_time": end_time.strftime("%H:%M:%S"),
-                "start_at": timezone.localtime(start_at).isoformat(),
-                "end_at": timezone.localtime(end_at).isoformat(),
+                "start_at": timezone.localtime(start_at, timezone.get_default_timezone()).isoformat(),
+                "end_at": timezone.localtime(end_at, timezone.get_default_timezone()).isoformat(),
                 "label": label,
                 "reason": label,
                 "color": data.get("color") or "#111111",
@@ -563,8 +571,8 @@ class TimeBlockSerializer(serializers.Serializer):
             "date": instance.date.isoformat(),
             "start_time": instance.start_time.strftime("%H:%M:%S"),
             "end_time": instance.end_time.strftime("%H:%M:%S"),
-            "start_at": timezone.localtime(start_at).isoformat(),
-            "end_at": timezone.localtime(end_at).isoformat(),
+            "start_at": timezone.localtime(start_at, timezone.get_default_timezone()).isoformat(),
+            "end_at": timezone.localtime(end_at, timezone.get_default_timezone()).isoformat(),
             "label": label,
             "reason": label,
             "color": instance.color or "#111111",
@@ -576,8 +584,8 @@ class TimeBlockSerializer(serializers.Serializer):
 
 class TimeBlockWriteSerializer(serializers.Serializer):
     employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True), required=False)
-    start_at = serializers.DateTimeField(required=False)
-    end_at = serializers.DateTimeField(required=False)
+    start_at = SalonDateTimeField(required=False)
+    end_at = SalonDateTimeField(required=False)
     reason = serializers.CharField(required=False, allow_blank=True)
     label = serializers.CharField(required=False, allow_blank=True)
     color = serializers.CharField(required=False, allow_blank=True)
@@ -629,8 +637,8 @@ class TimeBlockWriteSerializer(serializers.Serializer):
         if end_at <= start_at:
             raise serializers.ValidationError({"end_at": ["La hora de fin debe ser posterior al inicio."]})
 
-        local_start = timezone.localtime(start_at)
-        local_end = timezone.localtime(end_at)
+        local_start = timezone.localtime(start_at, timezone.get_default_timezone())
+        local_end = timezone.localtime(end_at, timezone.get_default_timezone())
         if local_start.date() != local_end.date():
             raise serializers.ValidationError({"end_at": ["El bloqueo debe empezar y terminar el mismo día."]})
 

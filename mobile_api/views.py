@@ -125,7 +125,7 @@ def _first_error_message(errors):
 
 
 def _format_api_datetime(value):
-    return timezone.localtime(value).isoformat()
+    return timezone.localtime(value, timezone.get_default_timezone()).isoformat()
 
 
 def _build_referral_tree(root_client):
