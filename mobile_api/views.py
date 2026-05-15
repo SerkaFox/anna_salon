@@ -1,7 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
 
-from django.contrib.auth.password_validation import validate_password
 from django.db.models import Count
 from django.http import FileResponse
 from django.utils import timezone
@@ -82,7 +81,7 @@ class _MeUpdateSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         write_only=True,
-        min_length=8,
+        min_length=4,
     )
 
     def validate(self, attrs):
@@ -99,7 +98,6 @@ class _MeUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"current_password": ["La contraseña actual no es correcta."]}
             )
-        validate_password(new_password, user=user)
         return attrs
 
 

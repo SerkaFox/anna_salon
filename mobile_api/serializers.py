@@ -123,7 +123,7 @@ class EmployeeWriteSerializer(serializers.ModelSerializer):
         required=False,
         allow_blank=True,
         write_only=True,
-        min_length=8,
+        min_length=4,
     )
     services = serializers.PrimaryKeyRelatedField(
         queryset=Service.objects.filter(is_active=True),
@@ -178,12 +178,20 @@ class EmployeeWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"non_field_errors": ["Sin permiso para editar este empleado."]}
             )
-        blocked_fields = set(attrs) - {"services"}
+        allowed_fields = {
+            "first_name",
+            "last_name",
+            "phone",
+            "email",
+            "calendar_color",
+            "services",
+        }
+        blocked_fields = set(attrs) - allowed_fields
         if blocked_fields:
             raise serializers.ValidationError(
                 {
                     "non_field_errors": [
-                        "Solo puedes editar los servicios de tu propia ficha."
+                        "Solo puedes editar tus datos de contacto, color y servicios."
                     ]
                 }
             )
