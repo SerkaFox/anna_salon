@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% load static %}
 
 {% block body %}
 <div class="mobile-topbar">
@@ -6,9 +7,9 @@
     ☰
   </button>
   <div class="mobile-topbar__brand">
-    <div class="logo">A</div>
+    <div class="logo"><img src="{% static 'logo.png' %}" alt="BRIMOON Studio"></div>
     <div>
-      <strong>Anna Salon</strong>
+      <strong>BRIMOON Studio</strong>
       <span>Gestión interna</span>
     </div>
   </div>

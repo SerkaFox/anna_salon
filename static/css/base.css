@@ -45,17 +45,20 @@ body {
 .logo {
   width: 52px;
   height: 52px;
-  border-radius: 16px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
-  color: #effff5;
-  font-weight: 800;
-  font-size: 1.3rem;
-  background:
-    linear-gradient(145deg, rgba(155, 238, 191, 0.9), rgba(22, 92, 59, 0.96)),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow);
   border: 1px solid rgba(219, 255, 233, 0.2);
+}
+
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .btn {

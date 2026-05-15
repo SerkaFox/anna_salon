@@ -1,4 +1,4 @@
-# Anna Salon
+# BRIMOON Studio
 
 Django application for salon management: clients, employees, services, zones, bookings, and the internal dashboard.
 

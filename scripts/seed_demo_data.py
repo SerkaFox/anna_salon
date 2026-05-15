@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 import sys
 from datetime import date, time, timedelta
 from decimal import Decimal
@@ -15,6 +16,7 @@ django.setup()
 
 from bookings.models import Booking, BookingPhoto
 from clients.models import Client
+from documents.models import CashClosure, FiscalDocument, Payment
 from employees.models import (
     Employee,
     EmployeeScheduleOverride,
@@ -81,6 +83,9 @@ def create_booking(client, employee, service, day, start_hour, start_minute, sta
 @transaction.atomic
 def main():
     BookingPhoto.objects.all().delete()
+    Payment.objects.all().delete()
+    FiscalDocument.objects.all().delete()
+    CashClosure.objects.all().delete()
     Booking.objects.all().delete()
     EmployeeTimeBlock.objects.all().delete()
     EmployeeScheduleOverride.objects.all().delete()
@@ -137,86 +142,52 @@ def main():
 
     services = {
         "mani": Service.objects.create(
-            name="Manicura semipermanente",
-            description="Retirada suave, preparacion, esmaltado semipermanente y aceite final.",
+            name="Manicura, extensiones y tratamientos 💅🏼",
+            description="Manicura, refuerzo, extensiones, tratamientos de unas y acabados personalizados.",
             duration_minutes=75,
-            price=money("32.00"),
-            requires_zone=True,
-        ),
-        "gel": Service.objects.create(
-            name="Refuerzo gel BIAB",
-            description="Nivelacion, refuerzo y acabado natural para unas resistentes.",
-            duration_minutes=105,
-            price=money("48.00"),
-            requires_zone=True,
-        ),
-        "nail_art": Service.objects.create(
-            name="Nail art premium",
-            description="Decoracion detallada sobre manicura, ideal para eventos.",
-            duration_minutes=120,
-            price=money("62.00"),
+            price=money("38.00"),
+            color="#E85D75",
             requires_zone=True,
         ),
         "pedicure": Service.objects.create(
-            name="Pedicura spa",
-            description="Pedicura completa con exfoliacion, hidratacion y esmaltado.",
-            duration_minutes=90,
-            price=money("42.00"),
-            requires_zone=True,
-        ),
-        "facial": Service.objects.create(
-            name="Higiene facial glow",
-            description="Limpieza profunda, extraccion, mascarilla calmante y SPF.",
-            duration_minutes=90,
-            price=money("58.00"),
-            requires_zone=True,
-        ),
-        "laser": Service.objects.create(
-            name="Depilacion laser zona media",
-            description="Sesion laser para axilas, ingles, brazos o zona equivalente.",
-            duration_minutes=45,
-            price=money("39.00"),
+            name="Pedicuras y tratamientos Pies 👣",
+            description="Pedicuras completas, cuidado de pies, tratamientos hidratantes y acabado.",
+            duration_minutes=75,
+            price=money("40.00"),
+            color="#F4A261",
             requires_zone=True,
         ),
         "brows": Service.objects.create(
-            name="Diseno y laminado de cejas",
-            description="Visagismo, laminado, tinte suave y acabado nutritivo.",
+            name="Definición, depilación y lifting de cejas 🥰",
+            description="Diseno, definicion, depilacion, lifting y tinte de cejas.",
             duration_minutes=60,
-            price=money("35.00"),
+            price=money("32.00"),
+            color="#2A9D8F",
             requires_zone=True,
         ),
-        "makeup": Service.objects.create(
-            name="Maquillaje evento",
-            description="Maquillaje social completo con preparacion de piel.",
-            duration_minutes=90,
-            price=money("70.00"),
-            requires_zone=True,
-        ),
-        "hair_ritual": Service.objects.create(
-            name="Ritual capilar express",
-            description="Lavado, tratamiento hidratante, masaje craneal y peinado rapido.",
-            duration_minutes=50,
-            price=money("29.00"),
-            requires_zone=True,
-        ),
-        "consult": Service.objects.create(
-            name="Consulta estetica inicial",
-            description="Valoracion, historial, recomendaciones y plan de tratamiento.",
+        "facial_depilation": Service.objects.create(
+            name="Depilación facial 💋",
+            description="Depilacion facial precisa para labio, menton, patillas y zonas pequenas.",
             duration_minutes=30,
-            price=money("0.00"),
-            requires_zone=False,
+            price=money("18.00"),
+            color="#C75C8B",
+            requires_zone=True,
+        ),
+        "lashes": Service.objects.create(
+            name="Tinte, extensiones y lifting de pestañas. 👁️",
+            description="Tinte, extensiones, lifting y tratamientos para pestanas.",
+            duration_minutes=75,
+            price=money("45.00"),
+            color="#457B9D",
+            requires_zone=True,
         ),
     }
 
     services["mani"].allowed_zones.set([zones["mesa_mani_1"], zones["mesa_mani_2"]])
-    services["gel"].allowed_zones.set([zones["mesa_mani_1"], zones["mesa_mani_2"]])
-    services["nail_art"].allowed_zones.set([zones["mesa_mani_1"], zones["mesa_mani_2"]])
     services["pedicure"].allowed_zones.set([zones["cabina_1"], zones["cabina_2"]])
-    services["facial"].allowed_zones.set([zones["cabina_1"], zones["cabina_2"]])
-    services["laser"].allowed_zones.set([zones["cabina_1"]])
-    services["brows"].allowed_zones.set([zones["makeup"]])
-    services["makeup"].allowed_zones.set([zones["makeup"]])
-    services["hair_ritual"].allowed_zones.set([zones["wash"]])
+    services["brows"].allowed_zones.set([zones["makeup"], zones["cabina_1"]])
+    services["facial_depilation"].allowed_zones.set([zones["makeup"], zones["cabina_1"], zones["cabina_2"]])
+    services["lashes"].allowed_zones.set([zones["makeup"], zones["cabina_2"]])
 
     employees = {
         "sofia": Employee.objects.create(
@@ -226,7 +197,7 @@ def main():
             email="sofia.marin@example.com",
             calendar_color="#e85d75",
             commission_percent=Decimal("42.00"),
-            notes="Especialista en manicura rusa, gel BIAB y nail art.",
+            notes="Especialista en manicura, extensiones y tratamientos de unas.",
         ),
         "valeria": Employee.objects.create(
             first_name="Valeria",
@@ -235,7 +206,7 @@ def main():
             email="valeria.torres@example.com",
             calendar_color="#f4a261",
             commission_percent=Decimal("40.00"),
-            notes="Faciales, laser y tratamientos corporales.",
+            notes="Especialista en pedicuras, depilacion facial y tratamientos de pies.",
         ),
         "irina": Employee.objects.create(
             first_name="Irina",
@@ -244,7 +215,7 @@ def main():
             email="irina.kovalenko@example.com",
             calendar_color="#2a9d8f",
             commission_percent=Decimal("45.00"),
-            notes="Cejas, maquillaje y atencion premium de eventos.",
+            notes="Especialista en cejas, lifting y pestanas.",
         ),
         "lucia": Employee.objects.create(
             first_name="Lucia",
@@ -253,7 +224,7 @@ def main():
             email="lucia.santos@example.com",
             calendar_color="#457b9d",
             commission_percent=Decimal("38.00"),
-            notes="Pedicura spa, higiene facial y apoyo en cabina.",
+            notes="Pedicuras, depilacion facial y apoyo en cabina.",
         ),
         "marta": Employee.objects.create(
             first_name="Marta",
@@ -262,15 +233,17 @@ def main():
             email="marta.rivas@example.com",
             calendar_color="#8d6b94",
             commission_percent=Decimal("36.00"),
-            notes="Ritual capilar express, consultas y recepcion tecnica.",
+            notes="Apoyo en manicura, cejas, pestanas y recepcion tecnica.",
         ),
     }
 
-    employees["sofia"].services.set([services["mani"], services["gel"], services["nail_art"], services["consult"]])
-    employees["valeria"].services.set([services["facial"], services["laser"], services["pedicure"], services["consult"]])
-    employees["irina"].services.set([services["brows"], services["makeup"], services["consult"]])
-    employees["lucia"].services.set([services["pedicure"], services["facial"], services["laser"], services["consult"]])
-    employees["marta"].services.set([services["hair_ritual"], services["consult"], services["brows"]])
+    rng = random.Random(20260515)
+    service_values = list(services.values())
+    for employee in employees.values():
+        employee.services.set(rng.sample(service_values, rng.randint(2, 4)))
+    for service in service_values:
+        if not service.employees.exists():
+            rng.choice(list(employees.values())).services.add(service)
 
     shift_patterns = {
         "sofia": (time(10, 0), time(19, 0), time(14, 0), time(14, 30)),
@@ -305,7 +278,7 @@ def main():
         date=date(2026, 4, 15),
         start_time=time(16, 0),
         end_time=time(17, 0),
-        label="Formacion producto BIAB",
+        label="Formacion producto manicura",
         color="#111111",
     )
     EmployeeTimeBlock.objects.create(
@@ -313,7 +286,7 @@ def main():
         date=date(2026, 4, 24),
         start_time=time(12, 30),
         end_time=time(13, 30),
-        label="Prueba novia externa",
+        label="Prueba pestanas externa",
         color="#111111",
     )
     EmployeeScheduleOverride.objects.create(
@@ -464,6 +437,15 @@ def main():
         "referral",
         "google",
     ]
+    service_aliases = {
+        "gel": "mani",
+        "nail_art": "mani",
+        "facial": "facial_depilation",
+        "laser": "facial_depilation",
+        "makeup": "lashes",
+        "hair_ritual": "lashes",
+        "consult": "brows",
+    }
 
     for index, spec in enumerate(booking_specs):
         reward = False
@@ -471,15 +453,20 @@ def main():
             client_name, employee_key, service_key, day_num, hour, minute, status, zone_key, notes, reward = spec
         else:
             client_name, employee_key, service_key, day_num, hour, minute, status, zone_key, notes = spec
+        service_key = service_aliases.get(service_key, service_key)
+        service = services[service_key]
+        zone = zones[zone_key] if zone_key else None
+        if service.requires_zone and (not zone or not service.allowed_zones.filter(pk=zone.pk).exists()):
+            zone = service.allowed_zones.order_by("pk").first()
         booking = create_booking(
             client=clients[client_name],
             employee=employees[employee_key],
-            service=services[service_key],
+            service=service,
             day=DEMO_MONTH.replace(day=day_num),
             start_hour=hour,
             start_minute=minute,
             status=status,
-            zone=zones[zone_key] if zone_key else None,
+            zone=zone,
             notes=notes,
             reward=reward,
         )

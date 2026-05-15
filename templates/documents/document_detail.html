@@ -1,6 +1,6 @@
 {% extends "panel_base.html" %}
 
-{% block title %}{{ document.number }} | Anna Salon{% endblock %}
+{% block title %}{{ document.number }} | BRIMOON Studio{% endblock %}
 
 {% block panel_title %}{{ document.get_document_type_display }} {{ document.number }}{% endblock %}
 {% block panel_subtitle %}Documento emitido para {{ document.booking.client }}.{% endblock %}
@@ -10,7 +10,7 @@
   <a class="btn btn-light" href="{% url 'documents:unpaid' %}">Pendientes</a>
   <a class="btn btn-light" href="{% url 'documents:cashbox' %}">Caja</a>
   {% if document.booking.client.email %}
-    <a class="btn btn-light" href="mailto:{{ document.booking.client.email }}?subject={{ document.get_document_type_display }}%20{{ document.number }}%20Anna%20Salon">Enviar al cliente</a>
+    <a class="btn btn-light" href="mailto:{{ document.booking.client.email }}?subject={{ document.get_document_type_display }}%20{{ document.number }}%20BRIMOON%20Studio">Enviar al cliente</a>
   {% endif %}
   <a class="btn" href="{% url 'documents:print' document.id %}" target="_blank" rel="noopener">Vista para imprimir</a>
 {% endblock %}
