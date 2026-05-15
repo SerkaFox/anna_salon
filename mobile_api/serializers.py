@@ -319,6 +319,8 @@ class BookingSerializer(serializers.ModelSerializer):
     zone_name = serializers.CharField(source="zone.name", read_only=True, allow_null=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     source_label = serializers.CharField(source="get_source_display", read_only=True)
+    start_at = serializers.SerializerMethodField()
+    end_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -349,6 +351,12 @@ class BookingSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_start_at(self, obj):
+        return _format_local_datetime(obj.start_at)
+
+    def get_end_at(self, obj):
+        return _format_local_datetime(obj.end_at)
 
 
 class BookingWriteSerializer(serializers.Serializer):
