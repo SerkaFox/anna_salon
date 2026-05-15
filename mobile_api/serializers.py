@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from accounts.permissions import can_access_booking, can_access_employee, get_employee_profile, is_admin_user, scope_clients_queryset
+from accounts.permissions import can_access_booking, can_access_employee, get_client_profile, get_employee_profile, is_admin_user, scope_clients_queryset
 from bookings.forms import BookingForm
 from bookings.models import Booking
 from bookings.utils import combine_local, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
@@ -45,6 +45,7 @@ def _form_errors_to_validation_error(form):
 class ClientSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     referred_by_name = serializers.CharField(source="referred_by.full_name", read_only=True, allow_null=True)
+    username = serializers.CharField(source="user.username", read_only=True, allow_null=True)
 
     class Meta:
         model = Client
@@ -63,11 +64,14 @@ class ClientSerializer(serializers.ModelSerializer):
             "referred_by",
             "referred_by_name",
             "referral_rewards_used",
+            "username",
         ]
 
 
 class ClientWriteSerializer(serializers.ModelSerializer):
     referred_by = serializers.PrimaryKeyRelatedField(queryset=Client.objects.filter(is_active=True), allow_null=True, required=False)
+    username = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    password = serializers.CharField(required=False, allow_blank=True, write_only=True, min_length=4)
 
     class Meta:
         model = Client
@@ -79,6 +83,8 @@ class ClientWriteSerializer(serializers.ModelSerializer):
             "birth_date",
             "notes",
             "referred_by",
+            "username",
+            "password",
         ]
 
     def __init__(self, *args, **kwargs):
@@ -89,6 +95,59 @@ class ClientWriteSerializer(serializers.ModelSerializer):
                 Client.objects.filter(is_active=True),
                 request.user,
             )
+            self.fields.pop("username", None)
+            self.fields.pop("password", None)
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request and is_admin_user(request.user):
+            username = (attrs.get("username") or "").strip()
+            if username:
+                exists = User.objects.filter(username=username)
+                if self.instance and self.instance.user_id:
+                    exists = exists.exclude(pk=self.instance.user_id)
+                if exists.exists():
+                    raise serializers.ValidationError({"username": ["Este usuario ya existe."]})
+        return attrs
+
+    def create(self, validated_data):
+        username = validated_data.pop("username", "")
+        password = validated_data.pop("password", "")
+        client = super().create(validated_data)
+        self._sync_user(client, username, password)
+        return client
+
+    def update(self, instance, validated_data):
+        username = validated_data.pop("username", "")
+        password = validated_data.pop("password", "")
+        client = super().update(instance, validated_data)
+        self._sync_user(client, username, password)
+        return client
+
+    def _sync_user(self, client, username, password):
+        request = self.context.get("request")
+        if not request or not is_admin_user(request.user):
+            return
+        username = (username or "").strip()
+        if not username and not password:
+            return
+        user = client.user
+        if user is None:
+            user = User(username=username, role=User.ROLE_CLIENT)
+        if username:
+            user.username = username
+        user.first_name = client.first_name
+        user.last_name = client.last_name
+        user.email = client.email
+        user.phone = client.phone
+        user.role = User.ROLE_CLIENT
+        user.is_active = True
+        if password:
+            user.set_password(password)
+        user.save()
+        if client.user_id != user.pk:
+            client.user = user
+            client.save(update_fields=["user"])
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -376,8 +435,9 @@ class BookingWriteSerializer(serializers.Serializer):
         user = request.user
         instance = self.instance
         employee_profile = get_employee_profile(user)
+        client_profile = get_client_profile(user)
 
-        if not is_admin_user(user) and not employee_profile:
+        if not is_admin_user(user) and not employee_profile and not client_profile:
             raise serializers.ValidationError({"employee": ["Tu usuario no tiene empleado vinculado."]})
 
         values = {}
@@ -389,7 +449,11 @@ class BookingWriteSerializer(serializers.Serializer):
             else:
                 values[field] = None
 
-        if not is_admin_user(user):
+        if client_profile:
+            values["client"] = client_profile
+            values["status"] = Booking.Statuses.PENDING
+            values["source"] = Booking.Sources.WEBSITE
+        elif not is_admin_user(user):
             requested_employee = values.get("employee") or employee_profile
             if requested_employee and not can_access_employee(user, requested_employee):
                 raise serializers.ValidationError({"employee": ["Sin acceso a este empleado."]})
@@ -435,8 +499,8 @@ class BookingWriteSerializer(serializers.Serializer):
         form = BookingForm(
             data=form_data,
             instance=instance,
-            allowed_employee=None if is_admin_user(user) else employee_profile,
-            allowed_clients=Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+            allowed_employee=None if is_admin_user(user) or client_profile else employee_profile,
+            allowed_clients=Client.objects.filter(pk=client_profile.pk) if client_profile else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
         )
         if not form.is_valid():
             raise _form_errors_to_validation_error(form)

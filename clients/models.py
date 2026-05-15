@@ -1,7 +1,16 @@
+from django.conf import settings
 from django.db import models
 
 
 class Client(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="client_profile",
+        verbose_name="Usuario",
+    )
     first_name = models.CharField("Nombre", max_length=120)
     last_name = models.CharField("Apellidos", max_length=150, blank=True)
     phone = models.CharField("Teléfono", max_length=30, blank=True)

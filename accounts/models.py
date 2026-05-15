@@ -6,11 +6,13 @@ class User(AbstractUser):
     ROLE_OWNER = 'owner'
     ROLE_ADMIN = 'admin'
     ROLE_EMPLOYEE = 'employee'
+    ROLE_CLIENT = 'client'
 
     ROLE_CHOICES = [
         (ROLE_OWNER, 'Owner'),
         (ROLE_ADMIN, 'Admin'),
         (ROLE_EMPLOYEE, 'Employee'),
+        (ROLE_CLIENT, 'Client'),
     ]
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_EMPLOYEE)
@@ -28,6 +30,10 @@ class User(AbstractUser):
     @property
     def is_employee_role(self):
         return self.role == self.ROLE_EMPLOYEE
+
+    @property
+    def is_client_role(self):
+        return self.role == self.ROLE_CLIENT
 
     @property
     def can_manage_staff(self):

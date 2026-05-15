@@ -10,7 +10,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import can_access_booking, can_access_client, can_access_employee, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
+from accounts.permissions import can_access_booking, can_access_client, can_access_employee, get_client_profile, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
 from auditlog.services import log_event
 from bookings.models import Booking, BookingPhoto
 from bookings.utils import (
@@ -238,6 +238,7 @@ class MobileApiMixin:
 class MeView(MobileApiMixin, APIView):
     def _payload(self, request):
         employee = getattr(request.user, "employee_profile", None)
+        client = get_client_profile(request.user)
         return {
             "id": request.user.pk,
             "username": request.user.username,
@@ -248,6 +249,8 @@ class MeView(MobileApiMixin, APIView):
             "can_manage_staff": request.user.can_manage_staff,
             "employee_id": employee.pk if employee else None,
             "employee_name": employee.full_name if employee else "",
+            "client_id": client.pk if client else None,
+            "client_name": client.full_name if client else "",
         }
 
     def get(self, request):
@@ -282,6 +285,8 @@ class ClientListView(MobileApiMixin, generics.ListCreateAPIView):
         return scope_clients_queryset(Client.objects.filter(is_active=True), self.request.user).order_by("first_name", "last_name")
 
     def create(self, request, *args, **kwargs):
+        if get_client_profile(request.user):
+            raise PermissionDenied("Sin permiso para crear clientes.")
         serializer = ClientWriteSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         client = serializer.save()
@@ -310,7 +315,7 @@ class ClientDetailView(MobileApiMixin, APIView):
             .filter(client=client)
             .order_by("-start_at")
         )
-        if not request.user.can_manage_staff:
+        if not request.user.can_manage_staff and not get_client_profile(request.user):
             bookings = bookings.filter(employee=request.user.employee_profile)
 
         booking_history = list(bookings[:20])
