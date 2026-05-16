@@ -224,9 +224,15 @@ class EmployeeWriteSerializer(serializers.ModelSerializer):
                 exists = User.objects.filter(username=username)
                 if current_user:
                     exists = exists.exclude(pk=current_user.pk)
-                if exists.exists():
+                existing_user = exists.first()
+                linked_employee = (
+                    getattr(existing_user, "employee_profile", None)
+                    if existing_user
+                    else None
+                )
+                if linked_employee and linked_employee != self.instance:
                     raise serializers.ValidationError(
-                        {"username": ["Este usuario ya existe."]}
+                        {"username": ["Este usuario ya esta vinculado a otro empleado."]}
                     )
                 if not current_user and not password:
                     raise serializers.ValidationError(
@@ -288,7 +294,9 @@ class EmployeeWriteSerializer(serializers.ModelSerializer):
             return
         user = employee.user
         if user is None:
-            user = User(username=username, role=User.ROLE_EMPLOYEE)
+            user = User.objects.filter(username=username).first()
+            if user is None:
+                user = User(username=username, role=User.ROLE_EMPLOYEE)
         if username:
             user.username = username
         user.first_name = employee.first_name
