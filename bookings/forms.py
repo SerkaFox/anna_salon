@@ -280,12 +280,13 @@ class BookingForm(forms.ModelForm):
 class BookingPhotoForm(forms.ModelForm):
     class Meta:
         model = BookingPhoto
-        fields = ["image", "photo_type", "notes", "is_key_reference"]
+        fields = ["image", "photo_type", "notes", "is_key_reference", "is_visible_to_client"]
         widgets = {
             "image": forms.FileInput(attrs={"class": "input", "accept": "image/*"}),
             "photo_type": forms.Select(attrs={"class": "input"}),
             "notes": forms.Textarea(attrs={"class": "textarea", "rows": 3, "placeholder": "Ej.: uñas debilitadas, posible alergia, foto de control..."}),
             "is_key_reference": forms.CheckboxInput(attrs={"class": "checkbox"}),
+            "is_visible_to_client": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 
     def clean_image(self):

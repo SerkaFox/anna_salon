@@ -19,6 +19,6 @@ class BookingAdmin(admin.ModelAdmin):
 
 @admin.register(BookingPhoto)
 class BookingPhotoAdmin(admin.ModelAdmin):
-    list_display = ("booking", "client", "photo_type", "is_key_reference", "created_at")
-    list_filter = ("photo_type", "is_key_reference", "created_at")
+    list_display = ("booking", "client", "photo_type", "is_key_reference", "is_visible_to_client", "created_at")
+    list_filter = ("photo_type", "is_key_reference", "is_visible_to_client", "created_at")
     search_fields = ("client__first_name", "client__last_name", "booking__service__name")

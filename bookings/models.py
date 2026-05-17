@@ -118,6 +118,7 @@ class BookingPhoto(models.Model):
     )
     notes = models.TextField("Notas", blank=True)
     is_key_reference = models.BooleanField("Foto importante", default=False)
+    is_visible_to_client = models.BooleanField("Visible para cliente y empleado", default=False)
     created_at = models.DateTimeField("Creada", auto_now_add=True)
 
     class Meta:

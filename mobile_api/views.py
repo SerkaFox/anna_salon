@@ -165,8 +165,15 @@ def _serialize_client_photo(photo):
         "photo_type_label": photo.get_photo_type_display(),
         "notes": photo.notes,
         "is_key_reference": photo.is_key_reference,
+        "is_visible_to_client": photo.is_visible_to_client,
         "image_url": image_url,
     }
+
+
+def _visible_photos_for_user(queryset, user):
+    if user.can_manage_staff:
+        return queryset
+    return queryset.filter(is_visible_to_client=True)
 
 
 def _employee_detail_payload(employee, request):
@@ -351,8 +358,10 @@ class ClientDetailView(MobileApiMixin, APIView):
         photo_history = (
             BookingPhoto.objects.select_related("booking", "booking__service", "booking__employee", "client")
             .filter(client=client)
-            .order_by("-created_at")[:24]
+            .order_by("-created_at")
         )
+        photo_history = _visible_photos_for_user(photo_history, request.user)
+        photo_history = photo_history[:24]
 
         return Response(
             {
@@ -752,6 +761,7 @@ class BookingPhotoListCreateView(MobileApiMixin, APIView):
     def get(self, request, pk):
         booking = self.get_booking(request, pk)
         photos = booking.photos.select_related("booking", "booking__service", "booking__employee").order_by("-created_at")
+        photos = _visible_photos_for_user(photos, request.user)
         return Response({"results": [_serialize_client_photo(photo) for photo in photos]})
 
     def post(self, request, pk):
@@ -770,6 +780,7 @@ class BookingPhotoListCreateView(MobileApiMixin, APIView):
             photo_type=photo_type,
             notes=request.data.get("notes", ""),
             is_key_reference=str(request.data.get("is_key_reference", "")).lower() in {"1", "true", "yes", "on"},
+            is_visible_to_client=str(request.data.get("is_visible_to_client", "")).lower() in {"1", "true", "yes", "on"},
         )
         log_event(
             actor=request.user,
@@ -782,11 +793,39 @@ class BookingPhotoListCreateView(MobileApiMixin, APIView):
         return Response(_serialize_client_photo(photo), status=status.HTTP_201_CREATED)
 
 
+class BookingPhotoDetailView(MobileApiMixin, APIView):
+    def get_object(self, request, pk):
+        photo = generics.get_object_or_404(BookingPhoto.objects.select_related("booking"), pk=pk)
+        if not can_access_booking(request.user, photo.booking):
+            raise PermissionDenied("Sin acceso a esta foto.")
+        return photo
+
+    def patch(self, request, pk):
+        if not request.user.can_manage_staff:
+            raise PermissionDenied("Solo administracion puede cambiar la visibilidad de fotos.")
+        photo = self.get_object(request, pk)
+        if "is_visible_to_client" not in request.data:
+            return Response({"is_visible_to_client": ["Campo requerido."]}, status=status.HTTP_400_BAD_REQUEST)
+        photo.is_visible_to_client = str(request.data.get("is_visible_to_client", "")).lower() in {"1", "true", "yes", "on"}
+        photo.save(update_fields=["is_visible_to_client"])
+        log_event(
+            actor=request.user,
+            section="booking_photo",
+            action="visibility",
+            instance=photo.booking,
+            message=f"Visibilidad de foto cambiada desde API movil para {photo.client}.",
+            metadata={"photo_id": photo.pk, "is_visible_to_client": photo.is_visible_to_client},
+        )
+        return Response(_serialize_client_photo(photo))
+
+
 class BookingPhotoImageView(MobileApiMixin, APIView):
     def get(self, request, pk):
         photo = generics.get_object_or_404(BookingPhoto.objects.select_related("booking"), pk=pk)
         if not can_access_booking(request.user, photo.booking):
             raise PermissionDenied("Sin acceso a esta foto.")
+        if not request.user.can_manage_staff and not photo.is_visible_to_client:
+            raise PermissionDenied("Esta foto no esta visible.")
         return FileResponse(photo.image.open("rb"), content_type="image/jpeg")
 
 

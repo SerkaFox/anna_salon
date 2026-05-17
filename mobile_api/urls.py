@@ -23,6 +23,7 @@ urlpatterns = [
     path("bookings/<int:pk>/photos/", views.BookingPhotoListCreateView.as_view(), name="booking_photos"),
     path("bookings/<int:pk>/reschedule/", views.BookingRescheduleView.as_view(), name="booking_reschedule"),
     path("bookings/<int:pk>/status/", views.BookingStatusView.as_view(), name="booking_status"),
+    path("photos/<int:pk>/", views.BookingPhotoDetailView.as_view(), name="booking_photo_detail"),
     path("photos/<int:pk>/image/", views.BookingPhotoImageView.as_view(), name="booking_photo_image"),
     path("time-blocks/", views.TimeBlockListCreateView.as_view(), name="time_blocks"),
     path("time-blocks/<str:pk>/", views.TimeBlockDetailView.as_view(), name="time_block_detail"),
