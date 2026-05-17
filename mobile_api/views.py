@@ -16,6 +16,7 @@ from bookings.models import Booking, BookingPhoto
 from bookings.utils import (
     MOBILE_SLOT_STEP_MINUTES,
     build_available_slots_for_day,
+    find_available_zone,
     get_bookings_for_day,
     get_day_bounds,
     get_employee_schedule,
@@ -713,6 +714,8 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         booking = data.get("booking")
+        if not data.get("employee"):
+            return self._team_slots(request, data, booking)
         slots, blocked = build_available_slots_for_day(
             date_obj=data["date"],
             employee=data["employee"],
@@ -734,6 +737,16 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
                         "start_at": _format_api_datetime(slot["start_at"]),
                         "end_at": _format_api_datetime(slot["end_at"]),
                         "label": timezone.localtime(slot["start_at"]).strftime("%H:%M"),
+                        "zone": (
+                            data["zone"].pk
+                            if data.get("zone")
+                            else (
+                                find_available_zone(data["service"], slot["start_at"], slot["end_at"], exclude_booking_id=booking.pk if booking else None).pk
+                                if data["service"].requires_zone
+                                and find_available_zone(data["service"], slot["start_at"], slot["end_at"], exclude_booking_id=booking.pk if booking else None)
+                                else None
+                            )
+                        ),
                     }
                     for slot in slots
                 ],
@@ -745,6 +758,68 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
                     }
                     for item in blocked
                 ],
+            }
+        )
+
+    def _team_slots(self, request, data, booking):
+        service = data["service"]
+        employees = scope_employees_queryset(
+            Employee.objects.filter(is_active=True).prefetch_related("services"),
+            request.user,
+        ).filter(services=service).order_by("first_name", "last_name")
+        slot_map = {}
+        employee_payload = []
+        for employee in employees:
+            slots, _blocked = build_available_slots_for_day(
+                date_obj=data["date"],
+                employee=employee,
+                service=service,
+                zone=data.get("zone"),
+                exclude_booking_id=booking.pk if booking else None,
+                step_minutes=MOBILE_SLOT_STEP_MINUTES,
+            )
+            first_slot = slots[0] if slots else None
+            employee_payload.append(
+                {
+                    "id": employee.pk,
+                    "name": employee.full_name,
+                    "next_start_at": _format_api_datetime(first_slot["start_at"]) if first_slot else None,
+                    "next_label": timezone.localtime(first_slot["start_at"]).strftime("%H:%M") if first_slot else None,
+                }
+            )
+            for slot in slots:
+                key = _format_api_datetime(slot["start_at"])
+                zone = data.get("zone")
+                if zone is None and service.requires_zone:
+                    zone = find_available_zone(service, slot["start_at"], slot["end_at"], exclude_booking_id=booking.pk if booking else None)
+                item = slot_map.setdefault(
+                    key,
+                    {
+                        "start_at": _format_api_datetime(slot["start_at"]),
+                        "end_at": _format_api_datetime(slot["end_at"]),
+                        "label": timezone.localtime(slot["start_at"]).strftime("%H:%M"),
+                        "employees": [],
+                    },
+                )
+                item["employees"].append(
+                    {
+                        "id": employee.pk,
+                        "name": employee.full_name,
+                        "zone": zone.pk if zone else None,
+                        "zone_name": zone.name if zone else None,
+                    }
+                )
+        slots = sorted(slot_map.values(), key=lambda item: item["start_at"])
+        return Response(
+            {
+                "date": data["date"].isoformat(),
+                "service": service.pk,
+                "zone": data["zone"].pk if data.get("zone") else None,
+                "duration": service.duration_minutes,
+                "step_minutes": MOBILE_SLOT_STEP_MINUTES,
+                "slots": slots,
+                "employees": employee_payload,
+                "blocked": [],
             }
         )
 

@@ -7,7 +7,7 @@ from rest_framework import serializers
 from accounts.permissions import can_access_booking, can_access_employee, get_client_profile, get_employee_profile, is_admin_user, scope_clients_queryset
 from bookings.forms import BookingForm
 from bookings.models import Booking
-from bookings.utils import combine_local, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
+from bookings.utils import combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
 from clients.models import Client, ClientRewardRule
 from clients.rewards import client_reward_progress
 from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
@@ -534,6 +534,18 @@ class BookingWriteSerializer(serializers.Serializer):
         if not values.get("end_at") or "start_at" in attrs or "service" in attrs:
             values["end_at"] = start_at + timedelta(minutes=service.duration_minutes)
 
+        if service.requires_zone and values.get("zone") is None:
+            values["zone"] = find_available_zone(
+                service,
+                values["start_at"],
+                values["end_at"],
+                exclude_booking_id=instance.pk if instance else None,
+            )
+            if values["zone"] is None:
+                raise serializers.ValidationError(
+                    {"zone": ["No hay zona libre para este horario."]}
+                )
+
         form_data = {
             "client": values["client"].pk,
             "employee": values["employee"].pk,
@@ -588,9 +600,7 @@ class AvailabilityCheckSerializer(serializers.Serializer):
             raise serializers.ValidationError({"employee": ["Este empleado no realiza el servicio seleccionado."]})
 
         if service.requires_zone:
-            if not zone:
-                raise serializers.ValidationError({"zone": ["Este servicio requiere una zona."]})
-            if not service.allowed_zones.filter(pk=zone.pk).exists():
+            if zone and not service.allowed_zones.filter(pk=zone.pk).exists():
                 raise serializers.ValidationError({"zone": ["La zona seleccionada no está permitida para este servicio."]})
         else:
             zone = None
@@ -602,6 +612,11 @@ class AvailabilityCheckSerializer(serializers.Serializer):
         if not is_slot_available(employee, service, zone, start_at, end_at, exclude_booking_id=exclude_booking_id):
             raise serializers.ValidationError({"non_field_errors": ["Ese horario no está disponible para el empleado o la zona."]})
 
+        if service.requires_zone and zone is None:
+            zone = find_available_zone(service, start_at, end_at, exclude_booking_id=exclude_booking_id)
+            if zone is None:
+                raise serializers.ValidationError({"zone": ["No hay zona libre para este horario."]})
+
         attrs["zone"] = zone
         attrs["end_at"] = end_at
         return attrs
@@ -609,7 +624,7 @@ class AvailabilityCheckSerializer(serializers.Serializer):
 
 class AvailabilitySlotsQuerySerializer(serializers.Serializer):
     date = serializers.DateField(required=True, input_formats=["%Y-%m-%d"])
-    employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True))
+    employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True), required=False)
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.filter(is_active=True))
     zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.filter(is_active=True), allow_null=True, required=False)
     booking = serializers.PrimaryKeyRelatedField(queryset=Booking.objects.select_related("employee"), required=False)
@@ -621,19 +636,17 @@ class AvailabilitySlotsQuerySerializer(serializers.Serializer):
         zone = attrs.get("zone")
         booking = attrs.get("booking")
 
-        if not can_access_employee(request.user, employee):
+        if employee and not can_access_employee(request.user, employee):
             raise serializers.ValidationError({"employee": ["Sin acceso a este empleado."]})
 
         if booking and not can_access_booking(request.user, booking):
             raise serializers.ValidationError({"booking": ["Sin acceso a esta reserva."]})
 
-        if not employee.services.filter(pk=service.pk).exists():
+        if employee and not employee.services.filter(pk=service.pk).exists():
             raise serializers.ValidationError({"employee": ["Este empleado no realiza el servicio seleccionado."]})
 
         if service.requires_zone:
-            if not zone:
-                raise serializers.ValidationError({"zone": ["Este servicio requiere una zona."]})
-            if not service.allowed_zones.filter(pk=zone.pk).exists():
+            if zone and not service.allowed_zones.filter(pk=zone.pk).exists():
                 raise serializers.ValidationError({"zone": ["La zona seleccionada no está permitida para este servicio."]})
         else:
             zone = None

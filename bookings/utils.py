@@ -236,6 +236,9 @@ def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking
     ):
         return False
 
+    if service.requires_zone and zone is None:
+        return find_available_zone(service, start_at, end_at, exclude_booking_id=exclude_booking_id) is not None
+
     if service.requires_zone and zone:
         zone_conflict = qs.filter(
             zone=zone,
@@ -247,6 +250,23 @@ def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking
             return False
 
     return True
+
+
+def find_available_zone(service, start_at, end_at, exclude_booking_id=None):
+    if not service.requires_zone:
+        return None
+    booking_qs = Booking.objects.exclude(status=Booking.Statuses.CANCELLED)
+    if exclude_booking_id:
+        booking_qs = booking_qs.exclude(pk=exclude_booking_id)
+    for zone in service.allowed_zones.filter(is_active=True).order_by("name", "pk"):
+        conflict = booking_qs.filter(
+            zone=zone,
+            start_at__lt=end_at,
+            end_at__gt=start_at,
+        ).exists()
+        if not conflict:
+            return zone
+    return None
 
 
 def find_available_slots_for_day(date_obj, employee, service, zone=None, exclude_booking_id=None):
@@ -356,6 +376,11 @@ def build_available_slots_for_day(date_obj, employee, service, zone=None, exclud
         if blocked_by_time_block:
             current += step
             continue
+
+        if service.requires_zone and zone is None:
+            if find_available_zone(service, current, slot_end, exclude_booking_id=exclude_booking_id) is None:
+                current += step
+                continue
 
         if is_slot_available(
             employee=employee,
