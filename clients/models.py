@@ -44,3 +44,60 @@ class Client(models.Model):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
+
+
+class ClientRewardRule(models.Model):
+    class RewardTypes(models.TextChoices):
+        REFERRALS = "referrals", "Amigos"
+        VISITS = "visits", "Visitas"
+        SPENT = "spent", "VIP"
+
+    name = models.CharField("Nombre", max_length=120)
+    reward_type = models.CharField("Tipo", max_length=20, choices=RewardTypes.choices, unique=True)
+    threshold = models.PositiveIntegerField("Objetivo", default=5)
+    discount_percent = models.DecimalField("Descuento %", max_digits=5, decimal_places=2, default=20)
+    icon = models.CharField("Icono", max_length=40, default="card_giftcard")
+    color = models.CharField("Color", max_length=20, default="#6FD29C")
+    is_active = models.BooleanField("Activa", default=True)
+    sort_order = models.PositiveIntegerField("Orden", default=0)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        verbose_name = "Premio de cliente"
+        verbose_name_plural = "Premios de clientes"
+
+    def __str__(self):
+        return self.name
+
+
+class ClientRewardRedemption(models.Model):
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name="reward_redemptions",
+        verbose_name="Cliente",
+    )
+    reward_rule = models.ForeignKey(
+        ClientRewardRule,
+        on_delete=models.PROTECT,
+        related_name="redemptions",
+        verbose_name="Premio",
+    )
+    booking = models.ForeignKey(
+        "bookings.Booking",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reward_redemptions",
+        verbose_name="Reserva",
+    )
+    discount_amount = models.DecimalField("Descuento aplicado", max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Premio usado"
+        verbose_name_plural = "Premios usados"
+
+    def __str__(self):
+        return f"{self.client} · {self.reward_rule}"

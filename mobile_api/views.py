@@ -22,6 +22,8 @@ from bookings.utils import (
     get_employee_time_block_occurrences,
 )
 from clients.models import Client
+from clients.models import ClientRewardRule
+from clients.rewards import client_reward_progress
 from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
 from salon.models import Zone
 from services_app.models import Service
@@ -35,6 +37,8 @@ from .serializers import (
     BookingWriteSerializer,
     ClientWriteSerializer,
     ClientSerializer,
+    ClientRewardRuleSerializer,
+    ClientRewardRuleWriteSerializer,
     EmployeeWriteSerializer,
     EmployeeSerializer,
     ServiceSerializer,
@@ -383,6 +387,7 @@ class ClientDetailView(MobileApiMixin, APIView):
                 "successful_referrals_count": successful_referrals_count,
                 "available_rewards": available_rewards,
                 "remaining_for_next_reward": remaining_for_next_reward,
+                "rewards": client_reward_progress(client),
                 "bookings": BookingSerializer(booking_history, many=True, context={"request": request}).data,
                 "photo_history": [_serialize_client_photo(photo) for photo in photo_history],
                 "photo_history_count": len(photo_history),
@@ -434,6 +439,43 @@ class ClientAvatarView(MobileApiMixin, APIView):
             message=f"Avatar actualizado desde API movil: {client.full_name}.",
         )
         return Response(ClientSerializer(client, context={"request": request}).data)
+
+
+class ClientRewardRuleListView(MobileApiMixin, APIView):
+    def get(self, request):
+        rules = ClientRewardRule.objects.all().order_by("sort_order", "name")
+        if not request.user.can_manage_staff:
+            rules = rules.filter(is_active=True)
+        return Response({"results": ClientRewardRuleSerializer(rules, many=True).data})
+
+
+class ClientRewardRuleDetailView(MobileApiMixin, APIView):
+    def patch(self, request, pk):
+        rule = generics.get_object_or_404(ClientRewardRule, pk=pk)
+        serializer = ClientRewardRuleWriteSerializer(
+            rule,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        rule = serializer.save()
+        log_event(
+            actor=request.user,
+            section="client_reward",
+            action="update",
+            instance=rule,
+            message=f"Premio actualizado desde API movil: {rule.name}.",
+        )
+        return Response(ClientRewardRuleSerializer(rule).data)
+
+
+class ClientRewardProgressView(MobileApiMixin, APIView):
+    def get(self, request, pk):
+        client = generics.get_object_or_404(Client, pk=pk, is_active=True)
+        if not can_access_client(request.user, client):
+            raise PermissionDenied("Sin acceso a este cliente.")
+        return Response({"results": client_reward_progress(client)})
 
 
 class EmployeeListView(MobileApiMixin, generics.ListAPIView):

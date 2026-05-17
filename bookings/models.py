@@ -72,6 +72,14 @@ class Booking(models.Model):
     client_price_snapshot = models.DecimalField("Precio cliente", max_digits=10, decimal_places=2, default=0)
     discount_amount_snapshot = models.DecimalField("Descuento aplicado", max_digits=10, decimal_places=2, default=0)
     referral_reward_applied = models.BooleanField("Premio aplicado", default=False)
+    reward_rule = models.ForeignKey(
+        "clients.ClientRewardRule",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bookings",
+        verbose_name="Premio aplicado",
+    )
 
     employee_percent_snapshot = models.DecimalField("Porcentaje empleado", max_digits=5, decimal_places=2, default=0)
     employee_amount_snapshot = models.DecimalField("Importe empleado", max_digits=10, decimal_places=2, default=0)

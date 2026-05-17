@@ -8,7 +8,8 @@ from accounts.permissions import can_access_booking, can_access_employee, get_cl
 from bookings.forms import BookingForm
 from bookings.models import Booking
 from bookings.utils import combine_local, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
-from clients.models import Client
+from clients.models import Client, ClientRewardRule
+from clients.rewards import client_reward_progress
 from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
 from salon.models import Zone
 from services_app.models import Service
@@ -73,6 +74,37 @@ class ClientSerializer(serializers.ModelSerializer):
         if not obj.avatar:
             return None
         return f"/api/v1/clients/{obj.pk}/avatar/"
+
+
+class ClientRewardRuleSerializer(serializers.ModelSerializer):
+    reward_type_label = serializers.CharField(source="get_reward_type_display", read_only=True)
+
+    class Meta:
+        model = ClientRewardRule
+        fields = [
+            "id",
+            "name",
+            "reward_type",
+            "reward_type_label",
+            "threshold",
+            "discount_percent",
+            "icon",
+            "color",
+            "is_active",
+            "sort_order",
+        ]
+
+
+class ClientRewardRuleWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClientRewardRule
+        fields = ["name", "threshold", "discount_percent", "icon", "color", "is_active", "sort_order"]
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        if not request.user.can_manage_staff:
+            raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar premios."]})
+        return attrs
 
 
 class ClientWriteSerializer(serializers.ModelSerializer):
@@ -395,6 +427,7 @@ class BookingSerializer(serializers.ModelSerializer):
     source_label = serializers.CharField(source="get_source_display", read_only=True)
     start_at = serializers.SerializerMethodField()
     end_at = serializers.SerializerMethodField()
+    reward_rule_name = serializers.CharField(source="reward_rule.name", read_only=True, allow_null=True)
 
     class Meta:
         model = Booking
@@ -419,6 +452,8 @@ class BookingSerializer(serializers.ModelSerializer):
             "duration_snapshot",
             "client_price_snapshot",
             "discount_amount_snapshot",
+            "reward_rule",
+            "reward_rule_name",
             "employee_percent_snapshot",
             "employee_amount_snapshot",
             "salon_amount_snapshot",
@@ -444,6 +479,7 @@ class BookingWriteSerializer(serializers.Serializer):
     source = serializers.ChoiceField(choices=Booking.Sources.choices, required=False)
     notes = serializers.CharField(required=False, allow_blank=True)
     apply_referral_reward = serializers.BooleanField(required=False, default=False)
+    reward_rule = serializers.PrimaryKeyRelatedField(queryset=ClientRewardRule.objects.filter(is_active=True), allow_null=True, required=False)
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -456,7 +492,7 @@ class BookingWriteSerializer(serializers.Serializer):
             raise serializers.ValidationError({"employee": ["Tu usuario no tiene empleado vinculado."]})
 
         values = {}
-        for field in ("client", "employee", "service", "zone", "start_at", "end_at", "status", "source", "notes"):
+        for field in ("client", "employee", "service", "zone", "start_at", "end_at", "status", "source", "notes", "reward_rule"):
             if field in attrs:
                 values[field] = attrs[field]
             elif instance is not None:
@@ -509,6 +545,7 @@ class BookingWriteSerializer(serializers.Serializer):
             "source": values["source"],
             "notes": values["notes"],
             "apply_referral_reward": "on" if attrs.get("apply_referral_reward") else "",
+            "reward_rule": values["reward_rule"].pk if values.get("reward_rule") else "",
         }
 
         form = BookingForm(

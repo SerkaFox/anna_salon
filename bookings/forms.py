@@ -6,6 +6,8 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from clients.models import Client
+from clients.models import ClientRewardRedemption, ClientRewardRule
+from clients.rewards import available_reward_for_client, client_reward_progress, successful_referrals_count
 from employees.models import Employee
 from salon.models import Zone
 from services_app.models import Service
@@ -19,10 +21,7 @@ REFERRAL_REWARD_STEP = 5
 
 
 def get_successful_referrals_count(client):
-    return Client.objects.filter(
-        referred_by=client,
-        bookings__status=Booking.Statuses.DONE,
-    ).distinct().count()
+    return successful_referrals_count(client)
 
 
 def get_available_rewards(client):
@@ -34,6 +33,11 @@ class BookingForm(forms.ModelForm):
     apply_referral_reward = forms.BooleanField(
         required=False,
         label="Aplicar premio de referido",
+    )
+    reward_rule = forms.ModelChoiceField(
+        queryset=ClientRewardRule.objects.none(),
+        required=False,
+        label="Premio",
     )
 
     class Meta:
@@ -47,6 +51,7 @@ class BookingForm(forms.ModelForm):
             "end_at",
             "status",
             "source",
+            "reward_rule",
             "notes",
         ]
         widgets = {
@@ -110,6 +115,18 @@ class BookingForm(forms.ModelForm):
         elif self.instance.pk:
             service = self.instance.service
             client = self.instance.client
+
+        if client:
+            available_ids = [
+                reward["id"]
+                for reward in client_reward_progress(client)
+                if reward["available"] > 0
+            ]
+            if self.instance.pk and self.instance.reward_rule_id:
+                available_ids.append(self.instance.reward_rule_id)
+                self.fields["reward_rule"].initial = self.instance.reward_rule
+                self.fields["reward_rule"].disabled = True
+            self.fields["reward_rule"].queryset = ClientRewardRule.objects.filter(pk__in=available_ids)
 
         if service:
             self.fields["employee"].queryset = service.employees.filter(is_active=True).order_by("first_name", "last_name")
@@ -214,10 +231,16 @@ class BookingForm(forms.ModelForm):
             if zone_overlap.exists():
                 raise ValidationError("La zona ya está ocupada en ese horario.")
 
-        if apply_referral_reward and client and not (self.instance.pk and self.instance.referral_reward_applied):
-            available_rewards = get_available_rewards(client)
-            if available_rewards <= 0:
-                self.add_error("apply_referral_reward", "Este cliente no tiene premios disponibles.")
+        reward_rule = cleaned_data.get("reward_rule")
+        if apply_referral_reward and not reward_rule:
+            reward_rule = ClientRewardRule.objects.filter(reward_type=ClientRewardRule.RewardTypes.REFERRALS, is_active=True).first()
+            cleaned_data["reward_rule"] = reward_rule
+            self.cleaned_data["reward_rule"] = reward_rule
+
+        if reward_rule and client and not (self.instance.pk and self.instance.reward_rule_id):
+            reward = available_reward_for_client(client, reward_rule)
+            if not reward or reward["available"] <= 0:
+                self.add_error("reward_rule", "Este cliente no tiene este premio disponible.")
 
         return cleaned_data
 
@@ -228,7 +251,10 @@ class BookingForm(forms.ModelForm):
         if self.instance.pk:
             previous_reward_applied = Booking.objects.get(pk=self.instance.pk).referral_reward_applied
 
-        should_apply_reward = self.cleaned_data.get("apply_referral_reward", False)
+        reward_rule = self.cleaned_data.get("reward_rule")
+        if not reward_rule and self.instance.pk:
+            reward_rule = self.instance.reward_rule
+        should_apply_reward = bool(reward_rule) or self.cleaned_data.get("apply_referral_reward", False)
 
         if booking.service_id:
             original_price = booking.service.price or Decimal("0.00")
@@ -239,11 +265,13 @@ class BookingForm(forms.ModelForm):
             discount_amount = Decimal("0.00")
             reward_applied = previous_reward_applied
 
+            discount_percent = reward_rule.discount_percent if reward_rule else REFERRAL_DISCOUNT_PERCENT
+
             if previous_reward_applied:
-                discount_amount = (original_price * REFERRAL_DISCOUNT_PERCENT) / Decimal("100")
+                discount_amount = (original_price * discount_percent) / Decimal("100")
                 reward_applied = True
             elif should_apply_reward:
-                discount_amount = (original_price * REFERRAL_DISCOUNT_PERCENT) / Decimal("100")
+                discount_amount = (original_price * discount_percent) / Decimal("100")
                 reward_applied = True
 
             client_price = original_price - discount_amount
@@ -254,6 +282,8 @@ class BookingForm(forms.ModelForm):
 
             booking.discount_amount_snapshot = discount_amount
             booking.referral_reward_applied = reward_applied
+            if reward_rule and not booking.reward_rule_id:
+                booking.reward_rule = reward_rule
             booking.client_price_snapshot = client_price
             booking.employee_percent_snapshot = employee_percent
             booking.employee_amount_snapshot = employee_amount
@@ -270,9 +300,21 @@ class BookingForm(forms.ModelForm):
             self.save_m2m()
 
             if booking.referral_reward_applied and not previous_reward_applied:
-                client = booking.client
-                client.referral_rewards_used += 1
-                client.save(update_fields=["referral_rewards_used"])
+                if booking.reward_rule:
+                    ClientRewardRedemption.objects.create(
+                        client=booking.client,
+                        reward_rule=booking.reward_rule,
+                        booking=booking,
+                        discount_amount=booking.discount_amount_snapshot,
+                    )
+                    if booking.reward_rule.reward_type == ClientRewardRule.RewardTypes.REFERRALS:
+                        client = booking.client
+                        client.referral_rewards_used += 1
+                        client.save(update_fields=["referral_rewards_used"])
+                else:
+                    client = booking.client
+                    client.referral_rewards_used += 1
+                    client.save(update_fields=["referral_rewards_used"])
 
         return booking
 
