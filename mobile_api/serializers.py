@@ -46,6 +46,7 @@ class ClientSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     referred_by_name = serializers.CharField(source="referred_by.full_name", read_only=True, allow_null=True)
     username = serializers.CharField(source="user.username", read_only=True, allow_null=True)
+    avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
@@ -65,7 +66,13 @@ class ClientSerializer(serializers.ModelSerializer):
             "referred_by_name",
             "referral_rewards_used",
             "username",
+            "avatar_url",
         ]
+
+    def get_avatar_url(self, obj):
+        if not obj.avatar:
+            return None
+        return f"/api/v1/clients/{obj.pk}/avatar/"
 
 
 class ClientWriteSerializer(serializers.ModelSerializer):

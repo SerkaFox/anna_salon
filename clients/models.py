@@ -11,6 +11,7 @@ class Client(models.Model):
         related_name="client_profile",
         verbose_name="Usuario",
     )
+    avatar = models.ImageField("Avatar", upload_to="client_avatars/%Y/%m/", null=True, blank=True)
     first_name = models.CharField("Nombre", max_length=120)
     last_name = models.CharField("Apellidos", max_length=150, blank=True)
     phone = models.CharField("Teléfono", max_length=30, blank=True)

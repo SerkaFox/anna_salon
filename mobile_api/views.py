@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from django.db.models import Count
-from django.http import FileResponse
+from django.http import FileResponse, Http404
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 from rest_framework import generics, serializers, status
@@ -391,6 +391,38 @@ class ClientDetailView(MobileApiMixin, APIView):
             action="update",
             instance=client,
             message=f"Cliente actualizado desde API movil: {client.full_name}.",
+        )
+        return Response(ClientSerializer(client, context={"request": request}).data)
+
+
+class ClientAvatarView(MobileApiMixin, APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_object(self, request, pk):
+        client = generics.get_object_or_404(Client, pk=pk, is_active=True)
+        if not can_access_client(request.user, client):
+            raise PermissionDenied("Sin acceso a este cliente.")
+        return client
+
+    def get(self, request, pk):
+        client = self.get_object(request, pk)
+        if not client.avatar:
+            raise Http404("Avatar no encontrado.")
+        return FileResponse(client.avatar.open("rb"), content_type="image/jpeg")
+
+    def post(self, request, pk):
+        client = self.get_object(request, pk)
+        image = request.FILES.get("image")
+        if not image:
+            return Response({"image": ["Selecciona una imagen."]}, status=status.HTTP_400_BAD_REQUEST)
+        client.avatar = image
+        client.save(update_fields=["avatar", "updated_at"])
+        log_event(
+            actor=request.user,
+            section="client",
+            action="avatar_update",
+            instance=client,
+            message=f"Avatar actualizado desde API movil: {client.full_name}.",
         )
         return Response(ClientSerializer(client, context={"request": request}).data)
 
