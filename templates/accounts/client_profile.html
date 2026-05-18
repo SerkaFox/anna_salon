@@ -2,12 +2,13 @@
 
 {% block title %}Mis datos | BRIMOON Studio{% endblock %}
 {% block portal_title %}Mis datos{% endblock %}
-{% block portal_subtitle %}Actualiza tu informacion de contacto para BRIMOON Studio.{% endblock %}
+{% block portal_subtitle %}Actualiza tus datos de usuario, contacto y contrasena.{% endblock %}
 
 {% block portal_content %}
 <section class="panel-card">
   <form method="post" class="entity-form">
     {% csrf_token %}
+    <input type="hidden" name="action" value="save_profile">
     {% if form.non_field_errors %}
       <div class="form-errors">
         {% for error in form.non_field_errors %}
@@ -40,6 +41,47 @@
     <div class="form-actions">
       <button type="submit" class="btn">Guardar datos</button>
       <a href="{% url 'clients:portal' %}" class="btn btn-light">Volver</a>
+      <a href="{% url 'accounts:logout' %}" class="btn btn-light">Salir</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel-card" style="margin-top: 18px;">
+  <div class="section-heading">
+    <div>
+      <h2>Cambiar contrasena</h2>
+      <p>Actualiza tu acceso al portal con una nueva contrasena.</p>
+    </div>
+  </div>
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="change_password">
+    {% if password_form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in password_form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ password_form.old_password.id_for_label }}">Contrasena actual</label>
+        {{ password_form.old_password }}
+        {% for error in password_form.old_password.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ password_form.new_password1.id_for_label }}">Nueva contrasena</label>
+        {{ password_form.new_password1 }}
+        {% for error in password_form.new_password1.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ password_form.new_password2.id_for_label }}">Repetir contrasena</label>
+        {{ password_form.new_password2 }}
+        {% for error in password_form.new_password2.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn">Cambiar contrasena</button>
     </div>
   </form>
 </section>

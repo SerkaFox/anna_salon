@@ -40,7 +40,24 @@ def user_logout(request):
 @login_required
 def profile_view(request):
     is_client_portal = bool(get_client_profile(request.user))
-    if request.method == "POST":
+    password_form = StyledPasswordChangeForm(request.user)
+
+    if is_client_portal and request.method == "POST" and request.POST.get("action") == "change_password":
+        form = UserProfileForm(instance=request.user)
+        password_form = StyledPasswordChangeForm(request.user, request.POST)
+        if password_form.is_valid():
+            user = password_form.save()
+            update_session_auth_hash(request, user)
+            log_event(
+                actor=request.user,
+                section="account",
+                action="password_change",
+                instance=user,
+                message=f"Contrasena cambiada para {user.username}.",
+            )
+            messages.success(request, "Contrasena actualizada.")
+            return redirect("accounts:profile")
+    elif request.method == "POST":
         form = UserProfileForm(request.POST, instance=request.user)
         if form.is_valid():
             form.save()
@@ -62,6 +79,7 @@ def profile_view(request):
         {
             "active_section": "profile",
             "form": form,
+            "password_form": password_form,
             "linked_employee": Employee.objects.filter(user=request.user).first(),
         },
     )
@@ -70,6 +88,9 @@ def profile_view(request):
 @login_required
 def change_password_view(request):
     is_client_portal = bool(get_client_profile(request.user))
+    if is_client_portal:
+        return redirect("accounts:profile")
+
     if request.method == "POST":
         form = StyledPasswordChangeForm(request.user, request.POST)
         if form.is_valid():
