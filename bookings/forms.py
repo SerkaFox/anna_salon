@@ -13,7 +13,7 @@ from salon.models import Zone
 from services_app.models import Service
 
 from .models import Booking, BookingPhoto
-from .utils import fits_employee_schedule
+from .utils import find_available_zone, fits_employee_schedule
 
 
 REFERRAL_DISCOUNT_PERCENT = Decimal("20.00")
@@ -200,8 +200,17 @@ class BookingForm(forms.ModelForm):
 
         if service:
             if service.requires_zone:
+                if not zone and start_at and end_at:
+                    zone = find_available_zone(
+                        service,
+                        start_at,
+                        end_at,
+                        exclude_booking_id=self.instance.pk if self.instance.pk else None,
+                    )
+                    cleaned_data["zone"] = zone
+                    self.cleaned_data["zone"] = zone
                 if not zone:
-                    self.add_error("zone", "Este servicio requiere una zona.")
+                    self.add_error("zone", "No hay zona libre para este horario.")
                 elif not service.allowed_zones.filter(pk=zone.pk).exists():
                     self.add_error("zone", "La zona seleccionada no está permitida para este servicio.")
             else:

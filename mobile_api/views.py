@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
+from django.db.models.deletion import ProtectedError
 from django.db.models import Count
 from django.http import FileResponse, Http404
 from django.utils import timezone
@@ -409,6 +410,33 @@ class ClientDetailView(MobileApiMixin, APIView):
         )
         return Response(ClientSerializer(client, context={"request": request}).data)
 
+    def delete(self, request, pk):
+        if not request.user.can_manage_staff:
+            raise PermissionDenied("Sin permiso para eliminar clientes.")
+        client = self.get_object(request, pk)
+        client_name = client.full_name
+        try:
+            client.delete()
+            action = "delete"
+            message = f"Cliente eliminado desde API movil: {client_name}."
+        except ProtectedError:
+            client.is_active = False
+            update_fields = ["is_active", "updated_at"]
+            client.save(update_fields=update_fields)
+            if client.user:
+                client.user.is_active = False
+                client.user.save(update_fields=["is_active"])
+            action = "deactivate"
+            message = f"Cliente desactivado desde API movil: {client_name}."
+        log_event(
+            actor=request.user,
+            section="client",
+            action=action,
+            instance=None if action == "delete" else client,
+            message=message,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class ClientAvatarView(MobileApiMixin, APIView):
     parser_classes = [MultiPartParser, FormParser]
@@ -535,6 +563,32 @@ class EmployeeDetailView(MobileApiMixin, APIView):
             message=f"Empleado actualizado desde API movil: {employee.full_name}.",
         )
         return Response(_employee_detail_payload(employee, request))
+
+    def delete(self, request, pk):
+        if not request.user.can_manage_staff:
+            raise PermissionDenied("Sin permiso para eliminar empleados.")
+        employee = self.get_object(request, pk)
+        employee_name = employee.full_name
+        try:
+            employee.delete()
+            action = "delete"
+            message = f"Empleado eliminado desde API movil: {employee_name}."
+        except ProtectedError:
+            employee.is_active = False
+            employee.save(update_fields=["is_active", "updated_at"])
+            if employee.user:
+                employee.user.is_active = False
+                employee.user.save(update_fields=["is_active"])
+            action = "deactivate"
+            message = f"Empleado desactivado desde API movil: {employee_name}."
+        log_event(
+            actor=request.user,
+            section="employee",
+            action=action,
+            instance=None if action == "delete" else employee,
+            message=message,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ServiceListView(MobileApiMixin, generics.ListCreateAPIView):

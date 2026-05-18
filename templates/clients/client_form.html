@@ -75,6 +75,32 @@
       </div>
     </div>
 
+    {% if form.username %}
+      <section>
+        <h2>Acceso del cliente a la app</h2>
+        <p class="muted-text">Crea o actualiza el acceso del cliente para que pueda entrar en su portal, ver historial, fotos permitidas y premios.</p>
+        <div class="form-grid">
+          <div class="field">
+            <label for="{{ form.username.id_for_label }}">Usuario app</label>
+            {{ form.username }}
+            {% if form.username.help_text %}
+              <p class="muted-text">{{ form.username.help_text }}</p>
+            {% endif %}
+            {{ form.username.errors }}
+          </div>
+
+          <div class="field">
+            <label for="{{ form.password.id_for_label }}">Password app</label>
+            {{ form.password }}
+            {% if form.password.help_text %}
+              <p class="muted-text">{{ form.password.help_text }}</p>
+            {% endif %}
+            {{ form.password.errors }}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
     <div class="field">
       <label for="{{ form.notes.id_for_label }}">Notas</label>
       {{ form.notes }}

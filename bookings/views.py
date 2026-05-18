@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from accounts.permissions import can_access_booking, can_access_employee, get_employee_profile, scope_bookings_queryset, scope_employees_queryset
+from accounts.permissions import can_access_booking, can_access_employee, get_client_profile, get_employee_profile, scope_bookings_queryset, scope_employees_queryset
 from auditlog.services import log_event
 from clients.models import Client
 from employees.models import Employee
@@ -361,6 +361,10 @@ def booking_photo_image(request, pk):
         pk=pk,
     )
     if not can_access_booking(request.user, photo.booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
+    if get_client_profile(request.user) and not photo.is_visible_to_client:
         from django.core.exceptions import PermissionDenied
 
         raise PermissionDenied

@@ -4,11 +4,11 @@ from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from accounts.permissions import get_employee_profile, scope_bookings_queryset, scope_clients_queryset
+from accounts.permissions import get_client_profile, get_employee_profile, scope_bookings_queryset, scope_clients_queryset
 from bookings.models import Booking
 from clients.models import Client
 from documents.models import FiscalDocument, Payment
@@ -141,6 +141,9 @@ def _get_client_ranking_context(reference_time):
 
 @login_required
 def home(request):
+    if get_client_profile(request.user):
+        return redirect("clients:portal")
+
     today = timezone.localdate()
     now = timezone.localtime()
 

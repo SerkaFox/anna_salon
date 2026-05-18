@@ -1,5 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -10,12 +12,18 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from accounts.permissions import can_access_client, scope_clients_queryset
+from accounts.permissions import can_access_client, get_client_profile, scope_clients_queryset
 from auditlog.services import log_event
+from bookings.forms import BookingForm
 from bookings.models import Booking
 from bookings.models import BookingPhoto
+from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
+from employees.models import Employee
 from .forms import ClientForm
-from .models import Client
+from .models import Client, ClientRewardRule
+from salon.models import Zone
+from services_app.models import Service
+from .rewards import client_reward_progress
 
 
 def build_referral_tree(root_client):
@@ -32,6 +40,9 @@ def build_referral_tree(root_client):
 
 @login_required
 def client_list(request):
+    if get_client_profile(request.user):
+        return redirect("clients:portal")
+
     query = request.GET.get("q", "").strip()
 
     clients = scope_clients_queryset(Client.objects.all(), request.user)
@@ -55,6 +66,143 @@ def client_list(request):
 
 
 @login_required
+def client_portal(request):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+
+    if request.method == "POST":
+        if request.POST.get("action") == "avatar":
+            image = request.FILES.get("avatar")
+            if not image:
+                messages.error(request, "Selecciona una imagen.")
+                return redirect("clients:portal")
+            client.avatar = image
+            client.save(update_fields=["avatar", "updated_at"])
+            log_event(
+                actor=request.user,
+                section="client",
+                action="avatar_update",
+                instance=client,
+                message=f"Avatar actualizado desde portal cliente: {client.full_name}.",
+            )
+            messages.success(request, "Avatar actualizado.")
+            return redirect("clients:portal")
+
+        data = request.POST.copy()
+        data["client"] = str(client.pk)
+        data["status"] = Booking.Statuses.PENDING
+        data["source"] = Booking.Sources.WEBSITE
+        form = BookingForm(
+            data,
+            allowed_clients=Client.objects.filter(pk=client.pk),
+        )
+        _configure_client_booking_form(form, client)
+        if form.is_valid():
+            booking = form.save()
+            log_event(
+                actor=request.user,
+                section="booking",
+                action="client_portal_create",
+                instance=booking,
+                message=f"Solicitud de reserva creada desde portal cliente: {client.full_name}.",
+            )
+            messages.success(request, "Solicitud enviada. BRIMOON Studio revisara y confirmara tu cita.")
+            return redirect("clients:portal")
+    else:
+        form = None
+
+    return render(
+        request,
+        "clients/client_portal.html",
+        _client_portal_context(request, client, form),
+    )
+
+
+@login_required
+def client_portal_slots_api(request):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+
+    service_id = request.GET.get("service")
+    date_text = request.GET.get("date")
+    zone_id = request.GET.get("zone")
+    if not service_id or not date_text:
+        return JsonResponse({"ok": False, "message": "Selecciona servicio y fecha."}, status=400)
+
+    try:
+        service = Service.objects.prefetch_related("allowed_zones", "employees").get(pk=service_id, is_active=True)
+        date_value = datetime.strptime(date_text, "%Y-%m-%d").date()
+    except (Service.DoesNotExist, ValueError):
+        return JsonResponse({"ok": False, "message": "Servicio o fecha no valida."}, status=400)
+
+    zone = None
+    if zone_id:
+        try:
+            zone = Zone.objects.get(pk=zone_id, is_active=True)
+        except Zone.DoesNotExist:
+            return JsonResponse({"ok": False, "message": "Zona no valida."}, status=400)
+        if service.requires_zone and not service.allowed_zones.filter(pk=zone.pk).exists():
+            return JsonResponse({"ok": False, "message": "La zona no esta permitida para este servicio."}, status=400)
+
+    slot_map = {}
+    employees = (
+        Employee.objects
+        .filter(is_active=True, services=service)
+        .prefetch_related("services")
+        .order_by("first_name", "last_name")
+    )
+    employee_payload = []
+    for employee in employees:
+        slots, _blocked = build_available_slots_for_day(
+            date_obj=date_value,
+            employee=employee,
+            service=service,
+            zone=zone,
+            step_minutes=MOBILE_SLOT_STEP_MINUTES,
+        )
+        first_slot = slots[0] if slots else None
+        employee_payload.append(
+            {
+                "id": employee.pk,
+                "name": employee.full_name,
+                "next_start_at": timezone.localtime(first_slot["start_at"]).strftime("%Y-%m-%dT%H:%M") if first_slot else "",
+                "next_label": timezone.localtime(first_slot["start_at"]).strftime("%H:%M") if first_slot else "",
+            }
+        )
+        for slot in slots:
+            start_key = timezone.localtime(slot["start_at"]).strftime("%Y-%m-%dT%H:%M")
+            slot_zone = zone
+            if service.requires_zone and slot_zone is None:
+                slot_zone = find_available_zone(service, slot["start_at"], slot["end_at"])
+            item = slot_map.setdefault(
+                start_key,
+                {
+                    "start_at": start_key,
+                    "label": timezone.localtime(slot["start_at"]).strftime("%H:%M"),
+                    "employees": [],
+                },
+            )
+            item["employees"].append(
+                {
+                    "id": employee.pk,
+                    "name": employee.full_name,
+                    "zone": slot_zone.pk if slot_zone else "",
+                    "zone_name": slot_zone.name if slot_zone else "",
+                }
+            )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "slots": sorted(slot_map.values(), key=lambda item: item["start_at"]),
+            "employees": employee_payload,
+        }
+    )
+
+
+@login_required
 def client_create(request):
     referred_by_id = request.GET.get("referred_by")
     initial = {}
@@ -66,6 +214,7 @@ def client_create(request):
     if request.method == "POST":
         form = ClientForm(
             request.POST,
+            can_manage_credentials=request.user.can_manage_staff,
             allowed_referred_by=scope_clients_queryset(
                 Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
                 request.user,
@@ -85,6 +234,7 @@ def client_create(request):
     else:
         form = ClientForm(
             initial=initial,
+            can_manage_credentials=request.user.can_manage_staff,
             allowed_referred_by=scope_clients_queryset(
                 Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
                 request.user,
@@ -105,6 +255,7 @@ def client_create(request):
 def client_create_api(request):
     form = ClientForm(
         request.POST,
+        can_manage_credentials=request.user.can_manage_staff,
         allowed_referred_by=scope_clients_queryset(
             Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
             request.user,
@@ -155,6 +306,7 @@ def client_update(request, pk):
         form = ClientForm(
             request.POST,
             instance=client,
+            can_manage_credentials=request.user.can_manage_staff,
             allowed_referred_by=scope_clients_queryset(
                 Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
                 request.user,
@@ -174,6 +326,7 @@ def client_update(request, pk):
     else:
         form = ClientForm(
             instance=client,
+            can_manage_credentials=request.user.can_manage_staff,
             allowed_referred_by=scope_clients_queryset(
                 Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
                 request.user,
@@ -289,8 +442,12 @@ def client_detail(request, pk):
     ).distinct()
 
     successful_referrals_count = successful_referrals.count()
-    available_rewards = max((successful_referrals_count // 5) - client.referral_rewards_used, 0)
-    remaining_for_next_reward = 5 - (successful_referrals_count % 5) if successful_referrals_count % 5 else 0
+    rewards = client_reward_progress(client)
+    available_rewards = sum(reward["available"] for reward in rewards)
+    remaining_for_next_reward = min(
+        (reward["remaining"] for reward in rewards if reward["remaining"] > 0),
+        default=0,
+    )
 
     context = {
         "photo_comparisons": [
@@ -329,9 +486,102 @@ def client_detail(request, pk):
         "successful_referrals_count": successful_referrals_count,
         "available_rewards": available_rewards,
         "remaining_for_next_reward": remaining_for_next_reward,
+        "rewards": rewards,
     }
 
     return render(request, "clients/client_detail.html", context)
+
+
+def _client_portal_context(request, client, booking_form=None):
+    bookings = (
+        Booking.objects
+        .select_related("employee", "service", "zone")
+        .prefetch_related("photos")
+        .filter(client=client)
+        .order_by("-start_at")
+    )
+    done_bookings = bookings.filter(status=Booking.Statuses.DONE)
+    total_spent = sum((booking.client_price_snapshot for booking in done_bookings), Decimal("0.00"))
+    total_visits = done_bookings.count()
+    avg_ticket = total_spent / total_visits if total_visits else Decimal("0.00")
+    upcoming_bookings = (
+        bookings.filter(start_at__gte=timezone.now())
+        .exclude(status=Booking.Statuses.CANCELLED)
+        .order_by("start_at")[:5]
+    )
+    history = list(bookings[:20])
+    rewards = client_reward_progress(client)
+    photo_history = (
+        BookingPhoto.objects
+        .select_related("booking", "booking__service", "booking__employee", "client")
+        .filter(client=client, is_visible_to_client=True)
+        .order_by("-created_at")[:24]
+    )
+    top_services = (
+        done_bookings.values("service__name")
+        .annotate(total=Count("id"))
+        .order_by("-total")[:5]
+    )
+
+    if booking_form is None:
+        booking_form = BookingForm(
+            initial={
+                "client": client,
+                "status": Booking.Statuses.PENDING,
+                "source": Booking.Sources.WEBSITE,
+            },
+            allowed_clients=Client.objects.filter(pk=client.pk),
+        )
+    _configure_client_booking_form(booking_form, client)
+
+    return {
+        "client": client,
+        "booking_form": booking_form,
+        "portal_services": [
+            {
+                "id": service.pk,
+                "requires_zone": service.requires_zone,
+                "employee_ids": [employee.pk for employee in service.employees.all()],
+                "allowed_zone_ids": [zone.pk for zone in service.allowed_zones.all()],
+            }
+            for service in Service.objects.filter(is_active=True).prefetch_related("employees", "allowed_zones")
+        ],
+        "portal_zones": [
+            {"id": zone.pk, "name": zone.name}
+            for zone in Zone.objects.filter(is_active=True).order_by("name")
+        ],
+        "stats": {
+            "total_visits": total_visits,
+            "total_spent": total_spent,
+            "avg_ticket": avg_ticket,
+            "available_rewards": sum(reward["available"] for reward in rewards),
+        },
+        "upcoming_bookings": upcoming_bookings,
+        "bookings": history,
+        "photo_history": photo_history,
+        "rewards": rewards,
+        "top_services": top_services,
+    }
+
+
+def _configure_client_booking_form(form, client):
+    form.fields["client"].widget = forms.HiddenInput()
+    form.fields["status"].widget = forms.HiddenInput()
+    form.fields["source"].widget = forms.HiddenInput()
+    form.fields["start_at"].widget = forms.HiddenInput()
+    form.fields["end_at"].required = False
+    form.fields["end_at"].widget = forms.HiddenInput()
+    form.fields["notes"].label = "Comentario"
+    form.fields["notes"].widget.attrs["placeholder"] = "Cuéntanos cualquier detalle importante."
+    form.fields["reward_rule"].queryset = ClientRewardRule.objects.filter(
+        pk__in=[
+            reward["id"]
+            for reward in client_reward_progress(client)
+            if reward["available"] > 0
+        ]
+    )
+    form.fields["reward_rule"].empty_label = "Sin premio"
+    form.fields["apply_referral_reward"].widget = forms.HiddenInput()
     
 @login_required
 def use_referral_reward(request, pk):

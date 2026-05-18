@@ -27,6 +27,8 @@ class UserLoginView(LoginView):
     redirect_authenticated_user = True
 
     def get_success_url(self):
+        if getattr(self.request.user, "role", None) == self.request.user.ROLE_CLIENT:
+            return reverse_lazy("clients:portal")
         return reverse_lazy("dashboard:home")
 
 

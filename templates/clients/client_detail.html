@@ -41,6 +41,49 @@
   {% endif %}
 </section>
 
+<section class="panel-card">
+  <div class="dashboard-section-head">
+    <div>
+      <h2>Premios del cliente</h2>
+      <p class="muted-text">Misma logica que en mobile: premios por amigos, visitas y gasto total. La configuracion viene de las reglas activas del salon.</p>
+    </div>
+  </div>
+
+  {% if rewards %}
+    <div class="stats-grid">
+      {% for reward in rewards %}
+        <article class="stat-card">
+          <div class="dashboard-section-head">
+            <div>
+              <span class="stat-label">{{ reward.reward_type_label }}</span>
+              <strong class="stat-value">{{ reward.name }}</strong>
+            </div>
+            <span class="dashboard-badge" style="border-color: {{ reward.color }}; color: {{ reward.color }};">
+              {{ reward.discount_percent|floatformat:0 }}%
+            </span>
+          </div>
+          <p class="muted-text">
+            Necesita {{ reward.threshold }}.
+            Ahora tiene {{ reward.current }}.
+          </p>
+          {% if reward.available > 0 %}
+            <p><strong>Disponible:</strong> {{ reward.available }} premio{{ reward.available|pluralize }} para aplicar.</p>
+          {% elif reward.remaining > 0 %}
+            <p><strong>Faltan:</strong> {{ reward.remaining }} para conseguir el proximo premio.</p>
+          {% else %}
+            <p><strong>Estado:</strong> progreso completo, pendiente de nuevo ciclo.</p>
+          {% endif %}
+          {% if reward.used > 0 %}
+            <p class="muted-text">Ya usado: {{ reward.used }}.</p>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted-text">No hay premios activos configurados.</p>
+  {% endif %}
+</section>
+
 <section class="content-grid">
   <article class="panel-card">
     <h2>Información</h2>
@@ -94,10 +137,12 @@
     <p>
       <strong>Para próximo premio:</strong>
       {% if request.user.can_manage_staff %}
-        {% if remaining_for_next_reward == 0 %}
-          Ya disponible
+        {% if available_rewards > 0 %}
+          Hay {{ available_rewards }} premio{{ available_rewards|pluralize }} disponible{{ available_rewards|pluralize }}.
+        {% elif remaining_for_next_reward > 0 %}
+          El objetivo mas cercano esta a {{ remaining_for_next_reward }} paso{{ remaining_for_next_reward|pluralize }}.
         {% else %}
-          Faltan {{ remaining_for_next_reward }} clientes
+          Sin premios activos pendientes.
         {% endif %}
       {% else %}
         Visible solo para administración

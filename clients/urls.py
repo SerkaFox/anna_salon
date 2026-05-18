@@ -7,12 +7,16 @@ from .views import (
     client_update,
     client_delete,
     client_detail,
+    client_portal,
+    client_portal_slots_api,
     use_referral_reward,
 )
 
 app_name = "clients"
 
 urlpatterns = [
+    path("portal/", client_portal, name="portal"),
+    path("portal/slots/", client_portal_slots_api, name="portal_slots_api"),
     path("", client_list, name="list"),
     path("new/", client_create, name="create"),
     path("api/new/", client_create_api, name="create_api"),

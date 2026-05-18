@@ -5,6 +5,8 @@ from django.urls import include, path
 
 def root_redirect(request):
     if request.user.is_authenticated:
+        if getattr(request.user, "role", None) == request.user.ROLE_CLIENT:
+            return redirect("clients:portal")
         return redirect("dashboard:home")
     return redirect("accounts:login")
 

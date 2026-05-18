@@ -1,0 +1,402 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}Mi BRIMOON Studio{% endblock %}
+
+{% block body %}
+<div class="mobile-topbar">
+  <div class="mobile-topbar__brand">
+    <div class="logo"><img src="{% static 'logo.png' %}" alt="BRIMOON Studio"></div>
+    <div>
+      <strong>BRIMOON Studio</strong>
+      <span>Portal cliente</span>
+    </div>
+  </div>
+  <a class="btn btn-light btn-small" href="{% url 'accounts:logout' %}">Salir</a>
+</div>
+
+<main class="main-panel" style="max-width: 1120px; margin: 0 auto;">
+  <header class="panel-header">
+    <div>
+      <h1>Hola, {{ client.full_name }}</h1>
+      <p>Tu historial, fotos autorizadas, premios y nueva solicitud de reserva.</p>
+    </div>
+    <div class="panel-actions">
+      <a class="btn btn-light" href="{% url 'accounts:profile' %}">Mis datos</a>
+      <a class="btn btn-light" href="{% url 'accounts:change_password' %}">Cambiar password</a>
+    </div>
+  </header>
+
+  {% if messages %}
+    <div class="messages-stack">
+      {% for message in messages %}
+        <div class="message-box {% if message.tags == 'error' %}is-error{% endif %}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <section class="content-grid">
+    <article class="panel-card">
+      <div class="dashboard-section-head">
+        <div>
+          <h2>Mi ficha</h2>
+          <p class="muted-text">{{ client.phone|default:"Sin telefono" }} · {{ client.email|default:"Sin email" }}</p>
+        </div>
+        <div>
+          {% if client.avatar %}
+            <img src="{{ client.avatar.url }}" alt="{{ client.full_name }}" style="width: 72px; height: 72px; object-fit: cover; border-radius: 20px;">
+          {% else %}
+            <div class="logo" style="width: 72px; height: 72px;">{{ client.full_name|slice:":1" }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <form method="post" enctype="multipart/form-data" class="entity-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="avatar">
+        <div class="field">
+          <label for="client-avatar">Mi avatar</label>
+          <input id="client-avatar" class="input" type="file" name="avatar" accept="image/*">
+        </div>
+        <button class="btn btn-light" type="submit">Actualizar avatar</button>
+      </form>
+      <div class="stats-grid">
+        <article class="stat-card">
+          <span class="stat-label">Visitas</span>
+          <strong class="stat-value">{{ stats.total_visits }}</strong>
+        </article>
+        <article class="stat-card">
+          <span class="stat-label">Gastado</span>
+          <strong class="stat-value">{{ stats.total_spent }} €</strong>
+        </article>
+        <article class="stat-card">
+          <span class="stat-label">Ticket medio</span>
+          <strong class="stat-value">{{ stats.avg_ticket|floatformat:2 }} €</strong>
+        </article>
+        <article class="stat-card">
+          <span class="stat-label">Premios</span>
+          <strong class="stat-value">{{ stats.available_rewards }}</strong>
+        </article>
+      </div>
+    </article>
+
+    <article class="panel-card">
+      <h2>Proximas citas</h2>
+      {% if upcoming_bookings %}
+        <div class="dashboard-stack">
+          {% for booking in upcoming_bookings %}
+            <article class="booking-list-card">
+              <strong>{{ booking.start_at|date:"d/m/Y H:i" }}</strong>
+              <p>{{ booking.service }} · {{ booking.employee }}</p>
+              <span class="dashboard-badge">{{ booking.get_status_display }}</span>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted-text">Todavia no tienes proximas citas.</p>
+      {% endif %}
+    </article>
+  </section>
+
+  <section class="panel-card">
+    <div class="dashboard-section-head">
+      <div>
+        <h2>Premios</h2>
+        <p class="muted-text">Pulsa una recompensa en la app al reservar. Aqui puedes ver cuanto falta y que descuento tiene cada una.</p>
+      </div>
+    </div>
+    {% if rewards %}
+      <div class="stats-grid">
+        {% for reward in rewards %}
+          <article class="stat-card">
+            <span class="stat-label">{{ reward.reward_type_label }}</span>
+            <strong class="stat-value">{{ reward.name }}</strong>
+            <p class="muted-text">Descuento {{ reward.discount_percent|floatformat:0 }}%. Necesitas {{ reward.threshold }}; ahora tienes {{ reward.current }}.</p>
+            {% if reward.available > 0 %}
+              <p><strong>Disponible:</strong> {{ reward.available }}</p>
+            {% elif reward.remaining > 0 %}
+              <p><strong>Faltan:</strong> {{ reward.remaining }}</p>
+            {% else %}
+              <p class="muted-text">Completado.</p>
+            {% endif %}
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted-text">No hay premios activos.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel-card">
+    <h2>Nueva solicitud de reserva</h2>
+    <p class="muted-text">Elige servicio, master, zona si corresponde y horario. La solicitud queda pendiente hasta que el salon la confirme.</p>
+    <form method="post" class="entity-form">
+      {% csrf_token %}
+      {{ booking_form.client }}
+      {{ booking_form.status }}
+      {{ booking_form.source }}
+      {{ booking_form.start_at }}
+      {{ booking_form.end_at }}
+      {{ booking_form.apply_referral_reward }}
+
+      {% if booking_form.non_field_errors %}
+        <div class="form-errors">
+          {% for error in booking_form.non_field_errors %}
+            <div>{{ error }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="{{ booking_form.service.id_for_label }}">Servicio</label>
+          {{ booking_form.service }}
+          {{ booking_form.service.errors }}
+        </div>
+        <div class="field">
+          <label for="portal-booking-date">Fecha</label>
+          <input id="portal-booking-date" class="input" type="date" min="{% now 'Y-m-d' %}">
+        </div>
+        <div class="field">
+          <label for="portal-booking-slot">Hora disponible</label>
+          <select id="portal-booking-slot" class="input" disabled>
+            <option value="">Selecciona servicio y fecha</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="{{ booking_form.employee.id_for_label }}">Master</label>
+          {{ booking_form.employee }}
+          {{ booking_form.employee.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ booking_form.zone.id_for_label }}">Zona</label>
+          {{ booking_form.zone }}
+          {{ booking_form.zone.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ booking_form.reward_rule.id_for_label }}">Premio</label>
+          {{ booking_form.reward_rule }}
+          {{ booking_form.reward_rule.errors }}
+        </div>
+      </div>
+      <div class="field">
+        <label for="{{ booking_form.notes.id_for_label }}">Comentario</label>
+        {{ booking_form.notes }}
+        {{ booking_form.notes.errors }}
+      </div>
+      {{ booking_form.start_at.errors }}
+      {{ booking_form.end_at.errors }}
+      <div class="booking-hint" id="portal-booking-hint"></div>
+      <button class="btn" type="submit">Enviar solicitud</button>
+    </form>
+  </section>
+
+  <section class="content-grid">
+    <article class="panel-card">
+      <h2>Historial visual</h2>
+      {% if photo_history %}
+        <div class="photo-grid">
+          {% for photo in photo_history %}
+            <article class="photo-card">
+              <a class="photo-thumb-button" href="{% url 'bookings:photo_image' photo.id %}" target="_blank" rel="noopener">
+                <img src="{% url 'bookings:photo_image' photo.id %}" alt="{{ photo.get_photo_type_display }}" class="photo-card__image">
+              </a>
+              <div class="photo-card__body">
+                <span class="dashboard-badge">{{ photo.get_photo_type_display }}</span>
+                <p class="muted-text">{{ photo.booking.start_at|date:"d/m/Y" }} · {{ photo.booking.service }}</p>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted-text">Todavia no hay fotos visibles para ti.</p>
+      {% endif %}
+    </article>
+
+    <article class="panel-card">
+      <h2>Historial de reservas</h2>
+      {% if bookings %}
+        <div class="dashboard-stack">
+          {% for booking in bookings %}
+            <article class="booking-list-card">
+              <strong>{{ booking.start_at|date:"d/m/Y H:i" }}</strong>
+              <p>{{ booking.service }} · {{ booking.employee }}</p>
+              <p class="muted-text">{{ booking.get_status_display }} · {{ booking.client_price_snapshot }} €</p>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted-text">Todavia no tienes reservas.</p>
+      {% endif %}
+    </article>
+  </section>
+</main>
+
+{{ portal_services|json_script:"portal-services-data" }}
+{{ portal_zones|json_script:"portal-zones-data" }}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const serviceSelect = document.getElementById("id_service");
+  const employeeSelect = document.getElementById("id_employee");
+  const zoneSelect = document.getElementById("id_zone");
+  const startInput = document.getElementById("id_start_at");
+  const dateInput = document.getElementById("portal-booking-date");
+  const slotSelect = document.getElementById("portal-booking-slot");
+  const hint = document.getElementById("portal-booking-hint");
+  const servicesNode = document.getElementById("portal-services-data");
+  const zonesNode = document.getElementById("portal-zones-data");
+  if (!serviceSelect || !employeeSelect || !zoneSelect || !startInput || !dateInput || !slotSelect || !servicesNode || !zonesNode) return;
+
+  const services = JSON.parse(servicesNode.textContent || "[]");
+  const zones = JSON.parse(zonesNode.textContent || "[]");
+  const allEmployeeOptions = Array.from(employeeSelect.options).map((option) => option.cloneNode(true));
+  const allZoneOptions = Array.from(zoneSelect.options).map((option) => option.cloneNode(true));
+  let slots = [];
+  let employeesAvailability = [];
+
+  startInput.readOnly = true;
+
+  function selectedService() {
+    return services.find((service) => String(service.id) === serviceSelect.value) || null;
+  }
+
+  function setHint(message, isError) {
+    if (!hint) return;
+    hint.textContent = message || "";
+    hint.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function replaceOptions(select, options) {
+    select.innerHTML = "";
+    options.forEach((option) => select.appendChild(option.cloneNode(true)));
+  }
+
+  function originalEmployeeOption(employeeId) {
+    return allEmployeeOptions.find((option) => option.value === String(employeeId));
+  }
+
+  function renderEmployeeAvailability(availableEmployees) {
+    const service = selectedService();
+    const allowedEmployees = new Set((service ? service.employee_ids : []).map(String));
+    const availableById = new Map((availableEmployees || []).map((employee) => [String(employee.id), employee]));
+    employeeSelect.innerHTML = "";
+    employeeSelect.appendChild(new Option("Elige master", ""));
+    employeesAvailability.forEach((employee) => {
+      const employeeId = String(employee.id);
+      if (service && !allowedEmployees.has(employeeId)) return;
+      const original = originalEmployeeOption(employeeId);
+      const baseLabel = original ? original.textContent : employee.name;
+      const available = availableById.get(employeeId);
+      const option = new Option(
+        available
+          ? baseLabel
+          : `${baseLabel} (${employee.next_label ? `prox. ${employee.next_label}` : "sin horario libre"})`,
+        employeeId
+      );
+      option.disabled = !available;
+      employeeSelect.appendChild(option);
+    });
+  }
+
+  function syncStaticFilters() {
+    const service = selectedService();
+    if (!service) {
+      replaceOptions(employeeSelect, allEmployeeOptions);
+      replaceOptions(zoneSelect, allZoneOptions);
+      return;
+    }
+    const allowedEmployees = new Set(service.employee_ids.map(String));
+    replaceOptions(employeeSelect, allEmployeeOptions.filter((option) => {
+      return !option.value || allowedEmployees.has(option.value);
+    }));
+    const allowedZones = new Set(service.allowed_zone_ids.map(String));
+    replaceOptions(zoneSelect, allZoneOptions.filter((option) => {
+      return !option.value || allowedZones.has(option.value);
+    }));
+    zoneSelect.closest(".field").hidden = !service.requires_zone;
+    if (!service.requires_zone) zoneSelect.value = "";
+  }
+
+  function renderSlots(nextSlots) {
+    slots = nextSlots || [];
+    slotSelect.innerHTML = "";
+    if (!slots.length) {
+      slotSelect.disabled = true;
+      slotSelect.appendChild(new Option("No hay horas libres", ""));
+      startInput.value = "";
+      renderEmployeeAvailability([]);
+      setHint("No hay horarios disponibles para este servicio y fecha.", true);
+      return;
+    }
+    slotSelect.disabled = false;
+    slotSelect.appendChild(new Option("Elige una hora", ""));
+    slots.forEach((slot) => {
+      const label = `${slot.label} · ${slot.employees.length} master${slot.employees.length === 1 ? "" : "s"}`;
+      slotSelect.appendChild(new Option(label, slot.start_at));
+    });
+    renderEmployeeAvailability([]);
+    setHint("Elige una hora y despues un master disponible.", false);
+  }
+
+  async function loadSlots() {
+    syncStaticFilters();
+    startInput.value = "";
+    if (!serviceSelect.value || !dateInput.value) {
+      employeesAvailability = [];
+      renderSlots([]);
+      slotSelect.innerHTML = "";
+      slotSelect.appendChild(new Option("Selecciona servicio y fecha", ""));
+      slotSelect.disabled = true;
+      setHint("", false);
+      return;
+    }
+    setHint("Buscando horarios disponibles...", false);
+    const params = new URLSearchParams({
+      service: serviceSelect.value,
+      date: dateInput.value,
+    });
+    if (zoneSelect.value) params.set("zone", zoneSelect.value);
+    try {
+      const response = await fetch(`{% url 'clients:portal_slots_api' %}?${params.toString()}`, {
+        headers: {"X-Requested-With": "XMLHttpRequest"},
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        employeesAvailability = [];
+        renderSlots([]);
+        setHint(data.message || "No se pudo cargar disponibilidad.", true);
+        return;
+      }
+      employeesAvailability = data.employees || [];
+      renderSlots(data.slots || []);
+    } catch (_error) {
+      employeesAvailability = [];
+      renderSlots([]);
+      setHint("No se pudo cargar disponibilidad.", true);
+    }
+  }
+
+  function syncSlotSelection() {
+    const slot = slots.find((item) => item.start_at === slotSelect.value);
+    startInput.value = slot ? slot.start_at : "";
+    if (!slot) {
+      syncStaticFilters();
+      return;
+    }
+    renderEmployeeAvailability(slot.employees);
+    const firstEmployee = slot.employees[0];
+    if (firstEmployee) {
+      employeeSelect.value = String(firstEmployee.id);
+      if (firstEmployee.zone) zoneSelect.value = String(firstEmployee.zone);
+    }
+    setHint("Horario disponible. Puedes enviar la solicitud.", false);
+  }
+
+  serviceSelect.addEventListener("change", loadSlots);
+  dateInput.addEventListener("change", loadSlots);
+  zoneSelect.addEventListener("change", loadSlots);
+  slotSelect.addEventListener("change", syncSlotSelection);
+  syncStaticFilters();
+});
+</script>
+{% endblock %}
