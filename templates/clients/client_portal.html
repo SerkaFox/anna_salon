@@ -1,40 +1,10 @@
-{% extends "layout.html" %}
-{% load static %}
+{% extends "client_portal_base.html" %}
 
 {% block title %}Mi BRIMOON Studio{% endblock %}
+{% block portal_title %}Hola, {{ client.full_name }}{% endblock %}
+{% block portal_subtitle %}Tu historial, fotos autorizadas, premios y nueva solicitud de reserva.{% endblock %}
 
-{% block body %}
-<div class="mobile-topbar">
-  <div class="mobile-topbar__brand">
-    <div class="logo"><img src="{% static 'logo.png' %}" alt="BRIMOON Studio"></div>
-    <div>
-      <strong>BRIMOON Studio</strong>
-      <span>Portal cliente</span>
-    </div>
-  </div>
-  <a class="btn btn-light btn-small" href="{% url 'accounts:logout' %}">Salir</a>
-</div>
-
-<main class="main-panel" style="max-width: 1120px; margin: 0 auto;">
-  <header class="panel-header">
-    <div>
-      <h1>Hola, {{ client.full_name }}</h1>
-      <p>Tu historial, fotos autorizadas, premios y nueva solicitud de reserva.</p>
-    </div>
-    <div class="panel-actions">
-      <a class="btn btn-light" href="{% url 'accounts:profile' %}">Mis datos</a>
-      <a class="btn btn-light" href="{% url 'accounts:change_password' %}">Cambiar password</a>
-    </div>
-  </header>
-
-  {% if messages %}
-    <div class="messages-stack">
-      {% for message in messages %}
-        <div class="message-box {% if message.tags == 'error' %}is-error{% endif %}">{{ message }}</div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
+{% block portal_content %}
   <section class="content-grid">
     <article class="panel-card">
       <div class="dashboard-section-head">
@@ -229,8 +199,6 @@
       {% endif %}
     </article>
   </section>
-</main>
-
 {{ portal_services|json_script:"portal-services-data" }}
 {{ portal_zones|json_script:"portal-zones-data" }}
 

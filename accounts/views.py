@@ -6,7 +6,7 @@ from django.contrib.auth.views import LoginView
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 
-from accounts.permissions import admin_required
+from accounts.permissions import admin_required, get_client_profile
 from auditlog.services import log_event
 from employees.models import Employee
 
@@ -39,6 +39,7 @@ def user_logout(request):
 
 @login_required
 def profile_view(request):
+    is_client_portal = bool(get_client_profile(request.user))
     if request.method == "POST":
         form = UserProfileForm(request.POST, instance=request.user)
         if form.is_valid():
@@ -51,13 +52,13 @@ def profile_view(request):
                 message=f"Perfil actualizado por {request.user.username}.",
             )
             messages.success(request, "Perfil actualizado.")
-            return redirect("accounts:profile")
+            return redirect("clients:portal" if is_client_portal else "accounts:profile")
     else:
         form = UserProfileForm(instance=request.user)
 
     return render(
         request,
-        "accounts/profile.html",
+        "accounts/client_profile.html" if is_client_portal else "accounts/profile.html",
         {
             "active_section": "profile",
             "form": form,
@@ -68,6 +69,7 @@ def profile_view(request):
 
 @login_required
 def change_password_view(request):
+    is_client_portal = bool(get_client_profile(request.user))
     if request.method == "POST":
         form = StyledPasswordChangeForm(request.user, request.POST)
         if form.is_valid():
@@ -81,13 +83,13 @@ def change_password_view(request):
                 message=f"Contraseña cambiada para {user.username}.",
             )
             messages.success(request, "Contraseña actualizada.")
-            return redirect("accounts:profile")
+            return redirect("clients:portal" if is_client_portal else "accounts:profile")
     else:
         form = StyledPasswordChangeForm(request.user)
 
     return render(
         request,
-        "accounts/change_password.html",
+        "accounts/client_change_password.html" if is_client_portal else "accounts/change_password.html",
         {
             "active_section": "profile",
             "form": form,

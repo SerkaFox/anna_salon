@@ -1,0 +1,46 @@
+{% extends "client_portal_base.html" %}
+
+{% block title %}Mis datos | BRIMOON Studio{% endblock %}
+{% block portal_title %}Mis datos{% endblock %}
+{% block portal_subtitle %}Actualiza tu informacion de contacto para BRIMOON Studio.{% endblock %}
+
+{% block portal_content %}
+<section class="panel-card">
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.username.id_for_label }}">Usuario</label>
+        {{ form.username }}
+      </div>
+      <div class="field">
+        <label for="{{ form.first_name.id_for_label }}">Nombre</label>
+        {{ form.first_name }}
+      </div>
+      <div class="field">
+        <label for="{{ form.last_name.id_for_label }}">Apellidos</label>
+        {{ form.last_name }}
+      </div>
+      <div class="field">
+        <label for="{{ form.email.id_for_label }}">Email</label>
+        {{ form.email }}
+      </div>
+      <div class="field">
+        <label for="{{ form.phone.id_for_label }}">Telefono</label>
+        {{ form.phone }}
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn">Guardar datos</button>
+      <a href="{% url 'clients:portal' %}" class="btn btn-light">Volver</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
