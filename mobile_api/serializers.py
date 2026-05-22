@@ -17,6 +17,14 @@ from services_app.models import Service
 User = get_user_model()
 
 
+def _can_schedule_for_employee(user, employee):
+    if is_admin_user(user):
+        return True
+    if get_client_profile(user):
+        return bool(employee)
+    return bool(get_employee_profile(user) and employee)
+
+
 def _format_local_datetime(value):
     if not value:
         return ""
@@ -506,9 +514,9 @@ class BookingWriteSerializer(serializers.Serializer):
             values["source"] = Booking.Sources.WEBSITE
         elif not is_admin_user(user):
             requested_employee = values.get("employee") or employee_profile
-            if requested_employee and not can_access_employee(user, requested_employee):
+            if requested_employee and not _can_schedule_for_employee(user, requested_employee):
                 raise serializers.ValidationError({"employee": ["Sin acceso a este empleado."]})
-            values["employee"] = employee_profile
+            values["employee"] = requested_employee
 
         missing = []
         for field in ("client", "employee", "service", "start_at"):
@@ -563,7 +571,7 @@ class BookingWriteSerializer(serializers.Serializer):
         form = BookingForm(
             data=form_data,
             instance=instance,
-            allowed_employee=None if is_admin_user(user) or client_profile else employee_profile,
+            allowed_employee=None,
             allowed_clients=Client.objects.filter(pk=client_profile.pk) if client_profile else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
         )
         if not form.is_valid():
@@ -593,7 +601,7 @@ class AvailabilityCheckSerializer(serializers.Serializer):
         end_at = start_at + timedelta(minutes=service.duration_minutes)
         exclude_booking_id = attrs.get("exclude_booking_id")
 
-        if not can_access_employee(user, employee):
+        if not _can_schedule_for_employee(user, employee):
             raise serializers.ValidationError({"employee": ["Sin acceso a este empleado."]})
 
         if not employee.services.filter(pk=service.pk).exists():
@@ -636,10 +644,10 @@ class AvailabilitySlotsQuerySerializer(serializers.Serializer):
         zone = attrs.get("zone")
         booking = attrs.get("booking")
 
-        if employee and not can_access_employee(request.user, employee):
+        if employee and not _can_schedule_for_employee(request.user, employee):
             raise serializers.ValidationError({"employee": ["Sin acceso a este empleado."]})
 
-        if booking and not can_access_booking(request.user, booking):
+        if booking and not (can_access_booking(request.user, booking) or get_employee_profile(request.user)):
             raise serializers.ValidationError({"booking": ["Sin acceso a esta reserva."]})
 
         if employee and not employee.services.filter(pk=service.pk).exists():

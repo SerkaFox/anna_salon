@@ -11,7 +11,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import can_access_booking, can_access_client, can_access_employee, get_client_profile, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
+from accounts.permissions import can_access_booking, can_access_client, can_access_employee, get_client_profile, get_employee_profile, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
 from auditlog.services import log_event
 from bookings.models import Booking, BookingPhoto
 from bookings.utils import (
@@ -51,6 +51,34 @@ from .serializers import (
     ZoneWriteSerializer,
     _format_local_datetime,
 )
+
+
+def _is_mobile_employee_user(user):
+    return bool(getattr(user, "is_authenticated", False) and get_employee_profile(user))
+
+
+def _mobile_employees_queryset(queryset, user):
+    if _is_mobile_employee_user(user):
+        return queryset
+    return scope_employees_queryset(queryset, user)
+
+
+def _mobile_bookings_queryset(queryset, user):
+    if _is_mobile_employee_user(user):
+        return queryset
+    return scope_bookings_queryset(queryset, user)
+
+
+def _mobile_can_access_booking(user, booking):
+    if _is_mobile_employee_user(user):
+        return True
+    return can_access_booking(user, booking)
+
+
+def _mobile_can_access_client(user, client):
+    if _is_mobile_employee_user(user):
+        return True
+    return can_access_client(user, client)
 
 
 def _normalize_id_aliases(data):
@@ -322,7 +350,10 @@ class ClientListView(MobileApiMixin, generics.ListCreateAPIView):
     serializer_class = ClientSerializer
 
     def get_queryset(self):
-        return scope_clients_queryset(Client.objects.filter(is_active=True), self.request.user).order_by("first_name", "last_name")
+        queryset = Client.objects.filter(is_active=True)
+        if not _is_mobile_employee_user(self.request.user):
+            queryset = scope_clients_queryset(queryset, self.request.user)
+        return queryset.order_by("first_name", "last_name")
 
     def create(self, request, *args, **kwargs):
         if get_client_profile(request.user):
@@ -343,7 +374,7 @@ class ClientListView(MobileApiMixin, generics.ListCreateAPIView):
 class ClientDetailView(MobileApiMixin, APIView):
     def get_object(self, request, pk):
         client = generics.get_object_or_404(Client.objects.select_related("referred_by"), pk=pk, is_active=True)
-        if not can_access_client(request.user, client):
+        if not _mobile_can_access_client(request.user, client):
             raise PermissionDenied("Sin acceso a este cliente.")
         return client
 
@@ -355,7 +386,7 @@ class ClientDetailView(MobileApiMixin, APIView):
             .filter(client=client)
             .order_by("-start_at")
         )
-        if not request.user.can_manage_staff and not get_client_profile(request.user):
+        if not request.user.can_manage_staff and not get_client_profile(request.user) and not _is_mobile_employee_user(request.user):
             bookings = bookings.filter(employee=request.user.employee_profile)
 
         booking_history = list(bookings[:20])
@@ -381,10 +412,9 @@ class ClientDetailView(MobileApiMixin, APIView):
             .annotate(total=Count("id"))
             .order_by("-total")[:3]
         )
-        referred_clients = scope_clients_queryset(
-            client.referred_clients.all().order_by("first_name", "last_name"),
-            request.user,
-        )
+        referred_clients = client.referred_clients.all().order_by("first_name", "last_name")
+        if not _is_mobile_employee_user(request.user):
+            referred_clients = scope_clients_queryset(referred_clients, request.user)
         successful_referrals_count = referred_clients.filter(bookings__status=Booking.Statuses.DONE).distinct().count()
         available_rewards = max((successful_referrals_count // 5) - client.referral_rewards_used, 0)
         remaining_for_next_reward = 5 - (successful_referrals_count % 5) if successful_referrals_count % 5 else 0
@@ -539,7 +569,7 @@ class EmployeeListView(MobileApiMixin, generics.ListAPIView):
 
     def get_queryset(self):
         return (
-            scope_employees_queryset(Employee.objects.filter(is_active=True), self.request.user)
+            _mobile_employees_queryset(Employee.objects.filter(is_active=True), self.request.user)
             .prefetch_related("services")
             .order_by("first_name", "last_name")
         )
@@ -757,7 +787,7 @@ class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = Booking.objects.select_related("client", "employee", "service", "zone")
-        return scope_bookings_queryset(queryset, self.request.user).order_by("start_at", "pk")
+        return _mobile_bookings_queryset(queryset, self.request.user).order_by("start_at", "pk")
 
     def list(self, request, *args, **kwargs):
         selected_date = _parse_date_param(request)
@@ -783,7 +813,7 @@ class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
 class BookingDetailView(MobileApiMixin, APIView):
     def get_object(self, request, pk):
         booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
-        if not can_access_booking(request.user, booking):
+        if not _mobile_can_access_booking(request.user, booking):
             raise PermissionDenied("Sin acceso a esta reserva.")
         return booking
 
@@ -894,7 +924,7 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
 
     def _team_slots(self, request, data, booking):
         service = data["service"]
-        employees = scope_employees_queryset(
+        employees = _mobile_employees_queryset(
             Employee.objects.filter(is_active=True).prefetch_related("services"),
             request.user,
         ).filter(services=service).order_by("first_name", "last_name")
@@ -958,7 +988,7 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
 class BookingRescheduleView(MobileApiMixin, APIView):
     def post(self, request, pk):
         booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
-        if not can_access_booking(request.user, booking):
+        if not _mobile_can_access_booking(request.user, booking):
             raise PermissionDenied("Sin acceso a esta reserva.")
 
         payload = _normalize_id_aliases(request.data)
@@ -979,7 +1009,7 @@ class BookingRescheduleView(MobileApiMixin, APIView):
 class BookingStatusView(MobileApiMixin, APIView):
     def post(self, request, pk):
         booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
-        if not can_access_booking(request.user, booking):
+        if not _mobile_can_access_booking(request.user, booking):
             raise PermissionDenied("Sin acceso a esta reserva.")
 
         serializer = BookingStatusSerializer(data=request.data)
@@ -1002,7 +1032,7 @@ class BookingPhotoListCreateView(MobileApiMixin, APIView):
 
     def get_booking(self, request, pk):
         booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
-        if not can_access_booking(request.user, booking):
+        if not _mobile_can_access_booking(request.user, booking):
             raise PermissionDenied("Sin acceso a esta reserva.")
         return booking
 
@@ -1044,7 +1074,7 @@ class BookingPhotoListCreateView(MobileApiMixin, APIView):
 class BookingPhotoDetailView(MobileApiMixin, APIView):
     def get_object(self, request, pk):
         photo = generics.get_object_or_404(BookingPhoto.objects.select_related("booking"), pk=pk)
-        if not can_access_booking(request.user, photo.booking):
+        if not _mobile_can_access_booking(request.user, photo.booking):
             raise PermissionDenied("Sin acceso a esta foto.")
         return photo
 
@@ -1070,7 +1100,7 @@ class BookingPhotoDetailView(MobileApiMixin, APIView):
 class BookingPhotoImageView(MobileApiMixin, APIView):
     def get(self, request, pk):
         photo = generics.get_object_or_404(BookingPhoto.objects.select_related("booking"), pk=pk)
-        if not can_access_booking(request.user, photo.booking):
+        if not _mobile_can_access_booking(request.user, photo.booking):
             raise PermissionDenied("Sin acceso a esta foto.")
         if not request.user.can_manage_staff and not photo.is_visible_to_client:
             raise PermissionDenied("Esta foto no esta visible.")
@@ -1081,7 +1111,7 @@ class TimeBlockListCreateView(MobileApiMixin, APIView):
     def get(self, request):
         selected_date = _parse_date_param(request)
         employee_id = request.query_params.get("employee")
-        employees = scope_employees_queryset(Employee.objects.filter(is_active=True), request.user)
+        employees = _mobile_employees_queryset(Employee.objects.filter(is_active=True), request.user)
         if employee_id:
             employees = employees.filter(pk=employee_id)
         occurrences = []
@@ -1222,8 +1252,8 @@ class TimeBlockDetailView(MobileApiMixin, APIView):
 class CalendarDayView(MobileApiMixin, APIView):
     def get(self, request):
         selected_date = _parse_date_param(request)
-        bookings = scope_bookings_queryset(get_bookings_for_day(selected_date), request.user)
-        employees = scope_employees_queryset(Employee.objects.filter(is_active=True), request.user).order_by("first_name", "last_name")
+        bookings = _mobile_bookings_queryset(get_bookings_for_day(selected_date), request.user)
+        employees = _mobile_employees_queryset(Employee.objects.filter(is_active=True), request.user).order_by("first_name", "last_name")
         employee_payload = []
 
         for employee in employees:
