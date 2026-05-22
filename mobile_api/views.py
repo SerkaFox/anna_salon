@@ -182,13 +182,38 @@ def _visible_photos_for_user(queryset, user):
     return queryset.filter(is_visible_to_client=True)
 
 
+def _parse_employee_stats_range(request):
+    date_from = request.query_params.get("date_from")
+    date_to = request.query_params.get("date_to")
+    parsed_from = None
+    parsed_to = None
+    if date_from:
+        try:
+            parsed_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+        except ValueError:
+            raise serializers.ValidationError({"date_from": ["Formato esperado YYYY-MM-DD."]})
+    if date_to:
+        try:
+            parsed_to = datetime.strptime(date_to, "%Y-%m-%d").date()
+        except ValueError:
+            raise serializers.ValidationError({"date_to": ["Formato esperado YYYY-MM-DD."]})
+    if parsed_from and parsed_to and parsed_from > parsed_to:
+        raise serializers.ValidationError({"date_to": ["La fecha final no puede ser anterior a la inicial."]})
+    return parsed_from, parsed_to
+
+
 def _employee_detail_payload(employee, request):
+    date_from, date_to = _parse_employee_stats_range(request)
     bookings = (
         Booking.objects.select_related("client", "service", "zone", "employee")
         .filter(employee=employee)
         .order_by("-start_at")
     )
     done_bookings = bookings.filter(status=Booking.Statuses.DONE)
+    if date_from:
+        done_bookings = done_bookings.filter(start_at__date__gte=date_from)
+    if date_to:
+        done_bookings = done_bookings.filter(start_at__date__lte=date_to)
     employee_earnings = Decimal("0.00")
     client_revenue = Decimal("0.00")
     salon_revenue = Decimal("0.00")
@@ -227,6 +252,8 @@ def _employee_detail_payload(employee, request):
     return {
         "employee": EmployeeSerializer(employee, context={"request": request}).data,
         "stats": {
+            "date_from": date_from.isoformat() if date_from else "",
+            "date_to": date_to.isoformat() if date_to else "",
             "employee_earnings": str(employee_earnings),
             "client_revenue": str(client_revenue),
             "salon_revenue": str(salon_revenue),
