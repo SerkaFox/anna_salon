@@ -632,6 +632,31 @@ class ServiceDetailView(MobileApiMixin, APIView):
         )
         return Response(ServiceSerializer(service, context={"request": request}).data)
 
+    def delete(self, request, pk):
+        if not request.user.can_manage_staff:
+            raise PermissionDenied("Sin permiso para eliminar servicios.")
+        service = self.get_object(pk)
+        service_name = service.name
+        try:
+            service.delete()
+            action = "delete"
+            message = f"Servicio eliminado desde API movil: {service_name}."
+            instance = None
+        except ProtectedError:
+            service.is_active = False
+            service.save(update_fields=["is_active", "updated_at"])
+            action = "deactivate"
+            message = f"Servicio desactivado desde API movil: {service_name}."
+            instance = service
+        log_event(
+            actor=request.user,
+            section="service",
+            action=action,
+            instance=instance,
+            message=message,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class ZoneListView(MobileApiMixin, generics.ListCreateAPIView):
     serializer_class = ZoneSerializer
@@ -673,6 +698,31 @@ class ZoneDetailView(MobileApiMixin, APIView):
             message=f"Zona actualizada desde API movil: {zone.name}.",
         )
         return Response(ZoneSerializer(zone, context={"request": request}).data)
+
+    def delete(self, request, pk):
+        if not request.user.can_manage_staff:
+            raise PermissionDenied("Sin permiso para eliminar zonas.")
+        zone = self.get_object(pk)
+        zone_name = zone.name
+        try:
+            zone.delete()
+            action = "delete"
+            message = f"Zona eliminada desde API movil: {zone_name}."
+            instance = None
+        except ProtectedError:
+            zone.is_active = False
+            zone.save(update_fields=["is_active", "updated_at"])
+            action = "deactivate"
+            message = f"Zona desactivada desde API movil: {zone_name}."
+            instance = zone
+        log_event(
+            actor=request.user,
+            section="zone",
+            action=action,
+            instance=instance,
+            message=message,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
