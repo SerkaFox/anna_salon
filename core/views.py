@@ -1,9 +1,25 @@
 import json
+import secrets
+from datetime import datetime, timedelta
 
-from django.http import Http404, HttpResponse
+from django.contrib.auth import login
+from django.db import transaction
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.utils.text import slugify
 from django.views.decorators.http import require_POST
+
+from accounts.models import User
+from bookings.forms import BookingForm
+from bookings.models import Booking
+from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
+from clients.models import Client
+from employees.models import Employee
+from salon.models import Zone
+from services_app.models import Service
 
 from .i18n import (
     ARTICLE_TRANSLATIONS,
@@ -19,6 +35,12 @@ from .i18n import (
 
 SITE_NAME = "BRIMOON Studio"
 SITE_DOMAIN = "https://anna.listoya.es"
+
+
+class PublicBookingError(Exception):
+    def __init__(self, errors):
+        self.errors = errors
+
 
 SERVICES = [
     {
@@ -223,6 +245,290 @@ def _base_context(request, canonical_path):
     }
 
 
+def _format_public_datetime(value):
+    return timezone.localtime(value).isoformat()
+
+
+def _public_booking_services():
+    return Service.objects.filter(is_active=True).order_by("name")
+
+
+def _generate_client_username(name):
+    base = slugify(name)[:28] or "cliente"
+    for _ in range(20):
+        username = f"{base}-{secrets.token_hex(3)}"
+        if not User.objects.filter(username=username).exists():
+            return username
+    return f"cliente-{secrets.token_hex(8)}"
+
+
+def _public_booking_context(request, values=None, errors=None):
+    context = _base_context(request, reverse("public_booking"))
+    context.update(
+        {
+            "booking_services": _public_booking_services(),
+            "booking_values": values or {},
+            "booking_errors": errors or {},
+            "booking_non_field_errors": (errors or {}).get("__all__", []),
+            "today": timezone.localdate().isoformat(),
+            "slot_endpoint": reverse("public_booking_slots"),
+        }
+    )
+    return context
+
+
+def _slot_matches(selected_start, slots):
+    selected_local = timezone.localtime(selected_start).replace(second=0, microsecond=0)
+    for slot in slots:
+        slot_local = timezone.localtime(slot["start_at"]).replace(second=0, microsecond=0)
+        if slot_local == selected_local:
+            return slot
+    return None
+
+
+def _create_public_booking(values):
+    name = values["name"].strip()
+    parts = name.split(None, 1)
+    first_name = parts[0]
+    last_name = parts[1] if len(parts) > 1 else ""
+    phone = values.get("phone", "").strip()
+    email = values.get("email", "").strip()
+
+    with transaction.atomic():
+        user = User(
+            username=_generate_client_username(name),
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            role=User.ROLE_CLIENT,
+        )
+        user.set_password(values["password"])
+        user.save()
+        client = Client.objects.create(
+            user=user,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone,
+            email=email,
+            is_active=True,
+        )
+        form = BookingForm(
+            data={
+                "client": client.pk,
+                "employee": values["employee"].pk,
+                "service": values["service"].pk,
+                "zone": values["zone"].pk if values.get("zone") else "",
+                "start_at": timezone.localtime(values["start_at"]).strftime("%Y-%m-%dT%H:%M"),
+                "end_at": timezone.localtime(values["end_at"]).strftime("%Y-%m-%dT%H:%M"),
+                "status": Booking.Statuses.PENDING,
+                "source": Booking.Sources.WEBSITE,
+                "notes": "Reserva creada desde la web publica.",
+            },
+            allowed_clients=Client.objects.filter(pk=client.pk),
+        )
+        if not form.is_valid():
+            raise PublicBookingError({field: [str(item) for item in errors] for field, errors in form.errors.items()})
+        booking = form.save()
+    return user, booking
+
+
+
+def public_booking_slots(request):
+    service_id = request.GET.get("service")
+    date_text = request.GET.get("date")
+    zone_id = request.GET.get("zone")
+    if not service_id or not date_text:
+        return JsonResponse({"ok": False, "message": "Selecciona servicio y fecha."}, status=400)
+
+    try:
+        service = Service.objects.prefetch_related("allowed_zones", "employees").get(pk=service_id, is_active=True)
+        date_value = datetime.strptime(date_text, "%Y-%m-%d").date()
+    except (Service.DoesNotExist, ValueError):
+        return JsonResponse({"ok": False, "message": "Servicio o fecha no valida."}, status=400)
+
+    if date_value < timezone.localdate():
+        return JsonResponse({"ok": False, "message": "Selecciona una fecha futura."}, status=400)
+
+    zone = None
+    if zone_id:
+        try:
+            zone = Zone.objects.get(pk=zone_id, is_active=True)
+        except Zone.DoesNotExist:
+            return JsonResponse({"ok": False, "message": "Zona no valida."}, status=400)
+        if service.requires_zone and not service.allowed_zones.filter(pk=zone.pk).exists():
+            return JsonResponse({"ok": False, "message": "La zona no esta permitida para este servicio."}, status=400)
+
+    slot_map = {}
+    blocked = []
+    employees = (
+        Employee.objects.filter(is_active=True, services=service)
+        .prefetch_related("services")
+        .order_by("first_name", "last_name")
+    )
+    for employee in employees:
+        slots, employee_blocked = build_available_slots_for_day(
+            date_obj=date_value,
+            employee=employee,
+            service=service,
+            zone=zone,
+            step_minutes=MOBILE_SLOT_STEP_MINUTES,
+        )
+        for item in employee_blocked:
+            blocked.append(
+                {
+                    "start_at": _format_public_datetime(item["start_at"]),
+                    "end_at": _format_public_datetime(item["end_at"]),
+                    "reason": item["reason"],
+                    "employee": employee.pk,
+                    "employee_name": employee.full_name,
+                }
+            )
+        for slot in slots:
+            slot_zone = zone
+            if service.requires_zone and slot_zone is None:
+                slot_zone = find_available_zone(service, slot["start_at"], slot["end_at"])
+            if service.requires_zone and slot_zone is None:
+                continue
+            key = _format_public_datetime(slot["start_at"])
+            item = slot_map.setdefault(
+                key,
+                {
+                    "start_at": key,
+                    "end_at": _format_public_datetime(slot["end_at"]),
+                    "label": timezone.localtime(slot["start_at"]).strftime("%H:%M"),
+                    "employees": [],
+                },
+            )
+            item["employees"].append(
+                {
+                    "id": employee.pk,
+                    "name": employee.full_name,
+                    "zone": slot_zone.pk if slot_zone else None,
+                    "zone_name": slot_zone.name if slot_zone else "",
+                }
+            )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "date": date_value.isoformat(),
+            "service": service.pk,
+            "duration": service.duration_minutes,
+            "step_minutes": MOBILE_SLOT_STEP_MINUTES,
+            "slots": sorted(slot_map.values(), key=lambda item: item["start_at"]),
+            "blocked": blocked,
+        }
+    )
+
+
+def public_booking(request):
+    if request.method == "GET":
+        return render(request, "core/public_booking.html", _public_booking_context(request, request.GET.dict()))
+
+    post = request.POST
+    include_contact = post.get("include_contact") == "on"
+    values = {
+        "service": post.get("service", ""),
+        "employee": post.get("employee", ""),
+        "zone": post.get("zone", ""),
+        "start_at": post.get("start_at", ""),
+        "date": post.get("date", ""),
+        "name": post.get("name", "").strip(),
+        "password": post.get("password", ""),
+        "include_contact": "on" if include_contact else "",
+        "phone": post.get("phone", "").strip() if include_contact else "",
+        "email": post.get("email", "").strip() if include_contact else "",
+    }
+    errors = {}
+
+    if not values["name"]:
+        errors["name"] = ["Indica tu nombre."]
+    if not values["password"]:
+        errors["password"] = ["Crea una contraseña para tu cuenta."]
+    elif len(values["password"]) < 6:
+        errors["password"] = ["La contraseña debe tener al menos 6 caracteres."]
+
+    service = employee = zone = start_at = None
+    try:
+        service = Service.objects.prefetch_related("allowed_zones", "employees").get(pk=values["service"], is_active=True)
+    except (Service.DoesNotExist, ValueError, TypeError):
+        errors["service"] = ["Selecciona un servicio valido."]
+
+    if service:
+        try:
+            employee = Employee.objects.get(pk=values["employee"], is_active=True, services=service)
+        except (Employee.DoesNotExist, ValueError, TypeError):
+            errors["employee"] = ["Selecciona una especialista disponible."]
+
+    if values.get("zone"):
+        try:
+            zone = Zone.objects.get(pk=values["zone"], is_active=True)
+        except (Zone.DoesNotExist, ValueError, TypeError):
+            errors["zone"] = ["Zona no valida."]
+        if zone and service and service.requires_zone and not service.allowed_zones.filter(pk=zone.pk).exists():
+            errors["zone"] = ["La zona no esta permitida para este servicio."]
+
+    start_at = parse_datetime(values["start_at"] or "")
+    if not start_at:
+        errors["start_at"] = ["Selecciona una hora disponible."]
+    else:
+        if timezone.is_naive(start_at):
+            start_at = timezone.make_aware(start_at)
+        start_at = timezone.localtime(start_at).replace(second=0, microsecond=0)
+        if start_at < timezone.localtime(timezone.now()).replace(second=0, microsecond=0):
+            errors["start_at"] = ["Selecciona una hora futura."]
+
+    if include_contact and values["email"]:
+        if User.objects.filter(email__iexact=values["email"]).exists() or Client.objects.filter(email__iexact=values["email"]).exists():
+            errors["email"] = ["Ya existe una cuenta con este email. Inicia sesion para reservar."]
+    if include_contact and values["phone"]:
+        if User.objects.filter(phone=values["phone"]).exists() or Client.objects.filter(phone=values["phone"]).exists():
+            errors["phone"] = ["Ya existe una cuenta con este telefono. Inicia sesion para reservar."]
+
+    end_at = None
+    if service and employee and start_at and not errors.get("start_at"):
+        end_at = start_at + timedelta(minutes=service.duration_minutes)
+        if service.requires_zone and zone is None:
+            zone = find_available_zone(service, start_at, end_at)
+        if service.requires_zone and zone is None:
+            errors["zone"] = ["No hay zona libre para este horario."]
+        else:
+            slots, _blocked = build_available_slots_for_day(
+                date_obj=timezone.localtime(start_at).date(),
+                employee=employee,
+                service=service,
+                zone=zone,
+                step_minutes=MOBILE_SLOT_STEP_MINUTES,
+            )
+            if not _slot_matches(start_at, slots):
+                errors["start_at"] = ["Este horario ya no esta disponible."]
+
+    if errors:
+        return render(request, "core/public_booking.html", _public_booking_context(request, values, errors), status=400)
+
+    try:
+        user, booking = _create_public_booking(
+            {
+                "name": values["name"],
+                "password": values["password"],
+                "phone": values["phone"],
+                "email": values["email"],
+                "service": service,
+                "employee": employee,
+                "zone": zone,
+                "start_at": start_at,
+                "end_at": end_at,
+            }
+        )
+    except PublicBookingError as exc:
+        return render(request, "core/public_booking.html", _public_booking_context(request, values, exc.errors), status=400)
+
+    login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    request.session[PUBLIC_LANGUAGE_SESSION_KEY] = detect_public_language(request)
+    return redirect(reverse("clients:portal"))
+
+
 @require_POST
 def set_public_language(request):
     language = normalize_public_language(request.POST.get("language"))
@@ -320,6 +626,7 @@ Sitemap: {SITE_DOMAIN}{reverse('sitemap_xml')}
 def sitemap_xml(request):
     paths = [
         reverse("home"),
+        reverse("public_booking"),
         reverse("service_index"),
         reverse("advice_index"),
     ]

@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-04">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-05">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
@@ -48,7 +48,7 @@
           </select>
         </form>
         <a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a>
-        <a class="btn-lux btn-lux-primary btn-lux-small" href="#reserva">{{ t.nav_book }}</a>
+        <a class="btn-lux btn-lux-primary btn-lux-small" href="{% url 'public_booking' %}">{{ t.nav_book }}</a>
       </div>
     </nav>
 
@@ -58,7 +58,7 @@
       <p class="lux-hero__lead">{{ t.hero_lead }}</p>
       <p class="lux-hero__copy">{{ t.hero_copy }}</p>
       <div class="lux-actions" aria-label="Acciones principales">
-        <a class="btn-lux btn-lux-primary btn-lux-large" href="#reserva">{{ t.nav_book }}</a>
+        <a class="btn-lux btn-lux-primary btn-lux-large" href="{% url 'public_booking' %}">{{ t.nav_book }}</a>
         <a class="btn-lux btn-lux-outline btn-lux-large" href="#servicios">{{ t.hero_services }}</a>
         <a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">{{ t.hero_whatsapp }}</a>
       </div>
@@ -134,14 +134,14 @@
         <span class="lux-kicker">{{ t.nav_prices }}</span>
         <h2>{{ t.prices_title }}</h2>
         <p>{{ t.prices_text }}</p>
-        <div class="lux-actions centered"><a class="btn-lux btn-lux-primary" href="#reserva">{{ t.nav_book }}</a><a class="btn-lux btn-lux-ghost" href="#servicios">{{ t.view_treatments }}</a></div>
+        <div class="lux-actions centered"><a class="btn-lux btn-lux-primary" href="{% url 'public_booking' %}">{{ t.nav_book }}</a><a class="btn-lux btn-lux-ghost" href="#servicios">{{ t.view_treatments }}</a></div>
       </div>
     </section>
 
     <section class="lux-section cta-section" id="reserva">
       <div class="lux-container cta-card">
         <div><span class="lux-kicker">{{ t.booking_kicker }}</span><h2>{{ t.booking_title }}</h2><p>{{ t.booking_text }}</p></div>
-        <div class="lux-actions"><a class="btn-lux btn-lux-primary btn-lux-large" href="{% url 'accounts:login' %}">{{ t.nav_book }}</a><a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">{{ t.whatsapp_contact }}</a></div>
+        <div class="lux-actions"><a class="btn-lux btn-lux-primary btn-lux-large" href="{% url 'public_booking' %}">{{ t.nav_book }}</a><a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">{{ t.whatsapp_contact }}</a></div>
       </div>
     </section>
 

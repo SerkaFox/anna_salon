@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-04">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-05">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
@@ -47,7 +47,7 @@
           </select>
         </form>
         <a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a>
-        <a class="btn-lux btn-lux-primary btn-lux-small" href="{% url 'home' %}#reserva">{{ t.nav_book }}</a>
+        <a class="btn-lux btn-lux-primary btn-lux-small" href="{% url 'public_booking' %}">{{ t.nav_book }}</a>
       </div>
     </nav>
     {% block page_hero %}{% endblock %}
