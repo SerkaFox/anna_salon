@@ -1,23 +1,23 @@
 {% load static %}
 <!doctype html>
-<html lang="es">
+<html lang="{{ public_language|default:'es' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}BRIMOON STUDIO | Belleza premium{% endblock %}</title>
-  <meta name="description" content="{% block meta_description %}BRIMOON Studio: especialistas en cejas, pestañas, manicura, pedicura y depilación facial.{% endblock %}">
+  <title>{% block title %}{{ t.site_title }}{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}{{ t.home_meta }}{% endblock %}">
   <link rel="canonical" href="{{ canonical_url }}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="BRIMOON Studio">
-  <meta property="og:title" content="{% block og_title %}BRIMOON STUDIO{% endblock %}">
-  <meta property="og:description" content="{% block og_description %}Belleza, cuidado y detalle en cada mirada.{% endblock %}">
+  <meta property="og:title" content="{% block og_title %}{{ t.site_title }}{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}{{ t.og_home_description }}{% endblock %}">
   <meta property="og:url" content="{{ canonical_url }}">
   <meta property="og:image" content="https://anna.listoya.es{% static 'Fon2.png' %}">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-03">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-04">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
@@ -31,12 +31,23 @@
         <span></span><span></span><span></span>
       </button>
       <div class="lux-nav__links" data-menu-panel>
-        <a href="{% url 'service_index' %}">Servicios</a>
-        <a href="{% url 'advice_index' %}">Consejos</a>
-        <a href="{% url 'home' %}#galeria">Galería</a>
-        <a href="{% url 'home' %}#contacto">Contacto</a>
-        <a href="{% url 'accounts:login' %}">Mi cuenta</a>
-        <a class="btn-lux btn-lux-primary btn-lux-small" href="{% url 'home' %}#reserva">Reservar cita</a>
+        <a href="{% url 'service_index' %}">{{ t.nav_services }}</a>
+        <a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a>
+        <a href="{% url 'home' %}#galeria">{{ t.nav_gallery }}</a>
+        <a href="{% url 'home' %}#contacto">{{ t.nav_contact }}</a>
+        
+        <form method="post" action="{% url 'set_public_language' %}" class="lux-language-switcher">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <label class="sr-only" for="public-language">Language</label>
+          <select id="public-language" name="language" onchange="this.form.submit()">
+            {% for code, label in public_languages %}
+              <option value="{{ code }}" {% if code == public_language %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        <a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a>
+        <a class="btn-lux btn-lux-primary btn-lux-small" href="{% url 'home' %}#reserva">{{ t.nav_book }}</a>
       </div>
     </nav>
     {% block page_hero %}{% endblock %}
@@ -46,9 +57,9 @@
 
   <footer class="lux-footer">
     <div class="lux-container footer-grid">
-      <div><strong>BRIMOON STUDIO</strong><p>Belleza, cuidado y detalle.</p></div>
-      <div><a href="{% url 'service_index' %}">Servicios</a><a href="{% url 'advice_index' %}">Consejos</a><span>Cejas</span><span>Pestañas</span></div>
-      <div><a href="{% url 'accounts:login' %}">Mi cuenta</a><span>© 2026 BRIMOON STUDIO</span></div>
+      <div><strong>BRIMOON STUDIO</strong><p>{{ t.footer_text }}</p></div>
+      <div><a href="{% url 'service_index' %}">{{ t.nav_services }}</a><a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a><span>Cejas</span><span>Pestañas</span></div>
+      <div><a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a><span>© 2026 BRIMOON STUDIO</span></div>
     </div>
   </footer>
 

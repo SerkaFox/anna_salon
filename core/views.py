@@ -1,9 +1,20 @@
 import json
 
-from django.http import HttpResponse
-from django.http import Http404
-from django.shortcuts import render
+from django.http import Http404, HttpResponse
+from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
+
+from .i18n import (
+    ARTICLE_TRANSLATIONS,
+    PUBLIC_LANGUAGE_SESSION_KEY,
+    PUBLIC_LANGUAGES,
+    SERVICE_TRANSLATIONS,
+    detect_public_language,
+    localize_items,
+    normalize_public_language,
+    public_texts,
+)
 
 
 SITE_NAME = "BRIMOON Studio"
@@ -193,82 +204,106 @@ def _article_schema(request, article):
     }, ensure_ascii=False)
 
 
+def _localized_context(request):
+    language = detect_public_language(request)
+    services = localize_items(SERVICES, SERVICE_TRANSLATIONS, language)
+    articles = localize_items(ARTICLES, ARTICLE_TRANSLATIONS, language)
+    return language, public_texts(language), services, articles
+
+
+def _base_context(request, canonical_path):
+    language, t, services, articles = _localized_context(request)
+    return {
+        "public_language": language,
+        "public_languages": PUBLIC_LANGUAGES,
+        "t": t,
+        "services": services,
+        "articles": articles,
+        "canonical_url": _absolute_url(request, canonical_path),
+    }
+
+
+@require_POST
+def set_public_language(request):
+    language = normalize_public_language(request.POST.get("language"))
+    request.session[PUBLIC_LANGUAGE_SESSION_KEY] = language
+    response = redirect(request.POST.get("next") or reverse("home"))
+    response.set_cookie(PUBLIC_LANGUAGE_SESSION_KEY, language, max_age=60 * 60 * 24 * 365, samesite="Lax", secure=True)
+    return response
+
+
 def home(request):
+    language, t, services, articles = _localized_context(request)
     schema = json.dumps({
         "@context": "https://schema.org",
         "@type": "BeautySalon",
         "name": SITE_NAME,
         "url": _absolute_url(request, reverse("home")),
-        "description": "Salón de belleza premium especializado en cejas, pestañas, manicura, pedicura y depilación facial.",
+        "description": t["home_meta"],
         "address": {"@type": "PostalAddress", "addressLocality": "Bilbao", "addressCountry": "ES"},
         "openingHours": "Mo-Sa by appointment",
         "sameAs": [],
-        "makesOffer": [{"@type": "Offer", "itemOffered": {"@type": "Service", "name": service["title"]}} for service in SERVICES],
+        "makesOffer": [{"@type": "Offer", "itemOffered": {"@type": "Service", "name": service["title"]}} for service in services],
     }, ensure_ascii=False)
-    return render(request, "core/home.html", {
-        "services": SERVICES,
-        "articles": ARTICLES[:3],
-        "canonical_url": _absolute_url(request, reverse("home")),
-        "schema_json": schema,
-    })
+    context = _base_context(request, reverse("home"))
+    context.update({"services": services, "articles": articles[:3], "schema_json": schema})
+    return render(request, "core/home.html", context)
 
 
 def service_index(request):
+    language, t, services, articles = _localized_context(request)
     schema = json.dumps({
         "@context": "https://schema.org",
         "@type": "CollectionPage",
-        "name": "Servicios de belleza en BRIMOON Studio",
-        "description": "Servicios de cejas, pestañas, manicura, pedicura y depilación facial.",
+        "name": t["all_services_title"],
+        "description": t["services_text"],
         "url": _absolute_url(request, reverse("service_index")),
     }, ensure_ascii=False)
-    return render(request, "core/service_index.html", {
-        "services": SERVICES,
-        "articles": ARTICLES[:3],
-        "canonical_url": _absolute_url(request, reverse("service_index")),
-        "schema_json": schema,
-        "meta_description": "Servicios de belleza premium en BRIMOON Studio: cejas, pestañas, manicura, pedicura y depilación facial con cita previa.",
-    })
+    context = _base_context(request, reverse("service_index"))
+    context.update({"services": services, "articles": articles[:3], "schema_json": schema, "meta_description": t["home_meta"]})
+    return render(request, "core/service_index.html", context)
 
 
 def service_detail(request, slug):
-    service = _find_by_slug(SERVICES, slug)
-    related = [item for item in SERVICES if item["slug"] != slug][:3]
-    return render(request, "core/service_detail.html", {
+    language, t, services, articles = _localized_context(request)
+    service = _find_by_slug(services, slug)
+    related = [item for item in services if item["slug"] != slug][:3]
+    context = _base_context(request, reverse("service_detail", args=[slug]))
+    context.update({
         "service": service,
         "related_services": related,
-        "articles": ARTICLES[:3],
-        "canonical_url": _absolute_url(request, reverse("service_detail", args=[slug])),
+        "articles": articles[:3],
         "schema_json": _service_schema(request, service),
     })
+    return render(request, "core/service_detail.html", context)
 
 
 def advice_index(request):
+    language, t, services, articles = _localized_context(request)
     schema = json.dumps({
         "@context": "https://schema.org",
         "@type": "Blog",
-        "name": "Consejos de belleza BRIMOON Studio",
-        "description": "Consejos, ideas y cuidados para cejas, pestañas, manicura, pedicura y depilación facial.",
+        "name": t["tips_page_title"],
+        "description": t["guide_text"],
         "url": _absolute_url(request, reverse("advice_index")),
     }, ensure_ascii=False)
-    return render(request, "core/advice_index.html", {
-        "articles": ARTICLES,
-        "services": SERVICES,
-        "canonical_url": _absolute_url(request, reverse("advice_index")),
-        "schema_json": schema,
-        "meta_description": "Consejos de belleza, cuidados y trucos profesionales de BRIMOON Studio para cejas, pestañas, manicura y piel.",
-    })
+    context = _base_context(request, reverse("advice_index"))
+    context.update({"articles": articles, "services": services, "schema_json": schema, "meta_description": t["guide_text"]})
+    return render(request, "core/advice_index.html", context)
 
 
 def article_detail(request, slug):
-    article = _find_by_slug(ARTICLES, slug)
-    related_articles = [item for item in ARTICLES if item["slug"] != slug][:3]
-    return render(request, "core/article_detail.html", {
+    language, t, services, articles = _localized_context(request)
+    article = _find_by_slug(articles, slug)
+    related_articles = [item for item in articles if item["slug"] != slug][:3]
+    context = _base_context(request, reverse("article_detail", args=[slug]))
+    context.update({
         "article": article,
         "related_articles": related_articles,
-        "services": SERVICES[:3],
-        "canonical_url": _absolute_url(request, reverse("article_detail", args=[slug])),
+        "services": services[:3],
         "schema_json": _article_schema(request, article),
     })
+    return render(request, "core/article_detail.html", context)
 
 
 def robots_txt(request):

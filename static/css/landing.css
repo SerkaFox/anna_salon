@@ -701,3 +701,42 @@ img { max-width: 100%; }
   .article-card img { height: 218px; }
   .inline-cta .btn-lux { width: 100%; }
 }
+
+
+.lux-language-switcher {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+.lux-language-switcher select {
+  min-height: 40px;
+  padding: 0 34px 0 14px;
+  border: 1px solid rgba(240, 208, 145, 0.34);
+  border-radius: 999px;
+  color: var(--gold-light);
+  background: rgba(6, 16, 24, 0.42);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+.lux-language-switcher select:focus-visible {
+  outline: 3px solid rgba(240, 208, 145, 0.45);
+  outline-offset: 3px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 980px) {
+  .lux-language-switcher,
+  .lux-language-switcher select { width: 100%; }
+}

@@ -1,13 +1,13 @@
 {% extends "core/public_base.html" %}
 {% load static %}
-{% block title %}{{ article.title }} | Consejos BRIMOON Studio{% endblock %}
+{% block title %}{{ article.title }} | {{ t.nav_tips }} BRIMOON Studio{% endblock %}
 {% block meta_description %}{{ article.meta }}{% endblock %}
 {% block og_title %}{{ article.title }}{% endblock %}
 {% block og_description %}{{ article.summary }}{% endblock %}
 {% block page_hero %}
 <section class="content-hero content-hero--split lux-container">
   <div>
-    <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{% url 'home' %}">Inicio</a><a href="{% url 'advice_index' %}">Consejos</a><span>{{ article.category }}</span></nav>
+    <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{% url 'home' %}">{{ t.home }}</a><a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a><span>{{ article.category }}</span></nav>
     <span class="lux-kicker">{{ article.category }}</span>
     <h1>{{ article.title }}</h1>
     <p>{{ article.summary }}</p>
@@ -22,12 +22,12 @@
       <h2>{{ heading }}</h2>
       <p>{{ body }}</p>
     {% endfor %}
-    <div class="inline-cta"><strong>Reserva tu cita y recibe una recomendación personalizada.</strong><a class="btn-lux btn-lux-primary" href="{% url 'home' %}#reserva">Reservar cita</a></div>
+    <div class="inline-cta"><strong>{{ t.personal_advice }}</strong><a class="btn-lux btn-lux-primary" href="{% url 'home' %}#reserva">{{ t.nav_book }}</a></div>
   </article>
 </section>
 <section class="lux-section seo-section">
   <div class="lux-container">
-    <div class="lux-section-head"><span class="lux-kicker">Sigue leyendo</span><h2>Más consejos útiles</h2></div>
+    <div class="lux-section-head"><span class="lux-kicker">{{ t.keep_reading }}</span><h2>{{ t.more_tips }}</h2></div>
     <div class="mini-card-grid">{% for item in related_articles %}<a class="mini-card" href="{% url 'article_detail' item.slug %}"><strong>{{ item.title }}</strong><span>{{ item.summary }}</span></a>{% endfor %}</div>
   </div>
 </section>

@@ -10,6 +10,7 @@ urlpatterns = [
     path("servicios/<slug:slug>/", core_views.service_detail, name="service_detail"),
     path("consejos/", core_views.advice_index, name="advice_index"),
     path("consejos/<slug:slug>/", core_views.article_detail, name="article_detail"),
+    path("set-language/", core_views.set_public_language, name="set_public_language"),
     path("robots.txt", core_views.robots_txt, name="robots_txt"),
     path("sitemap.xml", core_views.sitemap_xml, name="sitemap_xml"),
     path("", include("accounts.urls")),

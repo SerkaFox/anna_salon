@@ -1,15 +1,15 @@
 {% extends "core/public_base.html" %}
 {% load static %}
-{% block title %}Consejos de belleza y cuidados | BRIMOON Studio{% endblock %}
+{% block title %}{{ t.tips_page_title }} | BRIMOON Studio{% endblock %}
 {% block meta_description %}{{ meta_description }}{% endblock %}
-{% block og_title %}Consejos de belleza | BRIMOON Studio{% endblock %}
-{% block og_description %}Ideas, cuidados y recomendaciones para cejas, pestañas, manicura, pedicura y piel.{% endblock %}
+{% block og_title %}{{ t.tips_page_title }}{% endblock %}
+{% block og_description %}{{ t.guide_text }}{% endblock %}
 {% block page_hero %}
 <section class="content-hero lux-container">
-  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{% url 'home' %}">Inicio</a><span>Consejos</span></nav>
-  <span class="lux-kicker">Portal útil</span>
-  <h1>Consejos, cuidados y pequeños rituales de belleza</h1>
-  <p>Un espacio para resolver dudas frecuentes, cuidar mejor los resultados y elegir cada servicio con más criterio.</p>
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{% url 'home' %}">{{ t.home }}</a><span>{{ t.nav_tips }}</span></nav>
+  <span class="lux-kicker">{{ t.useful_portal }}</span>
+  <h1>{{ t.nav_tips }}, cuidados y pequeños rituales de belleza</h1>
+  <p>{{ t.tips_page_intro }}</p>
 </section>
 {% endblock %}
 {% block content %}
@@ -18,12 +18,12 @@
     {% for article in articles %}
       <article class="article-card">
         <img src="{% static article.image %}" alt="{{ article.title }}" loading="lazy">
-        <div><span>{{ article.category }}</span><h2>{{ article.title }}</h2><p>{{ article.summary }}</p><a class="btn-lux btn-lux-ghost" href="{% url 'article_detail' article.slug %}">Leer consejo</a></div>
+        <div><span>{{ article.category }}</span><h2>{{ article.title }}</h2><p>{{ article.summary }}</p><a class="btn-lux btn-lux-ghost" href="{% url 'article_detail' article.slug %}">{{ t.read_tip }}</a></div>
       </article>
     {% endfor %}
   </div>
 </section>
 <section class="lux-section">
-  <div class="lux-container price-band"><span class="lux-kicker">SEO Brimoon</span><h2>Guías pensadas para tus dudas reales</h2><p>El portal crecerá con recomendaciones sobre preparación, mantenimiento y elección de servicios para cada necesidad.</p></div>
+  <div class="lux-container price-band"><span class="lux-kicker">{{ t.guide_kicker }}</span><h2>{{ t.seo_note_title }}</h2><p>{{ t.seo_note_text }}</p></div>
 </section>
 {% endblock %}

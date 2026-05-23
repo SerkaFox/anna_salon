@@ -1375,3 +1375,209 @@
   white-space: nowrap;
   border: 0;
 }
+
+
+.client-lux-body {
+  --bg: #061018;
+  --bg-soft: rgba(13, 24, 35, 0.72);
+  --panel: rgba(8, 18, 26, 0.58);
+  --line: rgba(240, 208, 145, 0.22);
+  --text: #f7efe3;
+  --muted: #c6baaa;
+  --accent: #d6a75c;
+  --accent-2: #f0d091;
+  --accent-deep: #073d2e;
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.48);
+  min-height: 100vh;
+  background-color: #061018;
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+}
+.client-lux-body::before,
+.client-lux-body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+.client-lux-body::before {
+  z-index: -2;
+  background:
+    radial-gradient(circle at 16% 14%, rgba(240, 208, 145, 0.22), transparent 26%),
+    radial-gradient(circle at 82% 34%, rgba(25, 168, 118, 0.15), transparent 30%),
+    linear-gradient(180deg, rgba(2, 6, 10, 0.83) 0%, rgba(6, 16, 24, 0.9) 46%, rgba(2, 6, 10, 0.95) 100%),
+    url("../Fon2.png");
+  background-size: auto, auto, auto, cover;
+  background-position: center;
+  animation: clientPageDrift 24s ease-in-out infinite alternate;
+}
+.client-lux-body::after {
+  z-index: -1;
+  background: linear-gradient(120deg, transparent 0%, rgba(240, 208, 145, 0.08) 42%, transparent 58%);
+  opacity: 0.24;
+  animation: clientVeilSweep 11s ease-in-out infinite alternate;
+}
+.client-lux-panel {
+  width: min(1180px, calc(100% - 36px));
+  max-width: 1180px !important;
+  margin: 0 auto !important;
+  padding: 30px 0 70px;
+}
+.client-lux-body .mobile-topbar {
+  border-bottom: 1px solid rgba(240, 208, 145, 0.2);
+  background: rgba(5, 11, 18, 0.86);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.32);
+  backdrop-filter: blur(22px) saturate(130%);
+}
+.client-lux-body .logo {
+  border-radius: 50%;
+  border-color: rgba(240, 208, 145, 0.35);
+  box-shadow: 0 0 0 1px rgba(240, 208, 145, 0.22), 0 18px 54px rgba(214, 167, 92, 0.22);
+}
+.client-lux-body .panel-header {
+  align-items: center;
+  margin: 18px 0 28px;
+  padding: 18px 20px;
+  border: 1px solid rgba(240, 208, 145, 0.18);
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(7, 16, 24, 0.74), rgba(7, 16, 24, 0.38));
+  box-shadow: 0 18px 58px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(22px) saturate(128%);
+  animation: navFloatIn 0.9s ease both;
+}
+.client-lux-body .panel-header h1 {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(2.15rem, 4vw, 4.2rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #f7efe3;
+  text-shadow: 0 12px 42px rgba(0,0,0,0.5), 0 0 30px rgba(214,167,92,0.15);
+}
+.client-lux-body .panel-header p { color: rgba(247, 239, 227, 0.78); }
+.client-lux-body .panel-card,
+.client-lux-body .stat-card,
+.client-lux-body .booking-list-card,
+.client-lux-body .photo-card,
+.client-lux-body .dashboard-booking-card,
+.client-lux-body .client-score-card {
+  border: 1px solid rgba(240, 208, 145, 0.22);
+  background: linear-gradient(145deg, rgba(255,255,255,0.105), rgba(255,255,255,0.032));
+  box-shadow: 0 28px 80px rgba(0,0,0,0.48);
+  backdrop-filter: blur(22px) saturate(132%);
+  position: relative;
+  overflow: hidden;
+}
+.client-lux-body .panel-card::before,
+.client-lux-body .stat-card::before,
+.client-lux-body .booking-list-card::before,
+.client-lux-body .photo-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255,255,255,0.18), transparent 24%, transparent 70%, rgba(240,208,145,0.08));
+  opacity: 0.48;
+}
+.client-lux-body .panel-card > *,
+.client-lux-body .stat-card > *,
+.client-lux-body .booking-list-card > *,
+.client-lux-body .photo-card > * { position: relative; z-index: 1; }
+.client-lux-body .panel-card { border-radius: 28px; animation: cardRise 0.85s ease both; }
+.client-lux-body .stat-card { border-radius: 22px; transition: transform 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease; }
+.client-lux-body .stat-card:hover,
+.client-lux-body .panel-card:hover {
+  border-color: rgba(240, 208, 145, 0.48);
+  box-shadow: 0 34px 94px rgba(0,0,0,0.54), 0 18px 54px rgba(214,167,92,0.18);
+}
+.client-lux-body .stat-card:hover { transform: translateY(-4px); }
+.client-lux-body .stat-label,
+.client-lux-body .muted-text,
+.client-lux-body .panel-header p { color: #c6baaa; }
+.client-lux-body .stat-value,
+.client-lux-body .panel-card h2 { color: #f0d091; }
+.client-lux-body .panel-card h2 {
+  font-family: "Playfair Display", Georgia, serif;
+  letter-spacing: 0.01em;
+}
+.client-lux-body .btn {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid transparent;
+  color: #201206;
+  background: linear-gradient(135deg, #f7dda1, #d6a75c 52%, #9f6f29);
+  box-shadow: 0 18px 54px rgba(214, 167, 92, 0.26);
+  transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease, background 0.28s ease;
+}
+.client-lux-body .btn::after {
+  content: "";
+  position: absolute;
+  inset: -40% auto -40% -70%;
+  width: 48%;
+  background: linear-gradient(105deg, transparent, rgba(255,255,255,0.42), transparent);
+  transform: skewX(-18deg);
+  transition: left 0.72s ease;
+}
+.client-lux-body .btn:hover { transform: translateY(-3px); box-shadow: 0 24px 62px rgba(214,167,92,0.42); }
+.client-lux-body .btn:hover::after { left: 124%; }
+.client-lux-body .btn-light,
+.client-lux-body .btn-outline {
+  color: #f0d091;
+  background: rgba(6, 16, 24, 0.38);
+  border-color: rgba(240, 208, 145, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  backdrop-filter: blur(12px);
+}
+.client-lux-body .input,
+.client-lux-body input,
+.client-lux-body select,
+.client-lux-body textarea {
+  border-color: rgba(240, 208, 145, 0.22) !important;
+  color: #f7efe3 !important;
+  background: rgba(4, 11, 17, 0.58) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.client-lux-body .input:focus,
+.client-lux-body input:focus,
+.client-lux-body select:focus,
+.client-lux-body textarea:focus {
+  outline: 3px solid rgba(240, 208, 145, 0.24);
+  border-color: rgba(240, 208, 145, 0.62) !important;
+}
+.client-lux-body .language-switcher select {
+  min-height: 42px;
+  border-radius: 999px;
+  padding: 0 34px 0 14px;
+}
+.client-lux-body .dashboard-badge {
+  color: #f0d091;
+  border-color: rgba(240, 208, 145, 0.26);
+  background: rgba(240, 208, 145, 0.09);
+}
+.client-lux-body .photo-card__image {
+  transition: transform 0.55s ease, filter 0.55s ease;
+}
+.client-lux-body .photo-thumb-button:hover .photo-card__image {
+  transform: scale(1.045);
+  filter: brightness(1.08);
+}
+.client-lux-body .booking-hint {
+  color: #f0d091;
+}
+.client-lux-body .booking-hint.is-error { color: #ffd7ca; }
+@keyframes clientPageDrift {
+  from { transform: scale(1.04) translate3d(-0.8%, -0.5%, 0); }
+  to { transform: scale(1.08) translate3d(0.8%, 0.6%, 0); }
+}
+@keyframes clientVeilSweep {
+  from { transform: translateX(-22%) rotate(0.001deg); }
+  to { transform: translateX(18%) rotate(0.001deg); }
+}
+@media (max-width: 980px) {
+  .client-lux-panel { width: min(100% - 28px, 1180px); padding-top: 18px; }
+  .client-lux-body .panel-header { border-radius: 22px; }
+}
+@media (max-width: 640px) {
+  .client-lux-panel { width: calc(100% - 24px); padding-bottom: 46px; }
+  .client-lux-body .panel-card { padding: 18px; }
+}

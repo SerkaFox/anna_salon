@@ -1,6 +1,8 @@
 {% extends "layout.html" %}
 {% load static client_i18n %}
 
+{% block body_class %}client-lux-body{% endblock %}
+
 {% block body %}
 <div class="mobile-topbar">
   <div class="mobile-topbar__brand">
@@ -13,7 +15,7 @@
   <a class="btn btn-light btn-small" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
 </div>
 
-<main class="main-panel" style="max-width: 1120px; margin: 0 auto;">
+<main class="main-panel client-lux-panel">
   <header class="panel-header">
     <div>
       <h1>{% block portal_title %}{% endblock %}</h1>

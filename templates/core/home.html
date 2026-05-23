@@ -1,23 +1,23 @@
 {% load static %}
 <!doctype html>
-<html lang="es">
+<html lang="{{ public_language|default:'es' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BRIMOON STUDIO | Belleza premium</title>
-  <meta name="description" content="BRIMOON Studio en Bilbao: salón de belleza premium especializado en cejas, pestañas, manicura, pedicura y depilación facial con cita previa.">
+  <title>{{ t.site_title }}</title>
+  <meta name="description" content="{{ t.home_meta }}">
   <link rel="canonical" href="{{ canonical_url }}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="BRIMOON Studio">
-  <meta property="og:title" content="BRIMOON STUDIO | Belleza premium en Bilbao">
-  <meta property="og:description" content="Belleza, cuidado y detalle en cada mirada. Cejas, pestañas, manicura, pedicura y depilación facial.">
+  <meta property="og:title" content="{{ t.og_home_title }}">
+  <meta property="og:description" content="{{ t.og_home_description }}">
   <meta property="og:url" content="{{ canonical_url }}">
   <meta property="og:image" content="https://anna.listoya.es{% static 'Fon2.png' %}">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-03">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-04">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
@@ -31,25 +31,36 @@
         <span></span><span></span><span></span>
       </button>
       <div class="lux-nav__links" data-menu-panel>
-        <a href="{% url 'service_index' %}">Servicios</a>
-        <a href="{% url 'advice_index' %}">Consejos</a>
-        <a href="#galeria">Galería</a>
-        <a href="#precios">Precios</a>
-        <a href="#contacto">Contacto</a>
-        <a href="{% url 'accounts:login' %}">Mi cuenta</a>
-        <a class="btn-lux btn-lux-primary btn-lux-small" href="#reserva">Reservar cita</a>
+        <a href="{% url 'service_index' %}">{{ t.nav_services }}</a>
+        <a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a>
+        <a href="#galeria">{{ t.nav_gallery }}</a>
+        <a href="#precios">{{ t.nav_prices }}</a>
+        <a href="#contacto">{{ t.nav_contact }}</a>
+        
+        <form method="post" action="{% url 'set_public_language' %}" class="lux-language-switcher">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <label class="sr-only" for="public-language-home">Language</label>
+          <select id="public-language-home" name="language" onchange="this.form.submit()">
+            {% for code, label in public_languages %}
+              <option value="{{ code }}" {% if code == public_language %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        <a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a>
+        <a class="btn-lux btn-lux-primary btn-lux-small" href="#reserva">{{ t.nav_book }}</a>
       </div>
     </nav>
 
     <section class="lux-hero__content">
-      <div class="lux-kicker">Beauty studio · Bilbao</div>
+      <div class="lux-kicker">{{ t.kicker_home }}</div>
       <h1>BRIMOON STUDIO</h1>
-      <p class="lux-hero__lead">Belleza, cuidado y detalle en cada mirada</p>
-      <p class="lux-hero__copy">Especialistas en cejas, pestañas, manicura, pedicura y depilación facial.</p>
+      <p class="lux-hero__lead">{{ t.hero_lead }}</p>
+      <p class="lux-hero__copy">{{ t.hero_copy }}</p>
       <div class="lux-actions" aria-label="Acciones principales">
-        <a class="btn-lux btn-lux-primary btn-lux-large" href="#reserva">Reservar cita</a>
-        <a class="btn-lux btn-lux-outline btn-lux-large" href="#servicios">Ver servicios</a>
-        <a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">WhatsApp</a>
+        <a class="btn-lux btn-lux-primary btn-lux-large" href="#reserva">{{ t.nav_book }}</a>
+        <a class="btn-lux btn-lux-outline btn-lux-large" href="#servicios">{{ t.hero_services }}</a>
+        <a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">{{ t.hero_whatsapp }}</a>
       </div>
     </section>
   </header>
@@ -57,41 +68,27 @@
   <main>
     <section class="lux-section lux-trust" aria-label="Confianza">
       <div class="lux-container trust-grid">
-        <article><span>01</span><strong>Atención personalizada</strong><p>Cada visita se adapta a tu estilo, ritmo y necesidades.</p></article>
-        <article><span>02</span><strong>Técnicas profesionales</strong><p>Protocolos precisos para resultados elegantes y duraderos.</p></article>
-        <article><span>03</span><strong>Productos seleccionados</strong><p>Trabajamos con productos cuidados para piel, manos y mirada.</p></article>
-        <article><span>04</span><strong>Ambiente cuidado</strong><p>Un espacio íntimo para desconectar y sentirte renovada.</p></article>
+        <article><span>01</span><strong>{{ t.trust_1_title }}</strong><p>{{ t.trust_1_text }}</p></article>
+        <article><span>02</span><strong>{{ t.trust_2_title }}</strong><p>{{ t.trust_2_text }}</p></article>
+        <article><span>03</span><strong>{{ t.trust_3_title }}</strong><p>{{ t.trust_3_text }}</p></article>
+        <article><span>04</span><strong>{{ t.trust_4_title }}</strong><p>{{ t.trust_4_text }}</p></article>
       </div>
     </section>
 
     <section class="lux-section" id="servicios">
       <div class="lux-container">
         <div class="lux-section-head">
-          <span class="lux-kicker">Servicios</span>
-          <h2>Rituales para cuidar cada detalle</h2>
-          <p>Cinco áreas esenciales de belleza con un enfoque delicado, moderno y profesional.</p>
+          <span class="lux-kicker">{{ t.nav_services }}</span>
+          <h2>{{ t.services_title }}</h2>
+          <p>{{ t.services_text }}</p>
         </div>
         <div class="services-grid">
-          <article class="service-card">
-            <img src="{% static 'Definición, depilación y lifting de cejas.png' %}" alt="Definición, depilación y lifting de cejas" loading="lazy">
-            <div><h3>Definición, depilación y lifting de cejas</h3><p>Diseño de cejas, depilación precisa y lifting para realzar la expresión natural de tu mirada.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'cejas-definicion-depilacion-lifting' %}">Ver detalle</a></div>
-          </article>
-          <article class="service-card">
-            <img src="{% static 'Depilación facial.png' %}" alt="Depilación facial" loading="lazy">
-            <div><h3>Depilación facial</h3><p>Tratamientos delicados para una piel más limpia, suave y cuidada.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'depilacion-facial' %}">Ver detalle</a></div>
-          </article>
-          <article class="service-card">
-            <img src="{% static 'Manicura, extensiones y tratamientos.png' %}" alt="Manicura, extensiones y tratamientos" loading="lazy">
-            <div><h3>Manicura, extensiones y tratamientos</h3><p>Manicuras elegantes, extensiones y tratamientos para unas manos impecables.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'manicura-extensiones-tratamientos' %}">Ver detalle</a></div>
-          </article>
-          <article class="service-card">
-            <img src="{% static 'Pedicuras y tratamientos Pies.png' %}" alt="Pedicuras y tratamientos" loading="lazy">
-            <div><h3>Pedicuras y tratamientos</h3><p>Cuidado completo de pies, pedicura estética y tratamientos para bienestar y belleza.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'pedicuras-tratamientos-pies' %}">Ver detalle</a></div>
-          </article>
-          <article class="service-card">
-            <img src="{% static 'Tinte, extensiones y lifting de pestañas..png' %}" alt="Tinte, extensiones y lifting de pestañas" loading="lazy">
-            <div><h3>Tinte, extensiones y lifting de pestañas</h3><p>Color, volumen y curvatura para una mirada más intensa y definida.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'pestanas-tinte-extensiones-lifting' %}">Ver detalle</a></div>
-          </article>
+          {% for service in services %}
+            <article class="service-card">
+              <img src="{% static service.image %}" alt="{{ service.title }}" loading="lazy">
+              <div><h3>{{ service.title }}</h3><p>{{ service.short }}</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' service.slug %}">{{ t.view_detail }}</a></div>
+            </article>
+          {% endfor %}
         </div>
       </div>
     </section>
@@ -99,10 +96,10 @@
     <section class="lux-section lux-gallery" id="galeria">
       <div class="lux-container gallery-layout">
         <div class="lux-section-head align-left">
-          <span class="lux-kicker">Experiencia</span>
-          <h2>Un espacio pensado para desconectar, cuidarte y salir renovada.</h2>
-          <p>La estética Brimoon combina calma, precisión y una atención cercana en cada servicio.</p>
-          <a class="btn-lux btn-lux-outline" href="#contacto">Contactar</a>
+          <span class="lux-kicker">{{ t.experience_kicker }}</span>
+          <h2>{{ t.experience_title }}</h2>
+          <p>{{ t.experience_text }}</p>
+          <a class="btn-lux btn-lux-outline" href="#contacto">{{ t.contact_button }}</a>
         </div>
         <div class="gallery-cards">
           <img src="{% static 'Manicura, extensiones y tratamientos.png' %}" alt="Detalle de manicura Brimoon" loading="lazy">
@@ -116,62 +113,62 @@
     <section class="lux-section seo-section" id="consejos">
       <div class="lux-container">
         <div class="lux-section-head">
-          <span class="lux-kicker">Guía Brimoon</span>
-          <h2>Consejos y cuidados para mantener tu resultado</h2>
-          <p>Un portal útil con ideas sobre cejas, pestañas, manicura y piel para resolver dudas antes y después de tu cita.</p>
+          <span class="lux-kicker">{{ t.guide_kicker }}</span>
+          <h2>{{ t.guide_title }}</h2>
+          <p>{{ t.guide_text }}</p>
         </div>
         <div class="article-card-grid">
           {% for article in articles %}
             <article class="article-card">
               <img src="{% static article.image %}" alt="{{ article.title }}" loading="lazy">
-              <div><span>{{ article.category }}</span><h3>{{ article.title }}</h3><p>{{ article.summary }}</p><a class="btn-lux btn-lux-ghost" href="{% url 'article_detail' article.slug %}">Leer consejo</a></div>
+              <div><span>{{ article.category }}</span><h3>{{ article.title }}</h3><p>{{ article.summary }}</p><a class="btn-lux btn-lux-ghost" href="{% url 'article_detail' article.slug %}">{{ t.read_tip }}</a></div>
             </article>
           {% endfor %}
         </div>
-        <div class="lux-actions centered"><a class="btn-lux btn-lux-outline" href="{% url 'advice_index' %}">Ver todos los consejos</a></div>
+        <div class="lux-actions centered"><a class="btn-lux btn-lux-outline" href="{% url 'advice_index' %}">{{ t.view_all_tips }}</a></div>
       </div>
     </section>
 
     <section class="lux-section" id="precios">
       <div class="lux-container price-band">
-        <span class="lux-kicker">Precios</span>
-        <h2>Servicios premium con cita previa</h2>
-        <p>Consulta disponibilidad y el servicio que mejor encaja contigo desde tu cuenta o por WhatsApp.</p>
-        <div class="lux-actions centered"><a class="btn-lux btn-lux-primary" href="#reserva">Reservar cita</a><a class="btn-lux btn-lux-ghost" href="#servicios">Ver tratamientos</a></div>
+        <span class="lux-kicker">{{ t.nav_prices }}</span>
+        <h2>{{ t.prices_title }}</h2>
+        <p>{{ t.prices_text }}</p>
+        <div class="lux-actions centered"><a class="btn-lux btn-lux-primary" href="#reserva">{{ t.nav_book }}</a><a class="btn-lux btn-lux-ghost" href="#servicios">{{ t.view_treatments }}</a></div>
       </div>
     </section>
 
     <section class="lux-section cta-section" id="reserva">
       <div class="lux-container cta-card">
-        <div><span class="lux-kicker">Reserva</span><h2>¿Lista para tu momento Brimoon?</h2><p>Reserva tu cita y déjanos cuidar cada detalle.</p></div>
-        <div class="lux-actions"><a class="btn-lux btn-lux-primary btn-lux-large" href="{% url 'accounts:login' %}">Reservar cita</a><a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">Contactar por WhatsApp</a></div>
+        <div><span class="lux-kicker">{{ t.booking_kicker }}</span><h2>{{ t.booking_title }}</h2><p>{{ t.booking_text }}</p></div>
+        <div class="lux-actions"><a class="btn-lux btn-lux-primary btn-lux-large" href="{% url 'accounts:login' %}">{{ t.nav_book }}</a><a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">{{ t.whatsapp_contact }}</a></div>
       </div>
     </section>
 
     <section class="lux-section account-section">
       <div class="lux-container account-grid">
         <article>
-          <span class="lux-kicker">Área cliente</span>
-          <h2>Tu espacio personal</h2>
-          <p>Desde tu cuenta podrás consultar tus citas, revisar servicios reservados y acceder a tus datos de cliente.</p>
+          <span class="lux-kicker">{{ t.account_kicker }}</span>
+          <h2>{{ t.account_title }}</h2>
+          <p>{{ t.account_text }}</p>
         </article>
-        <div class="account-actions"><a class="btn-lux btn-lux-outline" href="{% url 'accounts:login' %}">Acceder a mi cuenta</a><a class="btn-lux btn-lux-ghost" href="{% url 'accounts:login' %}">Crear cuenta / Solicitar acceso</a></div>
+        <div class="account-actions"><a class="btn-lux btn-lux-outline" href="{% url 'accounts:login' %}">{{ t.account_access }}</a><a class="btn-lux btn-lux-ghost" href="{% url 'accounts:login' %}">{{ t.account_create }}</a></div>
       </div>
     </section>
 
     <section class="lux-section contact-section" id="contacto">
       <div class="lux-container contact-grid">
-        <div><span class="lux-kicker">Contacto</span><h2>Ven a cuidarte con nosotras</h2><p>Dirección: consulta la ubicación exacta al reservar tu cita.</p><p>WhatsApp: disponible bajo solicitud.</p><p>Horario: Lunes a sábado con cita previa.</p></div>
-        <div class="contact-card"><strong>BRIMOON STUDIO</strong><p>Cejas · Pestañas · Manicura · Pedicura · Depilación facial</p><a class="btn-lux btn-lux-primary" href="#">Ubicación</a></div>
+        <div><span class="lux-kicker">{{ t.nav_contact }}</span><h2>{{ t.contact_title }}</h2><p>{{ t.contact_address }}</p><p>{{ t.contact_whatsapp }}</p><p>{{ t.contact_hours }}</p></div>
+        <div class="contact-card"><strong>BRIMOON STUDIO</strong><p>{{ t.nav_services }} · {{ t.nav_tips }}</p><a class="btn-lux btn-lux-primary" href="#">{{ t.location }}</a></div>
       </div>
     </section>
   </main>
 
   <footer class="lux-footer">
     <div class="lux-container footer-grid">
-      <div><strong>BRIMOON STUDIO</strong><p>Belleza, cuidado y detalle.</p></div>
-      <div><a href="{% url 'service_index' %}">Servicios</a><a href="{% url 'advice_index' %}">Consejos</a><span>Cejas</span><span>Pestañas</span></div>
-      <div><a href="{% url 'accounts:login' %}">Mi cuenta</a><span>© 2026 BRIMOON STUDIO</span></div>
+      <div><strong>BRIMOON STUDIO</strong><p>{{ t.footer_text }}</p></div>
+      <div><a href="{% url 'service_index' %}">{{ t.nav_services }}</a><a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a><span>Cejas</span><span>Pestañas</span></div>
+      <div><a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a><span>© 2026 BRIMOON STUDIO</span></div>
     </div>
   </footer>
 

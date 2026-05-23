@@ -39,6 +39,18 @@ def normalize_client_language(language):
     return code if code in supported else DEFAULT_CLIENT_LANGUAGE
 
 
+
+def detect_client_language(request):
+    explicit = request.session.get(CLIENT_LANGUAGE_SESSION_KEY) or request.COOKIES.get(CLIENT_LANGUAGE_SESSION_KEY)
+    if explicit:
+        return normalize_client_language(explicit)
+    for item in (request.META.get("HTTP_ACCEPT_LANGUAGE") or "").split(","):
+        code = item.split(";", 1)[0].strip()
+        normalized = normalize_client_language(code)
+        if normalized != DEFAULT_CLIENT_LANGUAGE or code.lower().startswith(DEFAULT_CLIENT_LANGUAGE):
+            return normalized
+    return DEFAULT_CLIENT_LANGUAGE
+
 def translate_client(key, language=None, **kwargs):
     language = normalize_client_language(language)
     text = CLIENT_TRANSLATIONS.get(language, {}).get(key) or CLIENT_TRANSLATIONS[DEFAULT_CLIENT_LANGUAGE].get(key) or key
