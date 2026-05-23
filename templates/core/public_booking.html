@@ -23,7 +23,7 @@
       {% csrf_token %}
       {% if booking_non_field_errors %}<div class="booking-alert">{{ booking_non_field_errors.0 }}</div>{% endif %}
 
-      <div class="booking-form-grid">
+      <div class="booking-form-grid booking-choice-grid">
         <label class="lux-field">
           <span>{{ t.public_booking_service }}</span>
           <select class="lux-input" name="service" data-service-select required>
@@ -35,10 +35,30 @@
           {% if booking_errors.service %}<small>{{ booking_errors.service.0 }}</small>{% endif %}
         </label>
 
-        <label class="lux-field">
-          <span>{{ t.public_booking_date }}</span>
-          <input class="lux-input" type="date" name="date" min="{{ today }}" value="{{ booking_values.date|default:today }}" data-date-input required>
-        </label>
+        <div class="booking-date-range">
+          <label class="lux-field">
+            <span>{{ t.public_booking_date }}</span>
+            <input class="lux-input" type="date" name="date" min="{{ today }}" value="{{ booking_values.date|default:today }}" data-date-input required>
+          </label>
+          <label class="lux-field">
+            <span>{{ t.public_booking_range }}</span>
+            <select class="lux-input" data-time-range>
+              <option value="all">{{ t.public_booking_range_all }}</option>
+              <option value="9-12">09:00 - 12:00</option>
+              <option value="12-15">12:00 - 15:00</option>
+              <option value="15-18">15:00 - 18:00</option>
+              <option value="18-21">18:00 - 21:00</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="selected-slot-summary" data-selected-summary hidden>
+        <div>
+          <span>{{ t.public_booking_selected_label }}</span>
+          <strong data-selected-summary-text></strong>
+        </div>
+        <button class="btn-lux btn-lux-outline btn-lux-small" type="button" data-edit-slot>{{ t.public_booking_edit_time }}</button>
       </div>
 
       <div class="slot-picker" data-slot-picker>
@@ -49,7 +69,9 @@
           </div>
           <button class="btn-lux btn-lux-ghost btn-lux-small" type="button" data-refresh-slots>{{ t.public_booking_refresh }}</button>
         </div>
-        <div class="slot-grid" data-slot-grid></div>
+        <div class="slot-picker__body" data-slot-body>
+          <div class="slot-grid" data-slot-grid></div>
+        </div>
         {% if booking_errors.start_at %}<small class="form-error">{{ booking_errors.start_at.0 }}</small>{% endif %}
         {% if booking_errors.employee %}<small class="form-error">{{ booking_errors.employee.0 }}</small>{% endif %}
         {% if booking_errors.zone %}<small class="form-error">{{ booking_errors.zone.0 }}</small>{% endif %}
@@ -59,6 +81,7 @@
       <input type="hidden" name="employee" value="{{ booking_values.employee }}" data-employee-input>
       <input type="hidden" name="zone" value="{{ booking_values.zone }}" data-zone-input>
 
+      <div class="booking-details-section" data-details-section>
       <div class="booking-form-grid">
         <label class="lux-field">
           <span>{{ t.public_booking_name }}</span>
@@ -94,6 +117,7 @@
         <button class="btn-lux btn-lux-primary btn-lux-large" type="submit" data-submit-button disabled>{{ t.public_booking_submit }}</button>
         <a class="btn-lux btn-lux-outline btn-lux-large" href="{% url 'accounts:login' %}">{{ t.public_booking_existing }}</a>
       </div>
+      </div>
     </form>
 
     <aside class="public-booking-aside">
@@ -115,6 +139,7 @@
     if (!form) return;
     const serviceSelect = form.querySelector('[data-service-select]');
     const dateInput = form.querySelector('[data-date-input]');
+    const rangeSelect = form.querySelector('[data-time-range]');
     const grid = form.querySelector('[data-slot-grid]');
     const status = form.querySelector('[data-slot-status]');
     const startInput = form.querySelector('[data-start-input]');
@@ -124,6 +149,11 @@
     const refreshButton = form.querySelector('[data-refresh-slots]');
     const contactToggle = form.querySelector('[data-contact-toggle]');
     const contactFields = form.querySelector('[data-contact-fields]');
+    const selectedSummary = form.querySelector('[data-selected-summary]');
+    const selectedSummaryText = form.querySelector('[data-selected-summary-text]');
+    const editSlotButton = form.querySelector('[data-edit-slot]');
+    const detailsSection = form.querySelector('[data-details-section]');
+    let lastSlots = [];
     const messages = {
       choose: '{{ t.public_booking_select_service_date|escapejs }}',
       loading: '{{ t.public_booking_loading|escapejs }}',
@@ -138,39 +168,80 @@
       employeeInput.value = '';
       zoneInput.value = '';
       submitButton.disabled = true;
+      form.classList.remove('is-time-selected');
+      selectedSummary.hidden = true;
+      selectedSummaryText.textContent = '';
+    }
+
+    function slotHour(slot) {
+      return new Date(slot.start_at).getHours() + (new Date(slot.start_at).getMinutes() / 60);
+    }
+
+    function filteredSlots(slots) {
+      const value = rangeSelect.value;
+      if (value === 'all') return slots;
+      const parts = value.split('-').map(Number);
+      return slots.filter(function (slot) {
+        const hour = slotHour(slot);
+        return hour >= parts[0] && hour < parts[1];
+      });
+    }
+
+    function groupSlotsByEmployee(slots) {
+      const map = new Map();
+      slots.forEach(function (slot) {
+        slot.employees.forEach(function (employee) {
+          if (!map.has(employee.id)) {
+            map.set(employee.id, { id: employee.id, name: employee.name, slots: [] });
+          }
+          map.get(employee.id).slots.push({ slot: slot, employee: employee });
+        });
+      });
+      return Array.from(map.values()).sort(function (a, b) { return a.name.localeCompare(b.name); });
+    }
+
+    function selectSlot(slot, employee, button) {
+      form.querySelectorAll('.slot-time-button.is-selected').forEach(function (item) { item.classList.remove('is-selected'); });
+      button.classList.add('is-selected');
+      startInput.value = slot.start_at;
+      employeeInput.value = employee.id;
+      zoneInput.value = employee.zone || '';
+      submitButton.disabled = false;
+      const selectedText = messages.selected.replace('{time}', slot.label).replace('{employee}', employee.name);
+      status.textContent = selectedText;
+      selectedSummaryText.textContent = selectedText;
+      selectedSummary.hidden = false;
+      form.classList.add('is-time-selected');
+      window.setTimeout(function () { detailsSection.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
     }
 
     function renderSlots(slots) {
       grid.innerHTML = '';
       resetSlot();
-      if (!slots.length) {
+      const visibleSlots = filteredSlots(slots);
+      if (!visibleSlots.length) {
         status.textContent = messages.empty;
         return;
       }
       status.textContent = messages.chooseMaster;
-      slots.forEach(function (slot) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'slot-cluster';
-        const title = document.createElement('strong');
-        title.textContent = slot.label;
-        wrapper.appendChild(title);
-        slot.employees.forEach(function (employee) {
+      groupSlotsByEmployee(visibleSlots).forEach(function (master) {
+        const card = document.createElement('div');
+        card.className = 'master-slot-card';
+        const name = document.createElement('strong');
+        name.textContent = master.name;
+        card.appendChild(name);
+        const times = document.createElement('div');
+        times.className = 'master-time-grid';
+        master.slots.forEach(function (item) {
           const button = document.createElement('button');
           button.type = 'button';
-          button.className = 'slot-button';
-          button.textContent = employee.name;
-          button.addEventListener('click', function () {
-            form.querySelectorAll('.slot-button.is-selected').forEach(function (item) { item.classList.remove('is-selected'); });
-            button.classList.add('is-selected');
-            startInput.value = slot.start_at;
-            employeeInput.value = employee.id;
-            zoneInput.value = employee.zone || '';
-            submitButton.disabled = false;
-            status.textContent = messages.selected.replace('{time}', slot.label).replace('{employee}', employee.name);
-          });
-          wrapper.appendChild(button);
+          button.className = 'slot-time-button';
+          button.textContent = item.slot.label;
+          button.addEventListener('click', function () { selectSlot(item.slot, item.employee, button); });
+          times.appendChild(button);
         });
-        grid.appendChild(wrapper);
+        card.appendChild(times);
+        grid.appendChild(card);
       });
     }
 
@@ -178,6 +249,7 @@
       const service = serviceSelect.value;
       const date = dateInput.value;
       grid.innerHTML = '';
+      lastSlots = [];
       resetSlot();
       if (!service || !date) {
         status.textContent = messages.choose;
@@ -189,7 +261,8 @@
         .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
         .then(function (result) {
           if (!result.ok || !result.data.ok) throw new Error(result.data.message || messages.error);
-          renderSlots(result.data.slots || []);
+          lastSlots = result.data.slots || [];
+          renderSlots(lastSlots);
         })
         .catch(function (error) {
           status.textContent = error.message || messages.error;
@@ -201,7 +274,13 @@
     });
     serviceSelect.addEventListener('change', loadSlots);
     dateInput.addEventListener('change', loadSlots);
+    rangeSelect.addEventListener('change', function () { renderSlots(lastSlots); });
     refreshButton.addEventListener('click', loadSlots);
+    editSlotButton.addEventListener('click', function () {
+      form.classList.remove('is-time-selected');
+      selectedSummary.hidden = true;
+      form.querySelector('[data-slot-picker]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
     loadSlots();
   });
 </script>
