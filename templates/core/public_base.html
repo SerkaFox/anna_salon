@@ -58,7 +58,7 @@
   <footer class="lux-footer">
     <div class="lux-container footer-grid">
       <div><strong>BRIMOON STUDIO</strong><p>{{ t.footer_text }}</p></div>
-      <div><a href="{% url 'service_index' %}">{{ t.nav_services }}</a><a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a><span>Cejas</span><span>Pestañas</span></div>
+      <div><a href="{% url 'service_index' %}">{{ t.nav_services }}</a><a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a><span>{{ t.services_kicker }}</span><span>{{ t.guide_kicker }}</span></div>
       <div><a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a><span>© 2026 BRIMOON STUDIO</span></div>
     </div>
   </footer>
