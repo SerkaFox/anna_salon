@@ -120,7 +120,7 @@ ARTICLES = [
         "category": "Cejas",
         "summary": "Pequeños hábitos para conservar la forma, el brillo y la dirección del lifting de cejas.",
         "meta": "Consejos para cuidar las cejas después de un lifting: primeras horas, hidratación y mantenimiento profesional.",
-        "image": "Definición, depilación y lifting de cejas.png",
+        "image": "Brows.png",
         "sections": [
             ("Las primeras horas importan", "El resultado se estabiliza mejor cuando se evita humedad intensa, vapor y productos grasos durante el tiempo recomendado en cabina."),
             ("Peina con suavidad", "Un cepillado ligero ayuda a mantener la dirección sin forzar el pelo. La clave es ordenar, no arrastrar."),
@@ -133,7 +133,7 @@ ARTICLES = [
         "category": "Manicura",
         "summary": "Cuidado diario, aceite de cutícula y gestos sencillos para proteger el acabado.",
         "meta": "Consejos de manicura elegante y duradera: cuidado de manos, cutículas y mantenimiento entre citas.",
-        "image": "Manicura, extensiones y tratamientos.png",
+        "image": "Manicure.png",
         "sections": [
             ("Protege el acabado", "Usa guantes para tareas con agua o productos de limpieza. Es el gesto más simple y uno de los más eficaces."),
             ("Cuida la cutícula", "El aceite aplicado con constancia mejora el aspecto de la manicura y ayuda a que el contorno se vea más limpio."),
@@ -146,7 +146,7 @@ ARTICLES = [
         "category": "Piel",
         "summary": "Preparación y cuidados posteriores para que la piel se sienta más calmada.",
         "meta": "Depilación facial para piel sensible: recomendaciones antes y después para cuidar la piel.",
-        "image": "Depilación facial.png",
+        "image": "Skin.png",
         "sections": [
             ("Prepara la piel", "Evita exfoliaciones fuertes antes de la cita si sueles tener rojez o sensibilidad."),
             ("Menos es más", "Después del servicio, elige hidratación suave y evita activos intensos durante las primeras horas."),
@@ -159,7 +159,7 @@ ARTICLES = [
         "category": "Mirada",
         "summary": "Ideas para realzar la mirada manteniendo un acabado fino y sofisticado.",
         "meta": "Cómo combinar cejas y pestañas para una mirada natural, elegante y definida en BRIMOON Studio.",
-        "image": "Tinte, extensiones y lifting de pestañas..png",
+        "image": "Eyes.png",
         "sections": [
             ("Equilibrio antes que intensidad", "Una mirada elegante no siempre necesita más volumen. A veces basta con dirección, color y proporción."),
             ("Respeta tus facciones", "El diseño debe acompañar la forma natural del ojo y del rostro para que el resultado se vea propio."),
