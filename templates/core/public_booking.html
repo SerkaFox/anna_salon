@@ -52,6 +52,7 @@
           </label>
         </div>
       </div>
+      <div class="booking-date-strip" data-date-strip aria-label="{{ t.public_booking_date }}"></div>
 
       <div class="selected-slot-summary" data-selected-summary hidden>
         <div>
@@ -82,13 +83,14 @@
       <input type="hidden" name="zone" value="{{ booking_values.zone }}" data-zone-input>
 
       <div class="booking-details-section" data-details-section>
-      <div class="booking-form-grid">
-        <label class="lux-field">
+      <div class="booking-form-grid booking-details-grid">
+        <label class="lux-field lux-field-card">
           <span>{{ t.public_booking_name }}</span>
           <input class="lux-input" type="text" name="name" autocomplete="name" value="{{ booking_values.name }}" required>
+          <small class="field-help field-help-placeholder" aria-hidden="true">&nbsp;</small>
           <small class="form-error" data-error-for="name">{% if booking_errors.name %}{{ booking_errors.name.0 }}{% endif %}</small>
         </label>
-        <label class="lux-field">
+        <label class="lux-field lux-field-card">
           <span>{{ t.public_booking_password }}</span>
           <input class="lux-input" type="password" name="password" autocomplete="new-password" minlength="6" aria-describedby="public-booking-password-help" required>
           <small id="public-booking-password-help" class="field-help">{{ t.public_booking_password_help }}</small>
@@ -142,6 +144,7 @@
     const dateInput = form.querySelector('[data-date-input]');
     const rangeSelect = form.querySelector('[data-time-range]');
     const grid = form.querySelector('[data-slot-grid]');
+    const dateStrip = form.querySelector('[data-date-strip]');
     const status = form.querySelector('[data-slot-status]');
     const startInput = form.querySelector('[data-start-input]');
     const employeeInput = form.querySelector('[data-employee-input]');
@@ -155,6 +158,8 @@
     const editSlotButton = form.querySelector('[data-edit-slot]');
     const detailsSection = form.querySelector('[data-details-section]');
     let lastSlots = [];
+    let activeDateRequest = 0;
+    const currentLanguage = '{{ public_language|default:"es"|escapejs }}';
     const messages = {
       choose: '{{ t.public_booking_select_service_date|escapejs }}',
       loading: '{{ t.public_booking_loading|escapejs }}',
@@ -167,6 +172,51 @@
       timeRequired: '{{ t.public_booking_error_time|escapejs }}',
       submitting: '{{ t.public_booking_submitting|escapejs }}'
     };
+
+    function parseIsoDate(value) {
+      const parts = (value || '').split('-').map(Number);
+      if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+
+    function formatIsoDate(date) {
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return date.getFullYear() + '-' + month + '-' + day;
+    }
+
+    function addDays(value, days) {
+      const date = parseIsoDate(value);
+      if (!date) return value;
+      date.setDate(date.getDate() + days);
+      return formatIsoDate(date);
+    }
+
+    function renderDateStrip() {
+      if (!dateStrip) return;
+      const minDate = dateInput.min || dateInput.value;
+      const active = dateInput.value;
+      const formatterWeekday = new Intl.DateTimeFormat(currentLanguage, { weekday: 'short' });
+      const formatterMonth = new Intl.DateTimeFormat(currentLanguage, { month: 'short' });
+      dateStrip.innerHTML = '';
+      for (let index = 0; index < 14; index += 1) {
+        const value = addDays(minDate, index);
+        const date = parseIsoDate(value);
+        if (!date) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'date-pill';
+        if (value === active) button.classList.add('is-active');
+        button.dataset.date = value;
+        button.innerHTML = '<span>' + formatterWeekday.format(date) + '</span><strong>' + date.getDate() + '</strong><small>' + formatterMonth.format(date) + '</small>';
+        button.addEventListener('click', function () {
+          dateInput.value = value;
+          renderDateStrip();
+          loadSlots();
+        });
+        dateStrip.appendChild(button);
+      }
+    }
 
     function resetSlot() {
       startInput.value = '';
@@ -203,6 +253,12 @@
         });
       });
       return Array.from(map.values()).sort(function (a, b) { return a.name.localeCompare(b.name); });
+    }
+
+    function fetchSlotsForDate(service, date) {
+      const params = new URLSearchParams({ service: service, date: date });
+      return fetch(form.dataset.slotsUrl + '?' + params.toString(), { headers: { 'Accept': 'application/json' } })
+        .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); });
     }
 
     function selectSlot(slot, employee, button) {
@@ -251,27 +307,72 @@
     }
 
     function loadSlots() {
+      activeDateRequest += 1;
+      const requestId = activeDateRequest;
       const service = serviceSelect.value;
       const date = dateInput.value;
       grid.innerHTML = '';
       lastSlots = [];
       resetSlot();
+      renderDateStrip();
       if (!service || !date) {
         status.textContent = messages.choose;
         return;
       }
       status.textContent = messages.loading;
-      const params = new URLSearchParams({ service: service, date: date });
-      fetch(form.dataset.slotsUrl + '?' + params.toString(), { headers: { 'Accept': 'application/json' } })
-        .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+      fetchSlotsForDate(service, date)
         .then(function (result) {
+          if (activeDateRequest !== requestId) return;
           if (!result.ok || !result.data.ok) throw new Error(result.data.message || messages.error);
           lastSlots = result.data.slots || [];
           renderSlots(lastSlots);
         })
         .catch(function (error) {
+          if (activeDateRequest !== requestId) return;
           status.textContent = error.message || messages.error;
         });
+    }
+
+    function findFirstAvailableDate() {
+      const service = serviceSelect.value;
+      if (!service) {
+        loadSlots();
+        return;
+      }
+      const requestId = activeDateRequest + 1;
+      activeDateRequest = requestId;
+      grid.innerHTML = '';
+      lastSlots = [];
+      resetSlot();
+      renderDateStrip();
+      status.textContent = messages.loading;
+      let date = dateInput.min || dateInput.value;
+      const attempts = [];
+      for (let index = 0; index < 45; index += 1) attempts.push(addDays(date, index));
+      attempts.reduce(function (chain, candidateDate) {
+        return chain.then(function (found) {
+          if (found || activeDateRequest !== requestId) return found;
+          return fetchSlotsForDate(service, candidateDate).then(function (result) {
+            if (!result.ok || !result.data.ok) return false;
+            const slots = result.data.slots || [];
+            if (!slots.length) return false;
+            dateInput.value = candidateDate;
+            lastSlots = slots;
+            renderDateStrip();
+            renderSlots(lastSlots);
+            return true;
+          }).catch(function () { return false; });
+        });
+      }, Promise.resolve(false)).then(function (found) {
+        if (activeDateRequest !== requestId) return;
+        if (!found) {
+          lastSlots = [];
+          grid.innerHTML = '';
+          resetSlot();
+          renderDateStrip();
+          status.textContent = messages.empty;
+        }
+      });
     }
 
 
@@ -352,7 +453,7 @@
     contactToggle.addEventListener('change', function () {
       contactFields.hidden = !contactToggle.checked;
     });
-    serviceSelect.addEventListener('change', loadSlots);
+    serviceSelect.addEventListener('change', findFirstAvailableDate);
     dateInput.addEventListener('change', loadSlots);
     rangeSelect.addEventListener('change', function () { renderSlots(lastSlots); });
     refreshButton.addEventListener('click', loadSlots);
@@ -361,7 +462,12 @@
       selectedSummary.hidden = true;
       form.querySelector('[data-slot-picker]').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-    loadSlots();
+    renderDateStrip();
+    if (serviceSelect.value) {
+      findFirstAvailableDate();
+    } else {
+      loadSlots();
+    }
   });
 </script>
 {% endblock %}
