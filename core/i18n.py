@@ -210,6 +210,13 @@ def detect_public_language(request):
     explicit = request.session.get(PUBLIC_LANGUAGE_SESSION_KEY) or request.COOKIES.get(PUBLIC_LANGUAGE_SESSION_KEY)
     if explicit:
         return normalize_public_language(explicit)
+    try:
+        from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
+    except ImportError:
+        CLIENT_LANGUAGE_SESSION_KEY = "client_language"
+    shared = request.session.get(CLIENT_LANGUAGE_SESSION_KEY) or request.COOKIES.get(CLIENT_LANGUAGE_SESSION_KEY)
+    if shared:
+        return normalize_public_language(shared)
     for item in (request.META.get("HTTP_ACCEPT_LANGUAGE") or "").split(","):
         lang = normalize_public_language(item)
         if lang != DEFAULT_PUBLIC_LANGUAGE or item.lower().startswith(DEFAULT_PUBLIC_LANGUAGE):

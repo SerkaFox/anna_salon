@@ -1548,6 +1548,22 @@
   min-height: 42px;
   border-radius: 999px;
   padding: 0 34px 0 14px;
+  color: #f0d091 !important;
+  background: rgba(4, 11, 17, 0.86) !important;
+  border-color: rgba(240, 208, 145, 0.42) !important;
+  color-scheme: dark;
+}
+.client-lux-body select option {
+  color: #f7efe3;
+  background: #071018;
+}
+.client-lux-body input[type="date"] {
+  color-scheme: dark;
+}
+.client-lux-body input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.95;
+  filter: invert(86%) sepia(28%) saturate(603%) hue-rotate(352deg) brightness(102%) contrast(92%);
 }
 .client-lux-body .dashboard-badge {
   color: #f0d091;

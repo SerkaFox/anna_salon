@@ -25,6 +25,7 @@ from .models import Client, ClientRewardRule
 from salon.models import Zone
 from services_app.models import Service
 from .rewards import client_reward_progress
+from core.i18n import PUBLIC_LANGUAGE_SESSION_KEY
 from .translation import CLIENT_LANGUAGE_SESSION_KEY, normalize_client_language
 
 
@@ -47,8 +48,10 @@ def set_client_language(request):
     if request.method == "POST":
         language = normalize_client_language(request.POST.get("language"))
         request.session[CLIENT_LANGUAGE_SESSION_KEY] = language
+        request.session[PUBLIC_LANGUAGE_SESSION_KEY] = language
         response = redirect(request.POST.get("next") or reverse("clients:portal"))
         response.set_cookie(CLIENT_LANGUAGE_SESSION_KEY, language, max_age=60 * 60 * 24 * 365, samesite="Lax", secure=True)
+        response.set_cookie(PUBLIC_LANGUAGE_SESSION_KEY, language, max_age=60 * 60 * 24 * 365, samesite="Lax", secure=True)
         return response
     return redirect("clients:portal")
 

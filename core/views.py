@@ -17,6 +17,7 @@ from bookings.forms import BookingForm
 from bookings.models import Booking
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from clients.models import Client
+from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
 from employees.models import Employee
 from salon.models import Zone
 from services_app.models import Service
@@ -540,7 +541,9 @@ def public_booking(request):
         return _public_booking_error_response(request, values, exc.errors)
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-    request.session[PUBLIC_LANGUAGE_SESSION_KEY] = detect_public_language(request)
+    language = detect_public_language(request)
+    request.session[PUBLIC_LANGUAGE_SESSION_KEY] = language
+    request.session[CLIENT_LANGUAGE_SESSION_KEY] = language
     redirect_url = reverse("clients:portal")
     if _public_wants_json(request):
         return JsonResponse({"ok": True, "redirect": redirect_url, "username": user.username})
@@ -551,8 +554,10 @@ def public_booking(request):
 def set_public_language(request):
     language = normalize_public_language(request.POST.get("language"))
     request.session[PUBLIC_LANGUAGE_SESSION_KEY] = language
+    request.session[CLIENT_LANGUAGE_SESSION_KEY] = language
     response = redirect(request.POST.get("next") or reverse("home"))
     response.set_cookie(PUBLIC_LANGUAGE_SESSION_KEY, language, max_age=60 * 60 * 24 * 365, samesite="Lax", secure=True)
+    response.set_cookie(CLIENT_LANGUAGE_SESSION_KEY, language, max_age=60 * 60 * 24 * 365, samesite="Lax", secure=True)
     return response
 
 

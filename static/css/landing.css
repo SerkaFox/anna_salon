@@ -713,13 +713,18 @@ img { max-width: 100%; }
   padding: 0 34px 0 14px;
   border: 1px solid rgba(240, 208, 145, 0.34);
   border-radius: 999px;
-  color: var(--gold-light);
-  background: rgba(6, 16, 24, 0.42);
+  color: var(--gold-light) !important;
+  background: rgba(4, 11, 17, 0.86) !important;
   font: inherit;
   font-size: 0.9rem;
   font-weight: 800;
   cursor: pointer;
   backdrop-filter: blur(12px);
+  color-scheme: dark;
+}
+.lux-language-switcher select option {
+  color: #f7efe3;
+  background: #071018;
 }
 .lux-language-switcher select:focus-visible {
   outline: 3px solid rgba(240, 208, 145, 0.45);
@@ -811,15 +816,28 @@ img { max-width: 100%; }
   min-height: 52px;
   border: 1px solid rgba(240,208,145,0.26);
   border-radius: 16px;
-  color: var(--text);
-  background: rgba(4, 11, 17, 0.72);
+  color: var(--text) !important;
+  background: rgba(4, 11, 17, 0.78);
   padding: 0 15px;
   font: inherit;
   outline: none;
   transition: border-color .22s ease, box-shadow .22s ease, background .22s ease;
+  color-scheme: dark;
 }
 .lux-input:focus { border-color: rgba(240,208,145,0.72); box-shadow: 0 0 0 4px rgba(214,167,92,0.16); background: rgba(4, 11, 17, 0.88); }
-.lux-input option { color: #09121a; }
+select.lux-input {
+  background-color: rgba(4, 11, 17, 0.86);
+  color: var(--text) !important;
+}
+.lux-input option {
+  color: #f7efe3;
+  background: #071018;
+}
+input[type="date"].lux-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.95;
+  filter: invert(86%) sepia(28%) saturate(603%) hue-rotate(352deg) brightness(102%) contrast(92%);
+}
 .slot-picker {
   margin: 22px 0;
   padding: 20px;

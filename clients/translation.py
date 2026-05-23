@@ -51,6 +51,13 @@ def detect_client_language(request):
     explicit = request.session.get(CLIENT_LANGUAGE_SESSION_KEY) or request.COOKIES.get(CLIENT_LANGUAGE_SESSION_KEY)
     if explicit:
         return normalize_client_language(explicit)
+    try:
+        from core.i18n import PUBLIC_LANGUAGE_SESSION_KEY
+    except ImportError:
+        PUBLIC_LANGUAGE_SESSION_KEY = "public_language"
+    shared = request.session.get(PUBLIC_LANGUAGE_SESSION_KEY) or request.COOKIES.get(PUBLIC_LANGUAGE_SESSION_KEY)
+    if shared:
+        return normalize_client_language(shared)
     for item in (request.META.get("HTTP_ACCEPT_LANGUAGE") or "").split(","):
         code = item.split(";", 1)[0].strip()
         normalized = normalize_client_language(code)
