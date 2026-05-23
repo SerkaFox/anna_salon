@@ -9,10 +9,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-01">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-02">
 </head>
-<body class="landing-body">
-  <header class="lux-hero" id="inicio" style="--hero-image: url('{% static 'Fon2.png' %}');">
+<body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
+  <header class="lux-hero" id="inicio">
     <nav class="lux-nav" aria-label="Navegación principal">
       <a class="lux-brand" href="#inicio" aria-label="BRIMOON Studio inicio">
         <img src="{% static 'logo.png' %}" alt="BRIMOON Studio" class="lux-brand__logo">
@@ -78,7 +78,7 @@
             <img src="{% static 'Pedicuras y tratamientos Pies.png' %}" alt="Pedicuras y tratamientos" loading="lazy">
             <div><h3>Pedicuras y tratamientos</h3><p>Cuidado completo de pies, pedicura estética y tratamientos para bienestar y belleza.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
           </article>
-          <article class="service-card service-card--wide">
+          <article class="service-card">
             <img src="{% static 'Tinte, extensiones y lifting de pestañas..png' %}" alt="Tinte, extensiones y lifting de pestañas" loading="lazy">
             <div><h3>Tinte, extensiones y lifting de pestañas</h3><p>Color, volumen y curvatura para una mirada más intensa y definida.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
           </article>
