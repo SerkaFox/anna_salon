@@ -1,21 +1,37 @@
 {% extends "layout.html" %}
 {% load static %}
 
-{% block title %}Acceso | BRIMOON Studio{% endblock %}
+{% block html_lang %}{{ public_language|default:"es" }}{% endblock %}
+{% block title %}{{ t.login_title|default:"Acceso" }} | BRIMOON Studio{% endblock %}
+{% block body_class %}client-lux-body login-lux-body{% endblock %}
 
 {% block body %}
-<div class="login-shell">
-  <div class="login-card">
+<div class="login-shell login-lux-shell">
+  <div class="login-card login-lux-card">
     <div class="login-brand">
       <div class="logo"><img src="{% static 'logo.png' %}" alt="BRIMOON Studio"></div>
       <div>
         <strong>BRIMOON Studio</strong>
-        <span>Panel interno</span>
+        <span>{{ t.login_panel|default:"Área privada" }}</span>
       </div>
     </div>
 
-    <h1>Iniciar sesión</h1>
-    <p class="login-text">Accede al panel de gestión del salón.</p>
+    <div class="login-lux-topline">
+      <a class="btn btn-light btn-small" href="{% url 'home' %}">{{ t.back_to_site|default:"Volver al sitio" }}</a>
+      <form method="post" action="{% url 'set_public_language' %}" class="language-switcher login-language-switcher">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <label class="sr-only" for="login-language">Language</label>
+        <select id="login-language" name="language" class="input" onchange="this.form.submit()">
+          {% for code, label in public_languages %}
+            <option value="{{ code }}" {% if code == public_language %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    <h1>{{ t.login_title|default:"Iniciar sesión" }}</h1>
+    <p class="login-text">{{ t.login_subtitle|default:"Accede a tu cuenta de BRIMOON Studio." }}</p>
 
     <form method="post" class="login-form">
       {% csrf_token %}
@@ -29,16 +45,16 @@
       {% endif %}
 
       <div class="field">
-        <label for="{{ form.username.id_for_label }}">Usuario</label>
+        <label for="{{ form.username.id_for_label }}">{{ t.login_user|default:"Usuario" }}</label>
         {{ form.username }}
       </div>
 
       <div class="field">
-        <label for="{{ form.password.id_for_label }}">Contraseña</label>
+        <label for="{{ form.password.id_for_label }}">{{ t.login_password|default:"Contraseña" }}</label>
         {{ form.password }}
       </div>
 
-      <button type="submit" class="btn login-btn">Entrar</button>
+      <button type="submit" class="btn login-btn">{{ t.login_submit|default:"Entrar" }}</button>
     </form>
   </div>
 </div>

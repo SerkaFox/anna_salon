@@ -52,6 +52,10 @@ PUBLIC_TRANSLATIONS = {
     },
 }
 
+PUBLIC_TRANSLATIONS["es"].update({'login_title': 'Iniciar sesión', 'login_subtitle': 'Accede a tu cuenta de BRIMOON Studio.', 'login_panel': 'Área privada', 'login_user': 'Usuario', 'login_password': 'Contraseña', 'login_submit': 'Entrar', 'back_to_site': 'Volver al sitio'})
+PUBLIC_TRANSLATIONS["ru"].update({'login_title': 'Вход', 'login_subtitle': 'Войдите в свой аккаунт BRIMOON Studio.', 'login_panel': 'Личный кабинет', 'login_user': 'Логин', 'login_password': 'Пароль', 'login_submit': 'Войти', 'back_to_site': 'На сайт'})
+PUBLIC_TRANSLATIONS["en"].update({'login_title': 'Sign in', 'login_subtitle': 'Access your BRIMOON Studio account.', 'login_panel': 'Private area', 'login_user': 'Username', 'login_password': 'Password', 'login_submit': 'Sign in', 'back_to_site': 'Back to site'})
+
 PUBLIC_TRANSLATIONS["de"] = {**PUBLIC_TRANSLATIONS["en"], **{
     "site_title": "BRIMOON STUDIO | Premium-Beauty", "home_meta": "BRIMOON Studio in Bilbao: Premium-Beauty-Salon für Brauen, Wimpern, Maniküre, Pediküre und Gesichtsdepilation nach Termin.", "og_home_title": "BRIMOON STUDIO | Premium-Beauty in Bilbao", "og_home_description": "Schönheit, Pflege und Liebe zum Detail in jedem Blick.",
     "nav_services": "Services", "nav_tips": "Tipps", "nav_gallery": "Galerie", "nav_prices": "Preise", "nav_contact": "Kontakt", "nav_account": "Mein Konto", "nav_book": "Termin buchen",
@@ -80,6 +84,9 @@ PUBLIC_TRANSLATIONS["fr"] = {**PUBLIC_TRANSLATIONS["en"], **{
     "contact_kicker": "Contact", "contact_title": "Venez prendre soin de vous avec nous", "contact_address": "Adresse : emplacement exact communiqué à la réservation.", "contact_whatsapp": "WhatsApp : disponible sur demande.", "contact_hours": "Horaires : lundi à samedi sur rendez-vous.", "location": "Localisation", "footer_text": "Beauté, soin et détail.",
     "home": "Accueil", "service": "Service", "all_services_title": "Services de beauté chez BRIMOON Studio", "all_services_intro": "Découvrez nos soins pour le regard, les mains, les pieds et la peau du visage.", "premium_services": "Services premium", "tips_cta_kicker": "Conseil Brimoon", "tips_cta_title": "Prenez soin du résultat à la maison", "tips_cta_text": "Lisez nos conseils pour garder sourcils, cils, ongles et peau plus beaux entre les visites.", "see_tips": "Voir les conseils", "what_includes": "Ce que comprend ce soin", "before_after_tips": "Conseils avant et après", "personal_result": "Vous voulez un résultat adapté à vous ?", "also_interest": "Cela peut aussi vous intéresser", "more_services": "Plus de services Brimoon", "tips_page_title": "Conseils beauté, soins et petits rituels", "tips_page_intro": "Un espace pour répondre aux questions fréquentes, mieux entretenir les résultats et choisir chaque service avec plus de confiance.", "useful_portal": "Portail utile", "seo_note_title": "Guides pensés pour vos vraies questions", "seo_note_text": "Le portail grandira avec des recommandations sur la préparation, l'entretien et le choix des services.", "keep_reading": "Continuer à lire", "more_tips": "Plus de conseils utiles", "personal_advice": "Réservez votre rendez-vous et recevez une recommandation personnalisée.",
 }}
+
+PUBLIC_TRANSLATIONS["de"].update({'login_title': 'Anmelden', 'login_subtitle': 'Melden Sie sich in Ihrem BRIMOON Studio Konto an.', 'login_panel': 'Privater Bereich', 'login_user': 'Benutzername', 'login_password': 'Passwort', 'login_submit': 'Anmelden', 'back_to_site': 'Zur Website'})
+PUBLIC_TRANSLATIONS["fr"].update({'login_title': 'Connexion', 'login_subtitle': 'Accédez à votre compte BRIMOON Studio.', 'login_panel': 'Espace privé', 'login_user': 'Utilisateur', 'login_password': 'Mot de passe', 'login_submit': 'Entrer', 'back_to_site': 'Retour au site'})
 
 SERVICE_TRANSLATIONS = {
     "cejas-definicion-depilacion-lifting": {

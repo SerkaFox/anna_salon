@@ -4,7 +4,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
+
+from core.i18n import PUBLIC_LANGUAGES, detect_public_language, public_texts
 
 from accounts.permissions import admin_required, get_client_profile
 from auditlog.services import log_event
@@ -25,6 +27,22 @@ class UserLoginView(LoginView):
     template_name = "accounts/login.html"
     authentication_form = LoginForm
     redirect_authenticated_user = True
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        language = detect_public_language(self.request)
+        t = public_texts(language)
+        form = context.get("form")
+        if form:
+            form.fields["username"].widget.attrs["placeholder"] = t["login_user"]
+            form.fields["password"].widget.attrs["placeholder"] = t["login_password"]
+        context.update({
+            "public_language": language,
+            "public_languages": PUBLIC_LANGUAGES,
+            "t": t,
+            "canonical_url": f"https://anna.listoya.es{reverse('accounts:login')}",
+        })
+        return context
 
     def get_success_url(self):
         if getattr(self.request.user, "role", None) == self.request.user.ROLE_CLIENT:

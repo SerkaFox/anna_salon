@@ -1581,3 +1581,51 @@
   .client-lux-panel { width: calc(100% - 24px); padding-bottom: 46px; }
   .client-lux-body .panel-card { padding: 18px; }
 }
+
+
+.login-lux-body .login-shell {
+  position: relative;
+  min-height: 100vh;
+  padding: 28px;
+}
+.login-lux-card {
+  max-width: 500px;
+  border-radius: 30px;
+  border-color: rgba(240, 208, 145, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(214, 167, 92, 0.18), transparent 34%),
+    linear-gradient(145deg, rgba(255,255,255,0.115), rgba(255,255,255,0.035));
+  box-shadow: 0 34px 96px rgba(0,0,0,0.56), 0 18px 54px rgba(214,167,92,0.16);
+  animation: heroReveal 0.95s cubic-bezier(0.2, 0.78, 0.26, 1) both;
+}
+.login-lux-card h1 {
+  margin: 20px 0 10px;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(2.3rem, 4vw, 3.8rem);
+  line-height: 1;
+  color: #f7efe3;
+  text-shadow: 0 12px 42px rgba(0,0,0,0.5), 0 0 30px rgba(214,167,92,0.16);
+}
+.login-lux-card .login-text { color: #c6baaa; }
+.login-lux-card .login-brand span { color: #f0d091; }
+.login-lux-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+.login-language-switcher { margin: 0; }
+.login-language-switcher select {
+  min-height: 38px;
+  max-width: 170px;
+  border-radius: 999px;
+  padding: 0 34px 0 14px;
+}
+@media (max-width: 560px) {
+  .login-lux-body .login-shell { padding: 16px; }
+  .login-lux-topline { align-items: stretch; flex-direction: column; }
+  .login-language-switcher,
+  .login-language-switcher select,
+  .login-lux-topline .btn { width: 100%; max-width: none; }
+}

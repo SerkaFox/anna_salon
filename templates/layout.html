@@ -1,11 +1,11 @@
 {% load static %}
 <!doctype html>
-<html lang="es">
+<html lang="{% block html_lang %}es{% endblock %}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}BRIMOON Studio{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/site.css' %}?v=20260523-04">
+  <link rel="stylesheet" href="{% static 'css/site.css' %}?v=20260523-05">
 </head>
 <body class="app-body {% block body_class %}{% endblock %}">
   {% block body %}{% endblock %}

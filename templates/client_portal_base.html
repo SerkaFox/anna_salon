@@ -12,6 +12,7 @@
       <span>{% ct "portal_client" %}</span>
     </div>
   </div>
+  <a class="btn btn-light btn-small" href="{% url 'home' %}">{% ct "site_home" %}</a>
   <a class="btn btn-light btn-small" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
 </div>
 
@@ -34,6 +35,7 @@
           {% endfor %}
         </select>
       </form>
+      <a class="btn btn-light" href="{% url 'home' %}">{% ct "site_home" %}</a>
       <a class="btn btn-light" href="{% url 'clients:portal' %}">{% ct "my_portal" %}</a>
       <a class="btn btn-light" href="{% url 'accounts:profile' %}">{% ct "my_data" %}</a>
       <a class="btn btn-light" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
