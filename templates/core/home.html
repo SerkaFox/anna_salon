@@ -5,11 +5,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BRIMOON STUDIO | Belleza premium</title>
-  <meta name="description" content="BRIMOON Studio: especialistas en cejas, pestañas, manicura, pedicura y depilación facial.">
+  <meta name="description" content="BRIMOON Studio en Bilbao: salón de belleza premium especializado en cejas, pestañas, manicura, pedicura y depilación facial con cita previa.">
+  <link rel="canonical" href="{{ canonical_url }}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="BRIMOON Studio">
+  <meta property="og:title" content="BRIMOON STUDIO | Belleza premium en Bilbao">
+  <meta property="og:description" content="Belleza, cuidado y detalle en cada mirada. Cejas, pestañas, manicura, pedicura y depilación facial.">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta property="og:image" content="https://anna.listoya.es{% static 'Fon2.png' %}">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-02">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-03">
+  {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
   <header class="lux-hero" id="inicio">
@@ -22,7 +31,8 @@
         <span></span><span></span><span></span>
       </button>
       <div class="lux-nav__links" data-menu-panel>
-        <a href="#servicios">Servicios</a>
+        <a href="{% url 'service_index' %}">Servicios</a>
+        <a href="{% url 'advice_index' %}">Consejos</a>
         <a href="#galeria">Galería</a>
         <a href="#precios">Precios</a>
         <a href="#contacto">Contacto</a>
@@ -64,23 +74,23 @@
         <div class="services-grid">
           <article class="service-card">
             <img src="{% static 'Definición, depilación y lifting de cejas.png' %}" alt="Definición, depilación y lifting de cejas" loading="lazy">
-            <div><h3>Definición, depilación y lifting de cejas</h3><p>Diseño de cejas, depilación precisa y lifting para realzar la expresión natural de tu mirada.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
+            <div><h3>Definición, depilación y lifting de cejas</h3><p>Diseño de cejas, depilación precisa y lifting para realzar la expresión natural de tu mirada.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'cejas-definicion-depilacion-lifting' %}">Ver detalle</a></div>
           </article>
           <article class="service-card">
             <img src="{% static 'Depilación facial.png' %}" alt="Depilación facial" loading="lazy">
-            <div><h3>Depilación facial</h3><p>Tratamientos delicados para una piel más limpia, suave y cuidada.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
+            <div><h3>Depilación facial</h3><p>Tratamientos delicados para una piel más limpia, suave y cuidada.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'depilacion-facial' %}">Ver detalle</a></div>
           </article>
           <article class="service-card">
             <img src="{% static 'Manicura, extensiones y tratamientos.png' %}" alt="Manicura, extensiones y tratamientos" loading="lazy">
-            <div><h3>Manicura, extensiones y tratamientos</h3><p>Manicuras elegantes, extensiones y tratamientos para unas manos impecables.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
+            <div><h3>Manicura, extensiones y tratamientos</h3><p>Manicuras elegantes, extensiones y tratamientos para unas manos impecables.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'manicura-extensiones-tratamientos' %}">Ver detalle</a></div>
           </article>
           <article class="service-card">
             <img src="{% static 'Pedicuras y tratamientos Pies.png' %}" alt="Pedicuras y tratamientos" loading="lazy">
-            <div><h3>Pedicuras y tratamientos</h3><p>Cuidado completo de pies, pedicura estética y tratamientos para bienestar y belleza.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
+            <div><h3>Pedicuras y tratamientos</h3><p>Cuidado completo de pies, pedicura estética y tratamientos para bienestar y belleza.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'pedicuras-tratamientos-pies' %}">Ver detalle</a></div>
           </article>
           <article class="service-card">
             <img src="{% static 'Tinte, extensiones y lifting de pestañas..png' %}" alt="Tinte, extensiones y lifting de pestañas" loading="lazy">
-            <div><h3>Tinte, extensiones y lifting de pestañas</h3><p>Color, volumen y curvatura para una mirada más intensa y definida.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
+            <div><h3>Tinte, extensiones y lifting de pestañas</h3><p>Color, volumen y curvatura para una mirada más intensa y definida.</p><a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' 'pestanas-tinte-extensiones-lifting' %}">Ver detalle</a></div>
           </article>
         </div>
       </div>
@@ -99,6 +109,26 @@
           <img src="{% static 'Definición, depilación y lifting de cejas.png' %}" alt="Tratamiento de cejas Brimoon" loading="lazy">
           <img src="{% static 'Tinte, extensiones y lifting de pestañas..png' %}" alt="Tratamiento de pestañas Brimoon" loading="lazy">
         </div>
+      </div>
+    </section>
+
+
+    <section class="lux-section seo-section" id="consejos">
+      <div class="lux-container">
+        <div class="lux-section-head">
+          <span class="lux-kicker">Guía Brimoon</span>
+          <h2>Consejos y cuidados para mantener tu resultado</h2>
+          <p>Un portal útil con ideas sobre cejas, pestañas, manicura y piel para resolver dudas antes y después de tu cita.</p>
+        </div>
+        <div class="article-card-grid">
+          {% for article in articles %}
+            <article class="article-card">
+              <img src="{% static article.image %}" alt="{{ article.title }}" loading="lazy">
+              <div><span>{{ article.category }}</span><h3>{{ article.title }}</h3><p>{{ article.summary }}</p><a class="btn-lux btn-lux-ghost" href="{% url 'article_detail' article.slug %}">Leer consejo</a></div>
+            </article>
+          {% endfor %}
+        </div>
+        <div class="lux-actions centered"><a class="btn-lux btn-lux-outline" href="{% url 'advice_index' %}">Ver todos los consejos</a></div>
       </div>
     </section>
 
@@ -140,7 +170,7 @@
   <footer class="lux-footer">
     <div class="lux-container footer-grid">
       <div><strong>BRIMOON STUDIO</strong><p>Belleza, cuidado y detalle.</p></div>
-      <div><span>Cejas</span><span>Pestañas</span><span>Manicura</span><span>Pedicura</span></div>
+      <div><a href="{% url 'service_index' %}">Servicios</a><a href="{% url 'advice_index' %}">Consejos</a><span>Cejas</span><span>Pestañas</span></div>
       <div><a href="{% url 'accounts:login' %}">Mi cuenta</a><span>© 2026 BRIMOON STUDIO</span></div>
     </div>
   </footer>

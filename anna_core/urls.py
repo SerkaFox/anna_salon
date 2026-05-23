@@ -1,11 +1,17 @@
 from django.contrib import admin
 from django.urls import include, path
 
-from core.views import home
+from core import views as core_views
 
 
 urlpatterns = [
-    path("", home, name="home"),
+    path("", core_views.home, name="home"),
+    path("servicios/", core_views.service_index, name="service_index"),
+    path("servicios/<slug:slug>/", core_views.service_detail, name="service_detail"),
+    path("consejos/", core_views.advice_index, name="advice_index"),
+    path("consejos/<slug:slug>/", core_views.article_detail, name="article_detail"),
+    path("robots.txt", core_views.robots_txt, name="robots_txt"),
+    path("sitemap.xml", core_views.sitemap_xml, name="sitemap_xml"),
     path("", include("accounts.urls")),
     path("api/v1/", include("mobile_api.urls")),
     path("panel/", include("dashboard.urls")),

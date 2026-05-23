@@ -1,0 +1,35 @@
+{% extends "core/public_base.html" %}
+{% load static %}
+{% block title %}{{ service.title }} | BRIMOON Studio{% endblock %}
+{% block meta_description %}{{ service.meta }}{% endblock %}
+{% block og_title %}{{ service.title }} | BRIMOON Studio{% endblock %}
+{% block og_description %}{{ service.short }}{% endblock %}
+{% block page_hero %}
+<section class="content-hero content-hero--split lux-container">
+  <div>
+    <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{% url 'home' %}">Inicio</a><a href="{% url 'service_index' %}">Servicios</a><span>{{ service.title }}</span></nav>
+    <span class="lux-kicker">Servicio</span>
+    <h1>{{ service.title }}</h1>
+    <p>{{ service.intro }}</p>
+    <div class="lux-actions"><a class="btn-lux btn-lux-primary" href="{% url 'home' %}#reserva">Reservar cita</a><a class="btn-lux btn-lux-outline" href="{% url 'advice_index' %}">Consejos</a></div>
+  </div>
+  <img src="{% static service.image %}" alt="{{ service.title }}" loading="eager">
+</section>
+{% endblock %}
+{% block content %}
+<section class="lux-section article-layout">
+  <article class="lux-container article-body">
+    <h2>Qué incluye este cuidado</h2>
+    <ul class="lux-list">{% for benefit in service.benefits %}<li>{{ benefit }}</li>{% endfor %}</ul>
+    <h2>Consejos antes y después</h2>
+    <ul class="lux-list">{% for tip in service.tips %}<li>{{ tip }}</li>{% endfor %}</ul>
+    <div class="inline-cta"><strong>¿Quieres un resultado adaptado a ti?</strong><a class="btn-lux btn-lux-primary" href="{% url 'home' %}#reserva">Reservar cita</a></div>
+  </article>
+</section>
+<section class="lux-section seo-section">
+  <div class="lux-container">
+    <div class="lux-section-head"><span class="lux-kicker">También puede interesarte</span><h2>Más servicios Brimoon</h2></div>
+    <div class="mini-card-grid">{% for item in related_services %}<a class="mini-card" href="{% url 'service_detail' item.slug %}"><strong>{{ item.title }}</strong><span>{{ item.short }}</span></a>{% endfor %}</div>
+  </div>
+</section>
+{% endblock %}

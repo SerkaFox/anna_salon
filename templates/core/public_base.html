@@ -1,0 +1,72 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}BRIMOON STUDIO | Belleza premium{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}BRIMOON Studio: especialistas en cejas, pestañas, manicura, pedicura y depilación facial.{% endblock %}">
+  <link rel="canonical" href="{{ canonical_url }}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="BRIMOON Studio">
+  <meta property="og:title" content="{% block og_title %}BRIMOON STUDIO{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Belleza, cuidado y detalle en cada mirada.{% endblock %}">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta property="og:image" content="https://anna.listoya.es{% static 'Fon2.png' %}">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-03">
+  {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
+</head>
+<body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
+  <header class="lux-page-header">
+    <nav class="lux-nav" aria-label="Navegación principal">
+      <a class="lux-brand" href="{% url 'home' %}" aria-label="BRIMOON Studio inicio">
+        <img src="{% static 'logo.png' %}" alt="BRIMOON Studio" class="lux-brand__logo">
+        <span>BRIMOON STUDIO</span>
+      </a>
+      <button class="lux-menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false" data-menu-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <div class="lux-nav__links" data-menu-panel>
+        <a href="{% url 'service_index' %}">Servicios</a>
+        <a href="{% url 'advice_index' %}">Consejos</a>
+        <a href="{% url 'home' %}#galeria">Galería</a>
+        <a href="{% url 'home' %}#contacto">Contacto</a>
+        <a href="{% url 'accounts:login' %}">Mi cuenta</a>
+        <a class="btn-lux btn-lux-primary btn-lux-small" href="{% url 'home' %}#reserva">Reservar cita</a>
+      </div>
+    </nav>
+    {% block page_hero %}{% endblock %}
+  </header>
+
+  <main>{% block content %}{% endblock %}</main>
+
+  <footer class="lux-footer">
+    <div class="lux-container footer-grid">
+      <div><strong>BRIMOON STUDIO</strong><p>Belleza, cuidado y detalle.</p></div>
+      <div><a href="{% url 'service_index' %}">Servicios</a><a href="{% url 'advice_index' %}">Consejos</a><span>Cejas</span><span>Pestañas</span></div>
+      <div><a href="{% url 'accounts:login' %}">Mi cuenta</a><span>© 2026 BRIMOON STUDIO</span></div>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const toggle = document.querySelector('[data-menu-toggle]');
+      const panel = document.querySelector('[data-menu-panel]');
+      if (!toggle || !panel) return;
+      toggle.addEventListener('click', function () {
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        panel.classList.toggle('is-open', !expanded);
+      });
+      panel.querySelectorAll('a').forEach((link) => link.addEventListener('click', function () {
+        toggle.setAttribute('aria-expanded', 'false');
+        panel.classList.remove('is-open');
+      }));
+    });
+  </script>
+</body>
+</html>

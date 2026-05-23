@@ -1,0 +1,36 @@
+{% extends "core/public_base.html" %}
+{% load static %}
+{% block title %}Servicios de belleza en Bilbao | BRIMOON Studio{% endblock %}
+{% block meta_description %}{{ meta_description }}{% endblock %}
+{% block og_title %}Servicios de belleza | BRIMOON Studio{% endblock %}
+{% block og_description %}Cejas, pestañas, manicura, pedicura y depilación facial con estética premium.{% endblock %}
+{% block page_hero %}
+<section class="content-hero lux-container">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{% url 'home' %}">Inicio</a><span>Servicios</span></nav>
+  <span class="lux-kicker">Servicios premium</span>
+  <h1>Servicios de belleza en BRIMOON Studio</h1>
+  <p>Explora nuestras áreas de cuidado: mirada, manos, pies y piel facial. Cada servicio está pensado para un resultado elegante, preciso y natural.</p>
+</section>
+{% endblock %}
+{% block content %}
+<section class="lux-section seo-section">
+  <div class="lux-container services-grid seo-card-grid">
+    {% for service in services %}
+      <article class="service-card portal-card">
+        <img src="{% static service.image %}" alt="{{ service.title }}" loading="lazy">
+        <div>
+          <h2>{{ service.title }}</h2>
+          <p>{{ service.short }}</p>
+          <a class="btn-lux btn-lux-ghost" href="{% url 'service_detail' service.slug %}">Ver guía del servicio</a>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+</section>
+<section class="lux-section">
+  <div class="lux-container cta-card">
+    <div><span class="lux-kicker">Consejo Brimoon</span><h2>Cuida el resultado también en casa</h2><p>Lee nuestros consejos para mantener cejas, pestañas, uñas y piel con mejor aspecto entre citas.</p></div>
+    <div class="lux-actions"><a class="btn-lux btn-lux-outline" href="{% url 'advice_index' %}">Ver consejos</a></div>
+  </div>
+</section>
+{% endblock %}
