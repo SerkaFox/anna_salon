@@ -21,22 +21,28 @@
       <div class="field">
         <label for="{{ form.username.id_for_label }}">{% ct "username" %}</label>
         {{ form.username }}
+        <p class="muted-text">{% ct "username_help" %}</p>
+        {% for error in form.username.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
       </div>
       <div class="field">
         <label for="{{ form.first_name.id_for_label }}">{% ct "first_name" %}</label>
         {{ form.first_name }}
+        {% for error in form.first_name.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
       </div>
       <div class="field">
         <label for="{{ form.last_name.id_for_label }}">{% ct "last_name" %}</label>
         {{ form.last_name }}
+        {% for error in form.last_name.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
       </div>
       <div class="field">
         <label for="{{ form.email.id_for_label }}">{% ct "email" %}</label>
         {{ form.email }}
+        {% for error in form.email.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
       </div>
       <div class="field">
         <label for="{{ form.phone.id_for_label }}">{% ct "phone" %}</label>
         {{ form.phone }}
+        {% for error in form.phone.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
       </div>
     </div>
     <div class="form-actions">

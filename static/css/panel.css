@@ -1629,3 +1629,34 @@
   .login-language-switcher select,
   .login-lux-topline .btn { width: 100%; max-width: none; }
 }
+
+
+.client-login-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid rgba(240, 208, 145, 0.24);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(214, 167, 92, 0.12), rgba(7, 61, 46, 0.18));
+}
+.client-login-summary span {
+  display: block;
+  color: var(--muted-text, #b8ad9e);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.client-login-summary strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text, #f7efe3);
+  font-size: 1.08rem;
+}
+.client-login-summary p { margin: 5px 0 0; }
+@media (max-width: 620px) {
+  .client-login-summary { align-items: stretch; flex-direction: column; }
+}

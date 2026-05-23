@@ -804,6 +804,8 @@ img { max-width: 100%; }
 .lux-field span { font-size: 0.88rem; color: var(--gold-light); }
 .lux-field small,
 .form-error { color: #ffd3c4; font-size: 0.85rem; }
+.field-help { color: rgba(247,239,227,0.62) !important; font-weight: 600; line-height: 1.45; }
+.lux-input.is-invalid { border-color: rgba(255, 211, 196, 0.72); box-shadow: 0 0 0 4px rgba(255, 120, 92, 0.16); }
 .lux-input {
   width: 100%;
   min-height: 52px;

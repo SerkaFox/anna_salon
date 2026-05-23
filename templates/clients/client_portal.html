@@ -23,6 +23,14 @@
           {% endif %}
         </div>
       </div>
+      <div class="client-login-summary">
+        <div>
+          <span>{% ct "login_for_access" %}</span>
+          <strong>{{ request.user.username }}</strong>
+          <p class="muted-text">{% ct "username_help" %}</p>
+        </div>
+        <a class="btn btn-light btn-small" href="{% url 'accounts:profile' %}">{% ct "edit_login" %}</a>
+      </div>
       <form method="post" enctype="multipart/form-data" class="entity-form">
         {% csrf_token %}
         <input type="hidden" name="action" value="avatar">

@@ -33,6 +33,13 @@ CLIENT_TRANSLATIONS = {
 }
 
 
+CLIENT_TRANSLATIONS["es"].update({"login_for_access": "Login de acceso", "edit_login": "Cambiar login", "username_help": "Este usuario se usa para entrar en tu cuenta."})
+CLIENT_TRANSLATIONS["ru"].update({"login_for_access": "Логин для входа", "edit_login": "Изменить логин", "username_help": "Этот логин используется для входа в личный кабинет."})
+CLIENT_TRANSLATIONS["en"].update({"login_for_access": "Login username", "edit_login": "Change login", "username_help": "This username is used to sign in to your account."})
+CLIENT_TRANSLATIONS["de"].update({"login_for_access": "Login-Name", "edit_login": "Login ändern", "username_help": "Dieser Benutzername wird für die Anmeldung verwendet."})
+CLIENT_TRANSLATIONS["fr"].update({"login_for_access": "Identifiant de connexion", "edit_login": "Changer l'identifiant", "username_help": "Cet identifiant sert à entrer dans votre compte."})
+
+
 def normalize_client_language(language):
     code = (language or "").split("-", 1)[0].lower()
     supported = {item[0] for item in CLIENT_LANGUAGES}

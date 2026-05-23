@@ -19,9 +19,9 @@
 {% block content %}
 <section class="lux-section public-booking-section">
   <div class="lux-container public-booking-layout">
-    <form class="public-booking-card" method="post" data-public-booking-form data-slots-url="{{ slot_endpoint }}">
+    <form class="public-booking-card" method="post" novalidate data-public-booking-form data-slots-url="{{ slot_endpoint }}">
       {% csrf_token %}
-      {% if booking_non_field_errors %}<div class="booking-alert">{{ booking_non_field_errors.0 }}</div>{% endif %}
+      <div class="booking-alert" data-global-error {% if not booking_non_field_errors %}hidden{% endif %}>{% if booking_non_field_errors %}{{ booking_non_field_errors.0 }}{% endif %}</div>
 
       <div class="booking-form-grid booking-choice-grid">
         <label class="lux-field">
@@ -32,7 +32,7 @@
               <option value="{{ service.pk }}" {% if booking_values.service == service.pk|stringformat:'s' %}selected{% endif %}>{{ service.name }} · {{ service.duration_minutes }} min</option>
             {% endfor %}
           </select>
-          {% if booking_errors.service %}<small>{{ booking_errors.service.0 }}</small>{% endif %}
+          <small class="form-error" data-error-for="service">{% if booking_errors.service %}{{ booking_errors.service.0 }}{% endif %}</small>
         </label>
 
         <div class="booking-date-range">
@@ -72,9 +72,9 @@
         <div class="slot-picker__body" data-slot-body>
           <div class="slot-grid" data-slot-grid></div>
         </div>
-        {% if booking_errors.start_at %}<small class="form-error">{{ booking_errors.start_at.0 }}</small>{% endif %}
-        {% if booking_errors.employee %}<small class="form-error">{{ booking_errors.employee.0 }}</small>{% endif %}
-        {% if booking_errors.zone %}<small class="form-error">{{ booking_errors.zone.0 }}</small>{% endif %}
+        <small class="form-error" data-error-for="start_at">{% if booking_errors.start_at %}{{ booking_errors.start_at.0 }}{% endif %}</small>
+        <small class="form-error" data-error-for="employee">{% if booking_errors.employee %}{{ booking_errors.employee.0 }}{% endif %}</small>
+        <small class="form-error" data-error-for="zone">{% if booking_errors.zone %}{{ booking_errors.zone.0 }}{% endif %}</small>
       </div>
 
       <input type="hidden" name="start_at" value="{{ booking_values.start_at }}" data-start-input>
@@ -86,12 +86,13 @@
         <label class="lux-field">
           <span>{{ t.public_booking_name }}</span>
           <input class="lux-input" type="text" name="name" autocomplete="name" value="{{ booking_values.name }}" required>
-          {% if booking_errors.name %}<small>{{ booking_errors.name.0 }}</small>{% endif %}
+          <small class="form-error" data-error-for="name">{% if booking_errors.name %}{{ booking_errors.name.0 }}{% endif %}</small>
         </label>
         <label class="lux-field">
           <span>{{ t.public_booking_password }}</span>
-          <input class="lux-input" type="password" name="password" autocomplete="new-password" required>
-          {% if booking_errors.password %}<small>{{ booking_errors.password.0 }}</small>{% endif %}
+          <input class="lux-input" type="password" name="password" autocomplete="new-password" minlength="6" aria-describedby="public-booking-password-help" required>
+          <small id="public-booking-password-help" class="field-help">{{ t.public_booking_password_help }}</small>
+          <small class="form-error" data-error-for="password">{% if booking_errors.password %}{{ booking_errors.password.0 }}{% endif %}</small>
         </label>
       </div>
 
@@ -104,12 +105,12 @@
         <label class="lux-field">
           <span>{{ t.public_booking_phone }}</span>
           <input class="lux-input" type="tel" name="phone" autocomplete="tel" value="{{ booking_values.phone }}">
-          {% if booking_errors.phone %}<small>{{ booking_errors.phone.0 }}</small>{% endif %}
+          <small class="form-error" data-error-for="phone">{% if booking_errors.phone %}{{ booking_errors.phone.0 }}{% endif %}</small>
         </label>
         <label class="lux-field">
           <span>{{ t.public_booking_email }}</span>
           <input class="lux-input" type="email" name="email" autocomplete="email" value="{{ booking_values.email }}">
-          {% if booking_errors.email %}<small>{{ booking_errors.email.0 }}</small>{% endif %}
+          <small class="form-error" data-error-for="email">{% if booking_errors.email %}{{ booking_errors.email.0 }}{% endif %}</small>
         </label>
       </div>
 
@@ -160,7 +161,11 @@
       empty: '{{ t.public_booking_no_slots|escapejs }}',
       chooseMaster: '{{ t.public_booking_choose_master|escapejs }}',
       selected: '{{ t.public_booking_selected|escapejs }}',
-      error: '{{ t.public_booking_slots_error|escapejs }}'
+      error: '{{ t.public_booking_slots_error|escapejs }}',
+      passwordMin: '{{ t.public_booking_error_password_min|escapejs }}',
+      nameRequired: '{{ t.public_booking_error_name|escapejs }}',
+      timeRequired: '{{ t.public_booking_error_time|escapejs }}',
+      submitting: '{{ t.public_booking_submitting|escapejs }}'
     };
 
     function resetSlot() {
@@ -268,6 +273,81 @@
           status.textContent = error.message || messages.error;
         });
     }
+
+
+    function clearErrors() {
+      const globalError = form.querySelector('[data-global-error]');
+      if (globalError) { globalError.textContent = ''; globalError.hidden = true; }
+      form.querySelectorAll('[data-error-for]').forEach(function (item) { item.textContent = ''; });
+      form.querySelectorAll('.lux-input.is-invalid').forEach(function (item) { item.classList.remove('is-invalid'); });
+    }
+
+    function setFieldError(field, message) {
+      const error = form.querySelector('[data-error-for="' + field + '"]');
+      if (error) error.textContent = message || '';
+      const input = form.querySelector('[name="' + field + '"]');
+      if (input) input.classList.add('is-invalid');
+    }
+
+    function showErrors(errors) {
+      clearErrors();
+      let firstField = null;
+      Object.keys(errors || {}).forEach(function (field) {
+        const message = Array.isArray(errors[field]) ? errors[field][0] : errors[field];
+        if (field === '__all__') {
+          const globalError = form.querySelector('[data-global-error]');
+          if (globalError) { globalError.textContent = message; globalError.hidden = false; }
+          return;
+        }
+        setFieldError(field, message);
+        if (!firstField) firstField = field;
+      });
+      const firstError = firstField ? form.querySelector('[data-error-for="' + firstField + '"]') : form.querySelector('[data-global-error]:not([hidden])');
+      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function validateBeforeSubmit() {
+      clearErrors();
+      const errors = {};
+      const nameInput = form.querySelector('[name="name"]');
+      const passwordInput = form.querySelector('[name="password"]');
+      if (!startInput.value) errors.start_at = [messages.timeRequired];
+      if (!nameInput.value.trim()) errors.name = [messages.nameRequired];
+      if (!passwordInput.value || passwordInput.value.length < 6) errors.password = [messages.passwordMin];
+      if (Object.keys(errors).length) {
+        showErrors(errors);
+        return false;
+      }
+      return true;
+    }
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!validateBeforeSubmit()) return;
+      const originalText = submitButton.textContent;
+      submitButton.disabled = true;
+      submitButton.textContent = messages.submitting;
+      fetch(form.action || window.location.href, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      })
+        .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+        .then(function (result) {
+          if (result.ok && result.data.ok && result.data.redirect) {
+            window.location.href = result.data.redirect;
+            return;
+          }
+          showErrors(result.data.errors || { __all__: [messages.error] });
+          submitButton.disabled = false;
+          submitButton.textContent = originalText;
+        })
+        .catch(function () {
+          showErrors({ __all__: [messages.error] });
+          submitButton.disabled = false;
+          submitButton.textContent = originalText;
+        });
+    });
 
     contactToggle.addEventListener('change', function () {
       contactFields.hidden = !contactToggle.checked;
