@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% load static %}
+{% load static client_i18n %}
 
 {% block body %}
 <div class="mobile-topbar">
@@ -7,10 +7,10 @@
     <div class="logo"><img src="{% static 'logo.png' %}" alt="BRIMOON Studio"></div>
     <div>
       <strong>BRIMOON Studio</strong>
-      <span>Portal cliente</span>
+      <span>{% ct "portal_client" %}</span>
     </div>
   </div>
-  <a class="btn btn-light btn-small" href="{% url 'accounts:logout' %}">Salir</a>
+  <a class="btn btn-light btn-small" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
 </div>
 
 <main class="main-panel" style="max-width: 1120px; margin: 0 auto;">
@@ -20,9 +20,21 @@
       <p>{% block portal_subtitle %}{% endblock %}</p>
     </div>
     <div class="panel-actions">
-      <a class="btn btn-light" href="{% url 'clients:portal' %}">Mi portal</a>
-      <a class="btn btn-light" href="{% url 'accounts:profile' %}">Mis datos</a>
-      <a class="btn btn-light" href="{% url 'accounts:logout' %}">Salir</a>
+      {% client_lang as current_client_lang %}
+      {% client_languages as available_client_languages %}
+      <form method="post" action="{% url 'clients:set_language' %}" class="language-switcher">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <label class="sr-only" for="client-language">Language</label>
+        <select id="client-language" name="language" class="input" onchange="this.form.submit()">
+          {% for code, label in available_client_languages %}
+            <option value="{{ code }}" {% if code == current_client_lang %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      <a class="btn btn-light" href="{% url 'clients:portal' %}">{% ct "my_portal" %}</a>
+      <a class="btn btn-light" href="{% url 'accounts:profile' %}">{% ct "my_data" %}</a>
+      <a class="btn btn-light" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
     </div>
   </header>
 

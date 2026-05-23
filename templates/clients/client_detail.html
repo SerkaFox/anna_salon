@@ -19,16 +19,6 @@
   </article>
 
   <article class="stat-card">
-    <span class="stat-label">Gastado total</span>
-    <strong class="stat-value">{{ stats.total_spent }} €</strong>
-  </article>
-
-  <article class="stat-card">
-    <span class="stat-label">Ticket medio</span>
-    <strong class="stat-value">{{ stats.avg_ticket|floatformat:2 }} €</strong>
-  </article>
-
-  <article class="stat-card">
     <span class="stat-label">Clientes traídos</span>
     <strong class="stat-value">{{ referred_clients_count }}</strong>
   </article>
@@ -45,7 +35,7 @@
   <div class="dashboard-section-head">
     <div>
       <h2>Premios del cliente</h2>
-      <p class="muted-text">Misma logica que en mobile: premios por amigos, visitas y gasto total. La configuracion viene de las reglas activas del salon.</p>
+      <p class="muted-text">Misma logica que en mobile: premios por amigos y visitas. La configuracion viene de las reglas activas del salon.</p>
     </div>
   </div>
 

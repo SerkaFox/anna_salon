@@ -10,6 +10,7 @@ from .views import (
     client_portal,
     client_portal_slots_api,
     use_referral_reward,
+    set_client_language,
 )
 
 app_name = "clients"
@@ -17,6 +18,7 @@ app_name = "clients"
 urlpatterns = [
     path("portal/", client_portal, name="portal"),
     path("portal/slots/", client_portal_slots_api, name="portal_slots_api"),
+    path("portal/language/", set_client_language, name="set_language"),
     path("", client_list, name="list"),
     path("new/", client_create, name="create"),
     path("api/new/", client_create_api, name="create_api"),

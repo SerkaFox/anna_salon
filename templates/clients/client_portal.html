@@ -1,16 +1,19 @@
 {% extends "client_portal_base.html" %}
+{% load client_i18n %}
 
-{% block title %}Mi BRIMOON Studio{% endblock %}
-{% block portal_title %}Hola, {{ client.full_name }}{% endblock %}
-{% block portal_subtitle %}Tu historial, fotos autorizadas, premios y nueva solicitud de reserva.{% endblock %}
+{% block title %}{% ct "my_portal" %} | BRIMOON Studio{% endblock %}
+{% block portal_title %}{% ct "hello" name=client.full_name %}{% endblock %}
+{% block portal_subtitle %}{% ct "portal_subtitle" %}{% endblock %}
 
 {% block portal_content %}
+  {% ct "no_phone" as client_no_phone %}
+  {% ct "no_email" as client_no_email %}
   <section class="content-grid">
     <article class="panel-card">
       <div class="dashboard-section-head">
         <div>
-          <h2>Mi ficha</h2>
-          <p class="muted-text">{{ client.phone|default:"Sin telefono" }} · {{ client.email|default:"Sin email" }}</p>
+          <h2>{% ct "my_file" %}</h2>
+          <p class="muted-text">{{ client.phone|default:client_no_phone }} · {{ client.email|default:client_no_email }}</p>
         </div>
         <div>
           {% if client.avatar %}
@@ -24,33 +27,25 @@
         {% csrf_token %}
         <input type="hidden" name="action" value="avatar">
         <div class="field">
-          <label for="client-avatar">Mi avatar</label>
+          <label for="client-avatar">{% ct "my_avatar" %}</label>
           <input id="client-avatar" class="input" type="file" name="avatar" accept="image/*">
         </div>
-        <button class="btn btn-light" type="submit">Actualizar avatar</button>
+        <button class="btn btn-light" type="submit">{% ct "update_avatar" %}</button>
       </form>
       <div class="stats-grid">
         <article class="stat-card">
-          <span class="stat-label">Visitas</span>
+          <span class="stat-label">{% ct "visits" %}</span>
           <strong class="stat-value">{{ stats.total_visits }}</strong>
         </article>
         <article class="stat-card">
-          <span class="stat-label">Gastado</span>
-          <strong class="stat-value">{{ stats.total_spent }} €</strong>
-        </article>
-        <article class="stat-card">
-          <span class="stat-label">Ticket medio</span>
-          <strong class="stat-value">{{ stats.avg_ticket|floatformat:2 }} €</strong>
-        </article>
-        <article class="stat-card">
-          <span class="stat-label">Premios</span>
+          <span class="stat-label">{% ct "rewards" %}</span>
           <strong class="stat-value">{{ stats.available_rewards }}</strong>
         </article>
       </div>
     </article>
 
     <article class="panel-card">
-      <h2>Proximas citas</h2>
+      <h2>{% ct "upcoming_bookings" %}</h2>
       {% if upcoming_bookings %}
         <div class="dashboard-stack">
           {% for booking in upcoming_bookings %}
@@ -62,7 +57,7 @@
           {% endfor %}
         </div>
       {% else %}
-        <p class="muted-text">Todavia no tienes proximas citas.</p>
+        <p class="muted-text">{% ct "no_upcoming_bookings" %}</p>
       {% endif %}
     </article>
   </section>
@@ -70,8 +65,8 @@
   <section class="panel-card">
     <div class="dashboard-section-head">
       <div>
-        <h2>Premios</h2>
-        <p class="muted-text">Pulsa una recompensa en la app al reservar. Aqui puedes ver cuanto falta y que descuento tiene cada una.</p>
+        <h2>{% ct "rewards" %}</h2>
+        <p class="muted-text">{% ct "rewards_help" %}</p>
       </div>
     </div>
     {% if rewards %}
@@ -80,25 +75,25 @@
           <article class="stat-card">
             <span class="stat-label">{{ reward.reward_type_label }}</span>
             <strong class="stat-value">{{ reward.name }}</strong>
-            <p class="muted-text">Descuento {{ reward.discount_percent|floatformat:0 }}%. Necesitas {{ reward.threshold }}; ahora tienes {{ reward.current }}.</p>
+            <p class="muted-text">{% ct "discount" %} {{ reward.discount_percent|floatformat:0 }}%. {% ct "need_now" threshold=reward.threshold current=reward.current %}</p>
             {% if reward.available > 0 %}
-              <p><strong>Disponible:</strong> {{ reward.available }}</p>
+              <p><strong>{% ct "available" %}</strong> {{ reward.available }}</p>
             {% elif reward.remaining > 0 %}
-              <p><strong>Faltan:</strong> {{ reward.remaining }}</p>
+              <p><strong>{% ct "missing" %}</strong> {{ reward.remaining }}</p>
             {% else %}
-              <p class="muted-text">Completado.</p>
+              <p class="muted-text">{% ct "completed" %}</p>
             {% endif %}
           </article>
         {% endfor %}
       </div>
     {% else %}
-      <p class="muted-text">No hay premios activos.</p>
+      <p class="muted-text">{% ct "no_rewards" %}</p>
     {% endif %}
   </section>
 
   <section class="panel-card">
-    <h2>Nueva solicitud de reserva</h2>
-    <p class="muted-text">Elige servicio, master, zona si corresponde y horario. La solicitud queda pendiente hasta que el salon la confirme.</p>
+    <h2>{% ct "new_booking_request" %}</h2>
+    <p class="muted-text">{% ct "booking_help" %}</p>
     <form method="post" class="entity-form">
       {% csrf_token %}
       {{ booking_form.client }}
@@ -118,51 +113,51 @@
 
       <div class="form-grid">
         <div class="field">
-          <label for="{{ booking_form.service.id_for_label }}">Servicio</label>
+          <label for="{{ booking_form.service.id_for_label }}">{% ct "service" %}</label>
           {{ booking_form.service }}
           {{ booking_form.service.errors }}
         </div>
         <div class="field">
-          <label for="portal-booking-date">Fecha</label>
+          <label for="portal-booking-date">{% ct "date" %}</label>
           <input id="portal-booking-date" class="input" type="date" min="{% now 'Y-m-d' %}">
         </div>
         <div class="field">
-          <label for="portal-booking-slot">Hora disponible</label>
+          <label for="portal-booking-slot">{% ct "available_time" %}</label>
           <select id="portal-booking-slot" class="input" disabled>
-            <option value="">Selecciona servicio y fecha</option>
+            <option value="">{% ct "select_service_date" %}</option>
           </select>
         </div>
         <div class="field">
-          <label for="{{ booking_form.employee.id_for_label }}">Master</label>
+          <label for="{{ booking_form.employee.id_for_label }}">{% ct "master" %}</label>
           {{ booking_form.employee }}
           {{ booking_form.employee.errors }}
         </div>
         <div class="field">
-          <label for="{{ booking_form.zone.id_for_label }}">Zona</label>
+          <label for="{{ booking_form.zone.id_for_label }}">{% ct "zone" %}</label>
           {{ booking_form.zone }}
           {{ booking_form.zone.errors }}
         </div>
         <div class="field">
-          <label for="{{ booking_form.reward_rule.id_for_label }}">Premio</label>
+          <label for="{{ booking_form.reward_rule.id_for_label }}">{% ct "reward" %}</label>
           {{ booking_form.reward_rule }}
           {{ booking_form.reward_rule.errors }}
         </div>
       </div>
       <div class="field">
-        <label for="{{ booking_form.notes.id_for_label }}">Comentario</label>
+        <label for="{{ booking_form.notes.id_for_label }}">{% ct "comment" %}</label>
         {{ booking_form.notes }}
         {{ booking_form.notes.errors }}
       </div>
       {{ booking_form.start_at.errors }}
       {{ booking_form.end_at.errors }}
       <div class="booking-hint" id="portal-booking-hint"></div>
-      <button class="btn" type="submit">Enviar solicitud</button>
+      <button class="btn" type="submit">{% ct "send_request" %}</button>
     </form>
   </section>
 
   <section class="content-grid">
     <article class="panel-card">
-      <h2>Historial visual</h2>
+      <h2>{% ct "visual_history" %}</h2>
       {% if photo_history %}
         <div class="photo-grid">
           {% for photo in photo_history %}
@@ -178,12 +173,12 @@
           {% endfor %}
         </div>
       {% else %}
-        <p class="muted-text">Todavia no hay fotos visibles para ti.</p>
+        <p class="muted-text">{% ct "no_visible_photos" %}</p>
       {% endif %}
     </article>
 
     <article class="panel-card">
-      <h2>Historial de reservas</h2>
+      <h2>{% ct "booking_history" %}</h2>
       {% if bookings %}
         <div class="dashboard-stack">
           {% for booking in bookings %}
@@ -195,12 +190,24 @@
           {% endfor %}
         </div>
       {% else %}
-        <p class="muted-text">Todavia no tienes reservas.</p>
+        <p class="muted-text">{% ct "no_bookings" %}</p>
       {% endif %}
     </article>
   </section>
 {{ portal_services|json_script:"portal-services-data" }}
 {{ portal_zones|json_script:"portal-zones-data" }}
+{% ct "select_master" as t_select_master %}
+{% ct "next_short" time="__TIME__" as t_next_short_template %}
+{% ct "no_free_time" as t_no_free_time %}
+{% ct "no_free_hours" as t_no_free_hours %}
+{% ct "no_availability_for_service_date" as t_no_availability %}
+{% ct "choose_time" as t_choose_time %}
+{% ct "choose_time_master" as t_choose_time_master %}
+{% ct "select_service_date" as t_select_service_date %}
+{% ct "searching_availability" as t_searching_availability %}
+{% ct "availability_load_error" as t_availability_load_error %}
+{% ct "time_available_submit" as t_time_available_submit %}
+{% ct "masters_count" count="__COUNT__" suffix="__SUFFIX__" as t_masters_count_template %}
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
@@ -221,6 +228,24 @@ document.addEventListener("DOMContentLoaded", function () {
   const allZoneOptions = Array.from(zoneSelect.options).map((option) => option.cloneNode(true));
   let slots = [];
   let employeesAvailability = [];
+  const i18n = {
+    selectMaster: "{{ t_select_master|escapejs }}",
+    nextShortTemplate: "{{ t_next_short_template|escapejs }}",
+    noFreeTime: "{{ t_no_free_time|escapejs }}",
+    noFreeHours: "{{ t_no_free_hours|escapejs }}",
+    noAvailability: "{{ t_no_availability|escapejs }}",
+    chooseTime: "{{ t_choose_time|escapejs }}",
+    chooseTimeMaster: "{{ t_choose_time_master|escapejs }}",
+    selectServiceDate: "{{ t_select_service_date|escapejs }}",
+    searchingAvailability: "{{ t_searching_availability|escapejs }}",
+    availabilityLoadError: "{{ t_availability_load_error|escapejs }}",
+    timeAvailableSubmit: "{{ t_time_available_submit|escapejs }}",
+    mastersCountTemplate: "{{ t_masters_count_template|escapejs }}",
+  };
+
+  function formatTemplate(template, values) {
+    return Object.entries(values).reduce((text, [key, value]) => text.replaceAll(key, value), template);
+  }
 
   startInput.readOnly = true;
 
@@ -248,7 +273,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const allowedEmployees = new Set((service ? service.employee_ids : []).map(String));
     const availableById = new Map((availableEmployees || []).map((employee) => [String(employee.id), employee]));
     employeeSelect.innerHTML = "";
-    employeeSelect.appendChild(new Option("Elige master", ""));
+    employeeSelect.appendChild(new Option(i18n.selectMaster, ""));
     employeesAvailability.forEach((employee) => {
       const employeeId = String(employee.id);
       if (service && !allowedEmployees.has(employeeId)) return;
@@ -258,7 +283,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const option = new Option(
         available
           ? baseLabel
-          : `${baseLabel} (${employee.next_label ? `prox. ${employee.next_label}` : "sin horario libre"})`,
+          : `${baseLabel} (${employee.next_label ? formatTemplate(i18n.nextShortTemplate, {"__TIME__": employee.next_label || ""}) : i18n.noFreeTime})`,
         employeeId
       );
       option.disabled = !available;
@@ -290,20 +315,20 @@ document.addEventListener("DOMContentLoaded", function () {
     slotSelect.innerHTML = "";
     if (!slots.length) {
       slotSelect.disabled = true;
-      slotSelect.appendChild(new Option("No hay horas libres", ""));
+      slotSelect.appendChild(new Option(i18n.noFreeHours, ""));
       startInput.value = "";
       renderEmployeeAvailability([]);
-      setHint("No hay horarios disponibles para este servicio y fecha.", true);
+      setHint(i18n.noAvailability, true);
       return;
     }
     slotSelect.disabled = false;
-    slotSelect.appendChild(new Option("Elige una hora", ""));
+    slotSelect.appendChild(new Option(i18n.chooseTime, ""));
     slots.forEach((slot) => {
-      const label = `${slot.label} · ${slot.employees.length} master${slot.employees.length === 1 ? "" : "s"}`;
+      const label = `${slot.label} · ${formatTemplate(i18n.mastersCountTemplate, {"__COUNT__": String(slot.employees.length), "__SUFFIX__": slot.employees.length === 1 ? "" : "s"})}`;
       slotSelect.appendChild(new Option(label, slot.start_at));
     });
     renderEmployeeAvailability([]);
-    setHint("Elige una hora y despues un master disponible.", false);
+    setHint(i18n.chooseTimeMaster, false);
   }
 
   async function loadSlots() {
@@ -313,12 +338,12 @@ document.addEventListener("DOMContentLoaded", function () {
       employeesAvailability = [];
       renderSlots([]);
       slotSelect.innerHTML = "";
-      slotSelect.appendChild(new Option("Selecciona servicio y fecha", ""));
+      slotSelect.appendChild(new Option(i18n.selectServiceDate, ""));
       slotSelect.disabled = true;
       setHint("", false);
       return;
     }
-    setHint("Buscando horarios disponibles...", false);
+    setHint(i18n.searchingAvailability, false);
     const params = new URLSearchParams({
       service: serviceSelect.value,
       date: dateInput.value,
@@ -332,7 +357,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!response.ok || !data.ok) {
         employeesAvailability = [];
         renderSlots([]);
-        setHint(data.message || "No se pudo cargar disponibilidad.", true);
+        setHint(data.message || i18n.availabilityLoadError, true);
         return;
       }
       employeesAvailability = data.employees || [];
@@ -340,7 +365,7 @@ document.addEventListener("DOMContentLoaded", function () {
     } catch (_error) {
       employeesAvailability = [];
       renderSlots([]);
-      setHint("No se pudo cargar disponibilidad.", true);
+      setHint(i18n.availabilityLoadError, true);
     }
   }
 
@@ -357,7 +382,7 @@ document.addEventListener("DOMContentLoaded", function () {
       employeeSelect.value = String(firstEmployee.id);
       if (firstEmployee.zone) zoneSelect.value = String(firstEmployee.zone);
     }
-    setHint("Horario disponible. Puedes enviar la solicitud.", false);
+    setHint(i18n.timeAvailableSubmit, false);
   }
 
   serviceSelect.addEventListener("change", loadSlots);

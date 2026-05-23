@@ -1,8 +1,9 @@
 {% extends "client_portal_base.html" %}
+{% load client_i18n %}
 
-{% block title %}Mis datos | BRIMOON Studio{% endblock %}
-{% block portal_title %}Mis datos{% endblock %}
-{% block portal_subtitle %}Actualiza tus datos de usuario, contacto y contrasena.{% endblock %}
+{% block title %}{% ct "my_data" %} | BRIMOON Studio{% endblock %}
+{% block portal_title %}{% ct "my_data" %}{% endblock %}
+{% block portal_subtitle %}{% ct "profile_subtitle" %}{% endblock %}
 
 {% block portal_content %}
 <section class="panel-card">
@@ -18,30 +19,30 @@
     {% endif %}
     <div class="form-grid">
       <div class="field">
-        <label for="{{ form.username.id_for_label }}">Usuario</label>
+        <label for="{{ form.username.id_for_label }}">{% ct "username" %}</label>
         {{ form.username }}
       </div>
       <div class="field">
-        <label for="{{ form.first_name.id_for_label }}">Nombre</label>
+        <label for="{{ form.first_name.id_for_label }}">{% ct "first_name" %}</label>
         {{ form.first_name }}
       </div>
       <div class="field">
-        <label for="{{ form.last_name.id_for_label }}">Apellidos</label>
+        <label for="{{ form.last_name.id_for_label }}">{% ct "last_name" %}</label>
         {{ form.last_name }}
       </div>
       <div class="field">
-        <label for="{{ form.email.id_for_label }}">Email</label>
+        <label for="{{ form.email.id_for_label }}">{% ct "email" %}</label>
         {{ form.email }}
       </div>
       <div class="field">
-        <label for="{{ form.phone.id_for_label }}">Telefono</label>
+        <label for="{{ form.phone.id_for_label }}">{% ct "phone" %}</label>
         {{ form.phone }}
       </div>
     </div>
     <div class="form-actions">
-      <button type="submit" class="btn">Guardar datos</button>
-      <a href="{% url 'clients:portal' %}" class="btn btn-light">Volver</a>
-      <a href="{% url 'accounts:logout' %}" class="btn btn-light">Salir</a>
+      <button type="submit" class="btn">{% ct "save_data" %}</button>
+      <a href="{% url 'clients:portal' %}" class="btn btn-light">{% ct "back" %}</a>
+      <a href="{% url 'accounts:logout' %}" class="btn btn-light">{% ct "logout" %}</a>
     </div>
   </form>
 </section>
@@ -49,8 +50,8 @@
 <section class="panel-card" style="margin-top: 18px;">
   <div class="section-heading">
     <div>
-      <h2>Cambiar contrasena</h2>
-      <p>Actualiza tu acceso al portal con una nueva contrasena.</p>
+      <h2>{% ct "change_password" %}</h2>
+      <p>{% ct "change_password_help" %}</p>
     </div>
   </div>
   <form method="post" class="entity-form">
@@ -65,23 +66,23 @@
     {% endif %}
     <div class="form-grid">
       <div class="field">
-        <label for="{{ password_form.old_password.id_for_label }}">Contrasena actual</label>
+        <label for="{{ password_form.old_password.id_for_label }}">{% ct "current_password" %}</label>
         {{ password_form.old_password }}
         {% for error in password_form.old_password.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
       </div>
       <div class="field">
-        <label for="{{ password_form.new_password1.id_for_label }}">Nueva contrasena</label>
+        <label for="{{ password_form.new_password1.id_for_label }}">{% ct "new_password" %}</label>
         {{ password_form.new_password1 }}
         {% for error in password_form.new_password1.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
       </div>
       <div class="field">
-        <label for="{{ password_form.new_password2.id_for_label }}">Repetir contrasena</label>
+        <label for="{{ password_form.new_password2.id_for_label }}">{% ct "repeat_password" %}</label>
         {{ password_form.new_password2 }}
         {% for error in password_form.new_password2.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
       </div>
     </div>
     <div class="form-actions">
-      <button type="submit" class="btn">Cambiar contrasena</button>
+      <button type="submit" class="btn">{% ct "change_password" %}</button>
     </div>
   </form>
 </section>

@@ -1,18 +1,11 @@
 from django.contrib import admin
-from django.shortcuts import redirect
 from django.urls import include, path
 
-
-def root_redirect(request):
-    if request.user.is_authenticated:
-        if getattr(request.user, "role", None) == request.user.ROLE_CLIENT:
-            return redirect("clients:portal")
-        return redirect("dashboard:home")
-    return redirect("accounts:login")
+from core.views import home
 
 
 urlpatterns = [
-    path("", root_redirect),
+    path("", home, name="home"),
     path("", include("accounts.urls")),
     path("api/v1/", include("mobile_api.urls")),
     path("panel/", include("dashboard.urls")),

@@ -9,6 +9,7 @@ from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -24,6 +25,7 @@ from .models import Client, ClientRewardRule
 from salon.models import Zone
 from services_app.models import Service
 from .rewards import client_reward_progress
+from .translation import CLIENT_LANGUAGE_SESSION_KEY, normalize_client_language
 
 
 def build_referral_tree(root_client):
@@ -36,6 +38,19 @@ def build_referral_tree(root_client):
         "name": root_client.full_name or str(root_client),
         "children": [build_referral_tree(client) for client in referred_clients],
     }
+
+
+@login_required
+def set_client_language(request):
+    if not get_client_profile(request.user):
+        raise PermissionDenied
+    if request.method == "POST":
+        language = normalize_client_language(request.POST.get("language"))
+        request.session[CLIENT_LANGUAGE_SESSION_KEY] = language
+        response = redirect(request.POST.get("next") or reverse("clients:portal"))
+        response.set_cookie(CLIENT_LANGUAGE_SESSION_KEY, language, max_age=60 * 60 * 24 * 365, samesite="Lax", secure=True)
+        return response
+    return redirect("clients:portal")
 
 
 @login_required

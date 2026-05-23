@@ -1,105 +1,165 @@
+{% load static %}
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BRIMOON Studio</title>
-  <meta name="description" content="Gestión de clientes, servicios y agenda de BRIMOON Studio.">
+  <title>BRIMOON STUDIO | Belleza premium</title>
+  <meta name="description" content="BRIMOON Studio: especialistas en cejas, pestañas, manicura, pedicura y depilación facial.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-01">
 </head>
-<body>
-  <header class="hero">
-    <div class="container">
-      <div class="topbar">
-        <div class="brand">
-          <div class="logo"><img src="/static/logo.png" alt="BRIMOON Studio"></div>
-          <div>
-            <strong>BRIMOON Studio</strong>
-            <span>Administración y agenda</span>
-          </div>
-        </div>
-        <a class="btn btn-outline" href="/admin/">Entrar</a>
+<body class="landing-body">
+  <header class="lux-hero" id="inicio" style="--hero-image: url('{% static 'Fon2.png' %}');">
+    <nav class="lux-nav" aria-label="Navegación principal">
+      <a class="lux-brand" href="#inicio" aria-label="BRIMOON Studio inicio">
+        <img src="{% static 'logo.png' %}" alt="BRIMOON Studio" class="lux-brand__logo">
+        <span>BRIMOON STUDIO</span>
+      </a>
+      <button class="lux-menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false" data-menu-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <div class="lux-nav__links" data-menu-panel>
+        <a href="#servicios">Servicios</a>
+        <a href="#galeria">Galería</a>
+        <a href="#precios">Precios</a>
+        <a href="#contacto">Contacto</a>
+        <a href="{% url 'accounts:login' %}">Mi cuenta</a>
+        <a class="btn-lux btn-lux-primary btn-lux-small" href="#reserva">Reservar cita</a>
       </div>
+    </nav>
 
-      <div class="hero-grid">
-        <div class="hero-copy">
-          <span class="badge">Sistema interno del salón</span>
-          <h1>Control total de clientes, citas, servicios y personal</h1>
-          <p>
-            Una base moderna para gestionar el salón desde el móvil o desde el ordenador:
-            agenda, registro de clientes, empleados, zonas de trabajo y modificaciones de citas.
-          </p>
-          <div class="hero-actions">
-            <a class="btn" href="/admin/">Abrir panel</a>
-            <a class="btn btn-light" href="#features">Ver funciones</a>
-          </div>
-        </div>
-
-        <div class="hero-card">
-          <h2>Próxima fase</h2>
-          <ul>
-            <li>Clientes y fichas</li>
-            <li>Servicios y precios</li>
-            <li>Calendario del salón</li>
-            <li>Empleados y horarios</li>
-            <li>Zonas y recursos</li>
-            <li>Reprogramación de citas</li>
-          </ul>
-        </div>
+    <section class="lux-hero__content">
+      <div class="lux-kicker">Beauty studio · Bilbao</div>
+      <h1>BRIMOON STUDIO</h1>
+      <p class="lux-hero__lead">Belleza, cuidado y detalle en cada mirada</p>
+      <p class="lux-hero__copy">Especialistas en cejas, pestañas, manicura, pedicura y depilación facial.</p>
+      <div class="lux-actions" aria-label="Acciones principales">
+        <a class="btn-lux btn-lux-primary btn-lux-large" href="#reserva">Reservar cita</a>
+        <a class="btn-lux btn-lux-outline btn-lux-large" href="#servicios">Ver servicios</a>
+        <a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">WhatsApp</a>
       </div>
-    </div>
+    </section>
   </header>
 
   <main>
-    <section id="features" class="section">
-      <div class="container">
-        <div class="section-head">
-          <span class="badge badge-soft">Funciones del sistema</span>
-          <h2>Base preparada para crecer</h2>
-          <p>
-            Empezamos con una landing limpia, y luego conectamos el núcleo del CRM del salón.
-          </p>
+    <section class="lux-section lux-trust" aria-label="Confianza">
+      <div class="lux-container trust-grid">
+        <article><span>01</span><strong>Atención personalizada</strong><p>Cada visita se adapta a tu estilo, ritmo y necesidades.</p></article>
+        <article><span>02</span><strong>Técnicas profesionales</strong><p>Protocolos precisos para resultados elegantes y duraderos.</p></article>
+        <article><span>03</span><strong>Productos seleccionados</strong><p>Trabajamos con productos cuidados para piel, manos y mirada.</p></article>
+        <article><span>04</span><strong>Ambiente cuidado</strong><p>Un espacio íntimo para desconectar y sentirte renovada.</p></article>
+      </div>
+    </section>
+
+    <section class="lux-section" id="servicios">
+      <div class="lux-container">
+        <div class="lux-section-head">
+          <span class="lux-kicker">Servicios</span>
+          <h2>Rituales para cuidar cada detalle</h2>
+          <p>Cinco áreas esenciales de belleza con un enfoque delicado, moderno y profesional.</p>
         </div>
-
-        <div class="cards">
-          <article class="card">
-            <h3>Clientes</h3>
-            <p>Registro, teléfono, historial y observaciones internas.</p>
+        <div class="services-grid">
+          <article class="service-card">
+            <img src="{% static 'Definición, depilación y lifting de cejas.png' %}" alt="Definición, depilación y lifting de cejas" loading="lazy">
+            <div><h3>Definición, depilación y lifting de cejas</h3><p>Diseño de cejas, depilación precisa y lifting para realzar la expresión natural de tu mirada.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
           </article>
-
-          <article class="card">
-            <h3>Servicios</h3>
-            <p>Lista de tratamientos, duración, coste y lógica de reservas.</p>
+          <article class="service-card">
+            <img src="{% static 'Depilación facial.png' %}" alt="Depilación facial" loading="lazy">
+            <div><h3>Depilación facial</h3><p>Tratamientos delicados para una piel más limpia, suave y cuidada.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
           </article>
-
-          <article class="card">
-            <h3>Agenda</h3>
-            <p>Citas por día, cambios rápidos y control de disponibilidad.</p>
+          <article class="service-card">
+            <img src="{% static 'Manicura, extensiones y tratamientos.png' %}" alt="Manicura, extensiones y tratamientos" loading="lazy">
+            <div><h3>Manicura, extensiones y tratamientos</h3><p>Manicuras elegantes, extensiones y tratamientos para unas manos impecables.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
           </article>
-
-          <article class="card">
-            <h3>Equipo</h3>
-            <p>Alta de empleados, especialidades y horarios de trabajo.</p>
+          <article class="service-card">
+            <img src="{% static 'Pedicuras y tratamientos Pies.png' %}" alt="Pedicuras y tratamientos" loading="lazy">
+            <div><h3>Pedicuras y tratamientos</h3><p>Cuidado completo de pies, pedicura estética y tratamientos para bienestar y belleza.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
           </article>
-
-          <article class="card">
-            <h3>Zonas</h3>
-            <p>Cabinas, mesas, recursos y asignación según el servicio.</p>
-          </article>
-
-          <article class="card">
-            <h3>Administración</h3>
-            <p>Panel central para gestionar el salón desde un solo sitio.</p>
+          <article class="service-card service-card--wide">
+            <img src="{% static 'Tinte, extensiones y lifting de pestañas..png' %}" alt="Tinte, extensiones y lifting de pestañas" loading="lazy">
+            <div><h3>Tinte, extensiones y lifting de pestañas</h3><p>Color, volumen y curvatura para una mirada más intensa y definida.</p><a class="btn-lux btn-lux-ghost" href="#reserva">Reservar</a></div>
           </article>
         </div>
       </div>
     </section>
+
+    <section class="lux-section lux-gallery" id="galeria">
+      <div class="lux-container gallery-layout">
+        <div class="lux-section-head align-left">
+          <span class="lux-kicker">Experiencia</span>
+          <h2>Un espacio pensado para desconectar, cuidarte y salir renovada.</h2>
+          <p>La estética Brimoon combina calma, precisión y una atención cercana en cada servicio.</p>
+          <a class="btn-lux btn-lux-outline" href="#contacto">Contactar</a>
+        </div>
+        <div class="gallery-cards">
+          <img src="{% static 'Manicura, extensiones y tratamientos.png' %}" alt="Detalle de manicura Brimoon" loading="lazy">
+          <img src="{% static 'Definición, depilación y lifting de cejas.png' %}" alt="Tratamiento de cejas Brimoon" loading="lazy">
+          <img src="{% static 'Tinte, extensiones y lifting de pestañas..png' %}" alt="Tratamiento de pestañas Brimoon" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <section class="lux-section" id="precios">
+      <div class="lux-container price-band">
+        <span class="lux-kicker">Precios</span>
+        <h2>Servicios premium con cita previa</h2>
+        <p>Consulta disponibilidad y el servicio que mejor encaja contigo desde tu cuenta o por WhatsApp.</p>
+        <div class="lux-actions centered"><a class="btn-lux btn-lux-primary" href="#reserva">Reservar cita</a><a class="btn-lux btn-lux-ghost" href="#servicios">Ver tratamientos</a></div>
+      </div>
+    </section>
+
+    <section class="lux-section cta-section" id="reserva">
+      <div class="lux-container cta-card">
+        <div><span class="lux-kicker">Reserva</span><h2>¿Lista para tu momento Brimoon?</h2><p>Reserva tu cita y déjanos cuidar cada detalle.</p></div>
+        <div class="lux-actions"><a class="btn-lux btn-lux-primary btn-lux-large" href="{% url 'accounts:login' %}">Reservar cita</a><a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">Contactar por WhatsApp</a></div>
+      </div>
+    </section>
+
+    <section class="lux-section account-section">
+      <div class="lux-container account-grid">
+        <article>
+          <span class="lux-kicker">Área cliente</span>
+          <h2>Tu espacio personal</h2>
+          <p>Desde tu cuenta podrás consultar tus citas, revisar servicios reservados y acceder a tus datos de cliente.</p>
+        </article>
+        <div class="account-actions"><a class="btn-lux btn-lux-outline" href="{% url 'accounts:login' %}">Acceder a mi cuenta</a><a class="btn-lux btn-lux-ghost" href="{% url 'accounts:login' %}">Crear cuenta / Solicitar acceso</a></div>
+      </div>
+    </section>
+
+    <section class="lux-section contact-section" id="contacto">
+      <div class="lux-container contact-grid">
+        <div><span class="lux-kicker">Contacto</span><h2>Ven a cuidarte con nosotras</h2><p>Dirección: consulta la ubicación exacta al reservar tu cita.</p><p>WhatsApp: disponible bajo solicitud.</p><p>Horario: Lunes a sábado con cita previa.</p></div>
+        <div class="contact-card"><strong>BRIMOON STUDIO</strong><p>Cejas · Pestañas · Manicura · Pedicura · Depilación facial</p><a class="btn-lux btn-lux-primary" href="#">Ubicación</a></div>
+      </div>
+    </section>
   </main>
 
-  <footer class="footer">
-    <div class="container footer-inner">
-      <span>© 2026 BRIMOON Studio</span>
-      <span>anna.listoya.es</span>
+  <footer class="lux-footer">
+    <div class="lux-container footer-grid">
+      <div><strong>BRIMOON STUDIO</strong><p>Belleza, cuidado y detalle.</p></div>
+      <div><span>Cejas</span><span>Pestañas</span><span>Manicura</span><span>Pedicura</span></div>
+      <div><a href="{% url 'accounts:login' %}">Mi cuenta</a><span>© 2026 BRIMOON STUDIO</span></div>
     </div>
   </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const toggle = document.querySelector('[data-menu-toggle]');
+      const panel = document.querySelector('[data-menu-panel]');
+      if (!toggle || !panel) return;
+      toggle.addEventListener('click', function () {
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        panel.classList.toggle('is-open', !expanded);
+      });
+      panel.querySelectorAll('a').forEach((link) => link.addEventListener('click', function () {
+        toggle.setAttribute('aria-expanded', 'false');
+        panel.classList.remove('is-open');
+      }));
+    });
+  </script>
 </body>
 </html>
