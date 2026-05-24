@@ -153,10 +153,10 @@
       <div class="portal-date-strip" data-date-strip aria-label="{% ct 'date' %}"></div>
       <div class="portal-selected-slot" data-selected-summary hidden>
         <div>
-          <span>{% ct "available_time" %}</span>
+          <span>{% ct "selected_time" %}</span>
           <strong data-selected-summary-text></strong>
         </div>
-        <button class="btn btn-light btn-small" type="button" data-edit-slot>{% ct "choose_time" %}</button>
+        <button class="btn btn-light btn-small" type="button" data-edit-slot>{% ct "change_time" %}</button>
       </div>
       <div class="portal-slot-picker" data-slot-picker>
         <div class="portal-slot-picker__head">
@@ -164,7 +164,7 @@
             <strong>{% ct "available_time" %}</strong>
             <p class="muted-text" id="portal-booking-hint"></p>
           </div>
-          <button class="btn btn-light btn-small" type="button" data-refresh-slots>Actualizar</button>
+          <button class="btn btn-light btn-small" type="button" data-refresh-slots>{% ct "refresh_availability" %}</button>
         </div>
         <div class="portal-slot-grid" data-slot-grid></div>
         {{ booking_form.start_at.errors }}
@@ -382,7 +382,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (selectedSummaryText) selectedSummaryText.textContent = selectedText;
     if (selectedSummary) selectedSummary.hidden = false;
     if (bookingForm) bookingForm.classList.add("is-time-selected");
-    setHint(i18n.timeAvailableSubmit, false);
+    setHint("", false);
   }
 
   function renderSlots(nextSlots) {
@@ -493,6 +493,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (editSlotButton) editSlotButton.addEventListener("click", function () {
     if (bookingForm) bookingForm.classList.remove("is-time-selected");
     if (selectedSummary) selectedSummary.hidden = true;
+    setHint(i18n.chooseTimeMaster, false);
     document.querySelector("[data-slot-picker]").scrollIntoView({behavior: "smooth", block: "start"});
   });
   renderDateStrip();

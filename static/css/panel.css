@@ -1721,6 +1721,9 @@
 .client-lux-body .client-booking-form.is-time-selected .portal-slot-grid {
   display: none;
 }
+.client-lux-body .client-booking-form.is-time-selected .portal-slot-picker {
+  display: none;
+}
 @media (max-width: 900px) {
   .client-lux-body .portal-booking-choice-grid,
   .client-lux-body .portal-booking-date-range,

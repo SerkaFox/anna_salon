@@ -39,6 +39,12 @@ CLIENT_TRANSLATIONS["en"].update({"login_for_access": "Login username", "edit_lo
 CLIENT_TRANSLATIONS["de"].update({"login_for_access": "Login-Name", "edit_login": "Login ändern", "username_help": "Dieser Benutzername wird für die Anmeldung verwendet."})
 CLIENT_TRANSLATIONS["fr"].update({"login_for_access": "Identifiant de connexion", "edit_login": "Changer l'identifiant", "username_help": "Cet identifiant sert à entrer dans votre compte."})
 
+CLIENT_TRANSLATIONS["es"].update({"selected_time": "Horario elegido", "change_time": "Cambiar hora", "refresh_availability": "Actualizar"})
+CLIENT_TRANSLATIONS["ru"].update({"selected_time": "Выбранное время", "change_time": "Изменить время", "refresh_availability": "Обновить"})
+CLIENT_TRANSLATIONS["en"].update({"selected_time": "Selected time", "change_time": "Change time", "refresh_availability": "Refresh"})
+CLIENT_TRANSLATIONS["de"].update({"selected_time": "Gewählte Zeit", "change_time": "Zeit ändern", "refresh_availability": "Aktualisieren"})
+CLIENT_TRANSLATIONS["fr"].update({"selected_time": "Horaire choisi", "change_time": "Changer l'heure", "refresh_availability": "Actualiser"})
+
 
 def normalize_client_language(language):
     code = (language or "").split("-", 1)[0].lower()
