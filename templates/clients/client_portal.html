@@ -102,13 +102,15 @@
   <section class="panel-card">
     <h2>{% ct "new_booking_request" %}</h2>
     <p class="muted-text">{% ct "booking_help" %}</p>
-    <form method="post" class="entity-form">
+    <form method="post" class="entity-form client-booking-form" data-portal-booking-form>
       {% csrf_token %}
       {{ booking_form.client }}
       {{ booking_form.status }}
       {{ booking_form.source }}
       {{ booking_form.start_at }}
       {{ booking_form.end_at }}
+      {{ booking_form.employee }}
+      {{ booking_form.zone }}
       {{ booking_form.apply_referral_reward }}
 
       {% if booking_form.non_field_errors %}
@@ -119,31 +121,27 @@
         </div>
       {% endif %}
 
-      <div class="form-grid">
+      <div class="form-grid portal-booking-choice-grid">
         <div class="field">
           <label for="{{ booking_form.service.id_for_label }}">{% ct "service" %}</label>
           {{ booking_form.service }}
           {{ booking_form.service.errors }}
         </div>
-        <div class="field">
-          <label for="portal-booking-date">{% ct "date" %}</label>
-          <input id="portal-booking-date" class="input" type="date" min="{% now 'Y-m-d' %}">
-        </div>
-        <div class="field">
-          <label for="portal-booking-slot">{% ct "available_time" %}</label>
-          <select id="portal-booking-slot" class="input" disabled>
-            <option value="">{% ct "select_service_date" %}</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="{{ booking_form.employee.id_for_label }}">{% ct "master" %}</label>
-          {{ booking_form.employee }}
-          {{ booking_form.employee.errors }}
-        </div>
-        <div class="field">
-          <label for="{{ booking_form.zone.id_for_label }}">{% ct "zone" %}</label>
-          {{ booking_form.zone }}
-          {{ booking_form.zone.errors }}
+        <div class="portal-booking-date-range">
+          <div class="field">
+            <label for="portal-booking-date">{% ct "date" %}</label>
+            <input id="portal-booking-date" class="input" type="date" min="{% now 'Y-m-d' %}" value="{% now 'Y-m-d' %}" data-date-input>
+          </div>
+          <div class="field">
+            <label for="portal-booking-range">{% ct "available_time" %}</label>
+            <select id="portal-booking-range" class="input" data-time-range>
+              <option value="all">{% ct "choose_time" %}</option>
+              <option value="9-12">09:00 - 12:00</option>
+              <option value="12-15">12:00 - 15:00</option>
+              <option value="15-18">15:00 - 18:00</option>
+              <option value="18-21">18:00 - 21:00</option>
+            </select>
+          </div>
         </div>
         <div class="field">
           <label for="{{ booking_form.reward_rule.id_for_label }}">{% ct "reward" %}</label>
@@ -151,15 +149,36 @@
           {{ booking_form.reward_rule.errors }}
         </div>
       </div>
+
+      <div class="portal-date-strip" data-date-strip aria-label="{% ct 'date' %}"></div>
+      <div class="portal-selected-slot" data-selected-summary hidden>
+        <div>
+          <span>{% ct "available_time" %}</span>
+          <strong data-selected-summary-text></strong>
+        </div>
+        <button class="btn btn-light btn-small" type="button" data-edit-slot>{% ct "choose_time" %}</button>
+      </div>
+      <div class="portal-slot-picker" data-slot-picker>
+        <div class="portal-slot-picker__head">
+          <div>
+            <strong>{% ct "available_time" %}</strong>
+            <p class="muted-text" id="portal-booking-hint"></p>
+          </div>
+          <button class="btn btn-light btn-small" type="button" data-refresh-slots>Actualizar</button>
+        </div>
+        <div class="portal-slot-grid" data-slot-grid></div>
+        {{ booking_form.start_at.errors }}
+        {{ booking_form.employee.errors }}
+        {{ booking_form.zone.errors }}
+      </div>
+
       <div class="field">
         <label for="{{ booking_form.notes.id_for_label }}">{% ct "comment" %}</label>
         {{ booking_form.notes }}
         {{ booking_form.notes.errors }}
       </div>
-      {{ booking_form.start_at.errors }}
       {{ booking_form.end_at.errors }}
-      <div class="booking-hint" id="portal-booking-hint"></div>
-      <button class="btn" type="submit">{% ct "send_request" %}</button>
+      <button class="btn" type="submit" data-submit-button disabled>{% ct "send_request" %}</button>
     </form>
   </section>
 
@@ -203,7 +222,7 @@
     </article>
   </section>
 {{ portal_services|json_script:"portal-services-data" }}
-{{ portal_zones|json_script:"portal-zones-data" }}
+{% client_lang as current_client_lang %}
 {% ct "select_master" as t_select_master %}
 {% ct "next_short" time="__TIME__" as t_next_short_template %}
 {% ct "no_free_time" as t_no_free_time %}
@@ -224,18 +243,23 @@ document.addEventListener("DOMContentLoaded", function () {
   const zoneSelect = document.getElementById("id_zone");
   const startInput = document.getElementById("id_start_at");
   const dateInput = document.getElementById("portal-booking-date");
-  const slotSelect = document.getElementById("portal-booking-slot");
+  const rangeSelect = document.getElementById("portal-booking-range");
+  const grid = document.querySelector("[data-slot-grid]");
+  const dateStrip = document.querySelector("[data-date-strip]");
+  const submitButton = document.querySelector("[data-submit-button]");
+  const refreshButton = document.querySelector("[data-refresh-slots]");
+  const selectedSummary = document.querySelector("[data-selected-summary]");
+  const selectedSummaryText = document.querySelector("[data-selected-summary-text]");
+  const editSlotButton = document.querySelector("[data-edit-slot]");
+  const bookingForm = document.querySelector("[data-portal-booking-form]");
   const hint = document.getElementById("portal-booking-hint");
   const servicesNode = document.getElementById("portal-services-data");
-  const zonesNode = document.getElementById("portal-zones-data");
-  if (!serviceSelect || !employeeSelect || !zoneSelect || !startInput || !dateInput || !slotSelect || !servicesNode || !zonesNode) return;
+  if (!serviceSelect || !employeeSelect || !zoneSelect || !startInput || !dateInput || !rangeSelect || !grid || !servicesNode) return;
 
   const services = JSON.parse(servicesNode.textContent || "[]");
-  const zones = JSON.parse(zonesNode.textContent || "[]");
-  const allEmployeeOptions = Array.from(employeeSelect.options).map((option) => option.cloneNode(true));
-  const allZoneOptions = Array.from(zoneSelect.options).map((option) => option.cloneNode(true));
   let slots = [];
-  let employeesAvailability = [];
+  let activeDateRequest = 0;
+  const currentLanguage = "{{ current_client_lang|default:'es'|escapejs }}";
   const i18n = {
     selectMaster: "{{ t_select_master|escapejs }}",
     nextShortTemplate: "{{ t_next_short_template|escapejs }}",
@@ -267,87 +291,139 @@ document.addEventListener("DOMContentLoaded", function () {
     hint.classList.toggle("is-error", Boolean(isError));
   }
 
-  function replaceOptions(select, options) {
-    select.innerHTML = "";
-    options.forEach((option) => select.appendChild(option.cloneNode(true)));
+  function parseIsoDate(value) {
+    const parts = (value || "").split("-").map(Number);
+    if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
+    return new Date(parts[0], parts[1] - 1, parts[2]);
   }
 
-  function originalEmployeeOption(employeeId) {
-    return allEmployeeOptions.find((option) => option.value === String(employeeId));
+  function formatIsoDate(date) {
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return date.getFullYear() + "-" + month + "-" + day;
   }
 
-  function renderEmployeeAvailability(availableEmployees) {
-    const service = selectedService();
-    const allowedEmployees = new Set((service ? service.employee_ids : []).map(String));
-    const availableById = new Map((availableEmployees || []).map((employee) => [String(employee.id), employee]));
-    employeeSelect.innerHTML = "";
-    employeeSelect.appendChild(new Option(i18n.selectMaster, ""));
-    employeesAvailability.forEach((employee) => {
-      const employeeId = String(employee.id);
-      if (service && !allowedEmployees.has(employeeId)) return;
-      const original = originalEmployeeOption(employeeId);
-      const baseLabel = original ? original.textContent : employee.name;
-      const available = availableById.get(employeeId);
-      const option = new Option(
-        available
-          ? baseLabel
-          : `${baseLabel} (${employee.next_label ? formatTemplate(i18n.nextShortTemplate, {"__TIME__": employee.next_label || ""}) : i18n.noFreeTime})`,
-        employeeId
-      );
-      option.disabled = !available;
-      employeeSelect.appendChild(option);
+  function addDays(value, days) {
+    const date = parseIsoDate(value);
+    if (!date) return value;
+    date.setDate(date.getDate() + days);
+    return formatIsoDate(date);
+  }
+
+  function renderDateStrip() {
+    if (!dateStrip) return;
+    const minDate = dateInput.min || dateInput.value;
+    const active = dateInput.value;
+    const formatterWeekday = new Intl.DateTimeFormat(currentLanguage, { weekday: "short" });
+    const formatterMonth = new Intl.DateTimeFormat(currentLanguage, { month: "short" });
+    dateStrip.innerHTML = "";
+    for (let index = 0; index < 14; index += 1) {
+      const value = addDays(minDate, index);
+      const date = parseIsoDate(value);
+      if (!date) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "portal-date-pill";
+      if (value === active) button.classList.add("is-active");
+      button.innerHTML = `<span>${formatterWeekday.format(date)}</span><strong>${date.getDate()}</strong><small>${formatterMonth.format(date)}</small>`;
+      button.addEventListener("click", function () {
+        dateInput.value = value;
+        renderDateStrip();
+        loadSlots();
+      });
+      dateStrip.appendChild(button);
+    }
+  }
+
+  function resetSelection() {
+    startInput.value = "";
+    employeeSelect.value = "";
+    zoneSelect.value = "";
+    if (submitButton) submitButton.disabled = true;
+    if (selectedSummary) selectedSummary.hidden = true;
+    if (selectedSummaryText) selectedSummaryText.textContent = "";
+    if (bookingForm) bookingForm.classList.remove("is-time-selected");
+  }
+
+  function slotHour(slot) {
+    const date = new Date(slot.start_at);
+    return date.getHours() + (date.getMinutes() / 60);
+  }
+
+  function filteredSlots(nextSlots) {
+    const value = rangeSelect.value;
+    if (value === "all") return nextSlots;
+    const parts = value.split("-").map(Number);
+    return nextSlots.filter((slot) => {
+      const hour = slotHour(slot);
+      return hour >= parts[0] && hour < parts[1];
     });
   }
 
-  function syncStaticFilters() {
-    const service = selectedService();
-    if (!service) {
-      replaceOptions(employeeSelect, allEmployeeOptions);
-      replaceOptions(zoneSelect, allZoneOptions);
-      return;
-    }
-    const allowedEmployees = new Set(service.employee_ids.map(String));
-    replaceOptions(employeeSelect, allEmployeeOptions.filter((option) => {
-      return !option.value || allowedEmployees.has(option.value);
-    }));
-    const allowedZones = new Set(service.allowed_zone_ids.map(String));
-    replaceOptions(zoneSelect, allZoneOptions.filter((option) => {
-      return !option.value || allowedZones.has(option.value);
-    }));
-    zoneSelect.closest(".field").hidden = !service.requires_zone;
-    if (!service.requires_zone) zoneSelect.value = "";
+  function groupSlotsByEmployee(nextSlots) {
+    const map = new Map();
+    nextSlots.forEach((slot) => {
+      slot.employees.forEach((employee) => {
+        if (!map.has(employee.id)) map.set(employee.id, { id: employee.id, name: employee.name, slots: [] });
+        map.get(employee.id).slots.push({ slot, employee });
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  function selectSlot(slot, employee, button) {
+    document.querySelectorAll(".portal-slot-time.is-selected").forEach((item) => item.classList.remove("is-selected"));
+    button.classList.add("is-selected");
+    startInput.value = slot.start_at;
+    employeeSelect.value = String(employee.id);
+    zoneSelect.value = employee.zone ? String(employee.zone) : "";
+    if (submitButton) submitButton.disabled = false;
+    const selectedText = `${slot.label} · ${employee.name}`;
+    if (selectedSummaryText) selectedSummaryText.textContent = selectedText;
+    if (selectedSummary) selectedSummary.hidden = false;
+    if (bookingForm) bookingForm.classList.add("is-time-selected");
+    setHint(i18n.timeAvailableSubmit, false);
   }
 
   function renderSlots(nextSlots) {
     slots = nextSlots || [];
-    slotSelect.innerHTML = "";
-    if (!slots.length) {
-      slotSelect.disabled = true;
-      slotSelect.appendChild(new Option(i18n.noFreeHours, ""));
-      startInput.value = "";
-      renderEmployeeAvailability([]);
+    grid.innerHTML = "";
+    resetSelection();
+    const visibleSlots = filteredSlots(slots);
+    if (!visibleSlots.length) {
       setHint(i18n.noAvailability, true);
       return;
     }
-    slotSelect.disabled = false;
-    slotSelect.appendChild(new Option(i18n.chooseTime, ""));
-    slots.forEach((slot) => {
-      const label = `${slot.label} · ${formatTemplate(i18n.mastersCountTemplate, {"__COUNT__": String(slot.employees.length), "__SUFFIX__": slot.employees.length === 1 ? "" : "s"})}`;
-      slotSelect.appendChild(new Option(label, slot.start_at));
-    });
-    renderEmployeeAvailability([]);
     setHint(i18n.chooseTimeMaster, false);
+    groupSlotsByEmployee(visibleSlots).forEach((master) => {
+      const card = document.createElement("div");
+      card.className = "portal-master-slot-card";
+      const name = document.createElement("strong");
+      name.textContent = master.name;
+      card.appendChild(name);
+      const times = document.createElement("div");
+      times.className = "portal-master-time-grid";
+      master.slots.forEach((item) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "portal-slot-time";
+        button.textContent = item.slot.label;
+        button.addEventListener("click", () => selectSlot(item.slot, item.employee, button));
+        times.appendChild(button);
+      });
+      card.appendChild(times);
+      grid.appendChild(card);
+    });
   }
 
   async function loadSlots() {
-    syncStaticFilters();
+    activeDateRequest += 1;
+    const requestId = activeDateRequest;
     startInput.value = "";
+    renderDateStrip();
     if (!serviceSelect.value || !dateInput.value) {
-      employeesAvailability = [];
+      grid.innerHTML = "";
       renderSlots([]);
-      slotSelect.innerHTML = "";
-      slotSelect.appendChild(new Option(i18n.selectServiceDate, ""));
-      slotSelect.disabled = true;
       setHint("", false);
       return;
     }
@@ -356,48 +432,71 @@ document.addEventListener("DOMContentLoaded", function () {
       service: serviceSelect.value,
       date: dateInput.value,
     });
-    if (zoneSelect.value) params.set("zone", zoneSelect.value);
     try {
       const response = await fetch(`{% url 'clients:portal_slots_api' %}?${params.toString()}`, {
         headers: {"X-Requested-With": "XMLHttpRequest"},
       });
       const data = await response.json();
+      if (activeDateRequest !== requestId) return;
       if (!response.ok || !data.ok) {
-        employeesAvailability = [];
         renderSlots([]);
         setHint(data.message || i18n.availabilityLoadError, true);
         return;
       }
-      employeesAvailability = data.employees || [];
       renderSlots(data.slots || []);
     } catch (_error) {
-      employeesAvailability = [];
+      if (activeDateRequest !== requestId) return;
       renderSlots([]);
       setHint(i18n.availabilityLoadError, true);
     }
   }
 
-  function syncSlotSelection() {
-    const slot = slots.find((item) => item.start_at === slotSelect.value);
-    startInput.value = slot ? slot.start_at : "";
-    if (!slot) {
-      syncStaticFilters();
+  function findFirstAvailableDate() {
+    const service = serviceSelect.value;
+    if (!service) {
+      loadSlots();
       return;
     }
-    renderEmployeeAvailability(slot.employees);
-    const firstEmployee = slot.employees[0];
-    if (firstEmployee) {
-      employeeSelect.value = String(firstEmployee.id);
-      if (firstEmployee.zone) zoneSelect.value = String(firstEmployee.zone);
-    }
-    setHint(i18n.timeAvailableSubmit, false);
+    const requestId = activeDateRequest + 1;
+    activeDateRequest = requestId;
+    grid.innerHTML = "";
+    resetSelection();
+    renderDateStrip();
+    setHint(i18n.searchingAvailability, false);
+    const attempts = [];
+    for (let index = 0; index < 45; index += 1) attempts.push(addDays(dateInput.min || dateInput.value, index));
+    attempts.reduce((chain, candidateDate) => {
+      return chain.then((found) => {
+        if (found || activeDateRequest !== requestId) return found;
+        const params = new URLSearchParams({service, date: candidateDate});
+        return fetch(`{% url 'clients:portal_slots_api' %}?${params.toString()}`, {
+          headers: {"X-Requested-With": "XMLHttpRequest"},
+        }).then((response) => response.json().then((data) => ({ok: response.ok, data}))).then((result) => {
+          if (!result.ok || !result.data.ok || !(result.data.slots || []).length) return false;
+          dateInput.value = candidateDate;
+          slots = result.data.slots || [];
+          renderDateStrip();
+          renderSlots(slots);
+          return true;
+        }).catch(() => false);
+      });
+    }, Promise.resolve(false)).then((found) => {
+      if (activeDateRequest !== requestId) return;
+      if (!found) renderSlots([]);
+    });
   }
 
-  serviceSelect.addEventListener("change", loadSlots);
+  serviceSelect.addEventListener("change", findFirstAvailableDate);
   dateInput.addEventListener("change", loadSlots);
-  zoneSelect.addEventListener("change", loadSlots);
-  slotSelect.addEventListener("change", syncSlotSelection);
-  syncStaticFilters();
+  rangeSelect.addEventListener("change", () => renderSlots(slots));
+  if (refreshButton) refreshButton.addEventListener("click", loadSlots);
+  if (editSlotButton) editSlotButton.addEventListener("click", function () {
+    if (bookingForm) bookingForm.classList.remove("is-time-selected");
+    if (selectedSummary) selectedSummary.hidden = true;
+    document.querySelector("[data-slot-picker]").scrollIntoView({behavior: "smooth", block: "start"});
+  });
+  renderDateStrip();
+  loadSlots();
 });
 </script>
 {% endblock %}

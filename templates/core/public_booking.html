@@ -118,7 +118,7 @@
 
       <div class="booking-submit-row">
         <button class="btn-lux btn-lux-primary btn-lux-large" type="submit" data-submit-button disabled>{{ t.public_booking_submit }}</button>
-        <a class="btn-lux btn-lux-outline btn-lux-large" href="{% url 'accounts:login' %}">{{ t.public_booking_existing }}</a>
+        <button class="btn-lux btn-lux-outline btn-lux-large" type="button" data-existing-account disabled>{{ t.public_booking_existing }}</button>
       </div>
       </div>
     </form>
@@ -150,6 +150,7 @@
     const employeeInput = form.querySelector('[data-employee-input]');
     const zoneInput = form.querySelector('[data-zone-input]');
     const submitButton = form.querySelector('[data-submit-button]');
+    const existingAccountButton = form.querySelector('[data-existing-account]');
     const refreshButton = form.querySelector('[data-refresh-slots]');
     const contactToggle = form.querySelector('[data-contact-toggle]');
     const contactFields = form.querySelector('[data-contact-fields]');
@@ -223,6 +224,7 @@
       employeeInput.value = '';
       zoneInput.value = '';
       submitButton.disabled = true;
+      if (existingAccountButton) existingAccountButton.disabled = true;
       form.classList.remove('is-time-selected');
       selectedSummary.hidden = true;
       selectedSummaryText.textContent = '';
@@ -268,6 +270,7 @@
       employeeInput.value = employee.id;
       zoneInput.value = employee.zone || '';
       submitButton.disabled = false;
+      if (existingAccountButton) existingAccountButton.disabled = false;
       const selectedText = messages.selected.replace('{time}', slot.label).replace('{employee}', employee.name);
       status.textContent = selectedText;
       selectedSummaryText.textContent = selectedText;
@@ -449,6 +452,41 @@
           submitButton.textContent = originalText;
         });
     });
+
+    if (existingAccountButton) {
+      existingAccountButton.addEventListener('click', function () {
+        clearErrors();
+        if (!startInput.value) {
+          showErrors({ start_at: [messages.timeRequired] });
+          return;
+        }
+        const originalText = existingAccountButton.textContent;
+        existingAccountButton.disabled = true;
+        existingAccountButton.textContent = messages.submitting;
+        const payload = new FormData(form);
+        payload.set('action', 'existing_account');
+        fetch(form.action || window.location.href, {
+          method: 'POST',
+          body: payload,
+          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+          .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+          .then(function (result) {
+            if (result.ok && result.data.ok && result.data.redirect) {
+              window.location.href = result.data.redirect;
+              return;
+            }
+            showErrors(result.data.errors || { __all__: [messages.error] });
+            existingAccountButton.disabled = false;
+            existingAccountButton.textContent = originalText;
+          })
+          .catch(function () {
+            showErrors({ __all__: [messages.error] });
+            existingAccountButton.disabled = false;
+            existingAccountButton.textContent = originalText;
+          });
+      });
+    }
 
     contactToggle.addEventListener('change', function () {
       contactFields.hidden = !contactToggle.checked;

@@ -26,6 +26,7 @@ from salon.models import Zone
 from services_app.models import Service
 from .rewards import client_reward_progress
 from core.i18n import PUBLIC_LANGUAGE_SESSION_KEY
+from core.booking_requests import PUBLIC_PENDING_BOOKING_SESSION_KEY, create_booking_for_client_from_pending
 from .translation import CLIENT_LANGUAGE_SESSION_KEY, normalize_client_language
 
 
@@ -88,6 +89,22 @@ def client_portal(request):
     client = get_client_profile(request.user)
     if not client:
         raise PermissionDenied
+
+    pending_booking = request.session.pop(PUBLIC_PENDING_BOOKING_SESSION_KEY, None)
+    if request.method == "GET" and pending_booking:
+        booking, errors = create_booking_for_client_from_pending(client, pending_booking)
+        if booking:
+            log_event(
+                actor=request.user,
+                section="booking",
+                action="client_portal_pending_create",
+                instance=booking,
+                message=f"Reserva pendiente creada tras login de cliente: {client.full_name}.",
+            )
+            messages.success(request, "Solicitud enviada. BRIMOON Studio revisara y confirmara tu cita.")
+            return redirect("clients:portal")
+        first_error = next((items[0] for items in errors.values() if items), "No se pudo crear la reserva.")
+        messages.error(request, first_error)
 
     if request.method == "POST":
         if request.POST.get("action") == "avatar":
@@ -584,11 +601,13 @@ def _client_portal_context(request, client, booking_form=None):
 
 def _configure_client_booking_form(form, client):
     form.fields["client"].widget = forms.HiddenInput()
+    form.fields["employee"].widget = forms.HiddenInput()
     form.fields["status"].widget = forms.HiddenInput()
     form.fields["source"].widget = forms.HiddenInput()
     form.fields["start_at"].widget = forms.HiddenInput()
     form.fields["end_at"].required = False
     form.fields["end_at"].widget = forms.HiddenInput()
+    form.fields["zone"].widget = forms.HiddenInput()
     form.fields["notes"].label = "Comentario"
     form.fields["notes"].widget.attrs["placeholder"] = "Cuéntanos cualquier detalle importante."
     form.fields["reward_rule"].queryset = ClientRewardRule.objects.filter(

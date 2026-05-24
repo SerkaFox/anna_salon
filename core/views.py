@@ -18,6 +18,7 @@ from bookings.models import Booking
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from clients.models import Client
 from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
+from accounts.permissions import get_client_profile
 from employees.models import Employee
 from salon.models import Zone
 from services_app.models import Service
@@ -31,6 +32,11 @@ from .i18n import (
     localize_items,
     normalize_public_language,
     public_texts,
+)
+from .booking_requests import (
+    PUBLIC_PENDING_BOOKING_SESSION_KEY,
+    create_booking_for_client_from_pending,
+    pending_booking_from_post,
 )
 
 
@@ -443,6 +449,26 @@ def public_booking(request):
 
     _language, t, _services, _articles = _localized_context(request)
     post = request.POST
+    if post.get("action") == "existing_account":
+        pending = pending_booking_from_post(post)
+        if request.user.is_authenticated:
+            client = get_client_profile(request.user)
+            if not client:
+                redirect_url = reverse("dashboard:home")
+            else:
+                booking, errors = create_booking_for_client_from_pending(client, pending)
+                if errors:
+                    return _public_booking_error_response(request, post.dict(), errors)
+                redirect_url = reverse("clients:portal")
+            if _public_wants_json(request):
+                return JsonResponse({"ok": True, "redirect": redirect_url})
+            return redirect(redirect_url)
+        request.session[PUBLIC_PENDING_BOOKING_SESSION_KEY] = pending
+        redirect_url = f"{reverse('accounts:login')}?next={reverse('clients:portal')}"
+        if _public_wants_json(request):
+            return JsonResponse({"ok": True, "redirect": redirect_url})
+        return redirect(redirect_url)
+
     include_contact = post.get("include_contact") == "on"
     values = {
         "service": post.get("service", ""),
