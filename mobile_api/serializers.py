@@ -369,9 +369,8 @@ class ServiceSerializer(serializers.ModelSerializer):
 
 
 class ServiceWriteSerializer(serializers.ModelSerializer):
-    allowed_zones = serializers.PrimaryKeyRelatedField(
-        queryset=Zone.objects.filter(is_active=True),
-        many=True,
+    allowed_zones = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
         required=False,
     )
 
@@ -394,9 +393,12 @@ class ServiceWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar servicios."]})
         requires_zone = attrs.get("requires_zone", self.instance.requires_zone if self.instance else False)
         if "allowed_zones" in attrs:
-            has_allowed_zones = bool(attrs["allowed_zones"])
+            zone_ids = list(dict.fromkeys(attrs["allowed_zones"]))
+            zones = list(Zone.objects.filter(pk__in=zone_ids, is_active=True))
+            attrs["allowed_zones"] = zones
+            has_allowed_zones = bool(zones)
         elif self.instance:
-            has_allowed_zones = self.instance.allowed_zones.exists()
+            has_allowed_zones = self.instance.allowed_zones.filter(is_active=True).exists()
         else:
             has_allowed_zones = False
         if requires_zone and not has_allowed_zones:
