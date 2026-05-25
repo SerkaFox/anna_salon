@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.conf import settings
 from django.contrib.auth import logout, update_session_auth_hash
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -40,7 +41,7 @@ class UserLoginView(LoginView):
             "public_language": language,
             "public_languages": PUBLIC_LANGUAGES,
             "t": t,
-            "canonical_url": f"https://anna.listoya.es{reverse('accounts:login')}",
+            "canonical_url": f"{settings.PUBLIC_BASE_URL.rstrip('/')}{reverse('accounts:login')}",
         })
         return context
 

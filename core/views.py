@@ -2,6 +2,7 @@ import json
 import secrets
 from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.contrib.auth import login
 from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
@@ -41,7 +42,7 @@ from .booking_requests import (
 
 
 SITE_NAME = "BRIMOON Studio"
-SITE_DOMAIN = "https://anna.listoya.es"
+SITE_DOMAIN = settings.PUBLIC_BASE_URL.rstrip("/")
 
 
 class PublicBookingError(Exception):

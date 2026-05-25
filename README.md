@@ -39,6 +39,9 @@ python manage.py runserver
 ## Required environment variables
 
 - `DJANGO_SECRET_KEY`
+- `SITE_URL=https://brimoon.es`
+- `PUBLIC_BASE_URL=https://brimoon.es`
+- `APP_DOWNLOAD_URL=https://brimoon.es/app/`
 - `DB_ENGINE`
 - `DB_NAME`
 - `DB_USER`

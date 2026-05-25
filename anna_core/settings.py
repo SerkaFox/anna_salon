@@ -69,15 +69,25 @@ LOGGING = {
     },
 }
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'anna-dev-temporary-secret-key-change-me')
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'brimoon-dev-temporary-secret-key-change-me')
 DEBUG = False
 
 ALLOWED_HOSTS = [
-    'anna.listoya.es',
+    'brimoon.es',
+    'www.brimoon.es',
     '127.0.0.1',
     'localhost',
     '192.168.0.159',
 ]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://brimoon.es',
+    'https://www.brimoon.es',
+]
+
+SITE_URL = os.getenv('SITE_URL', 'https://brimoon.es')
+PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', SITE_URL)
+APP_DOWNLOAD_URL = os.getenv('APP_DOWNLOAD_URL', 'https://brimoon.es/app/')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
