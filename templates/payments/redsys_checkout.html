@@ -1,0 +1,30 @@
+{% extends "core/public_base.html" %}
+
+{% block title %}Pago seguro | BRIMOON Studio{% endblock %}
+
+{% block content %}
+<main class="lux-section payment-result-section">
+  <div class="lux-container payment-result-card">
+    <span class="lux-kicker">TPV seguro</span>
+    <h1>Conectando con Redsys</h1>
+    <p>Te llevamos a la pasarela segura del banco para completar el pago de tu reserva.</p>
+    <div class="payment-summary">
+      <span>Reserva #{{ payment.booking_id }}</span>
+      <strong>{{ payment.amount }} EUR</strong>
+    </div>
+    <form method="post" action="{{ payment_url }}" data-redsys-autosubmit>
+      {% for name, value in form_fields.items %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+      {% endfor %}
+      <button class="btn-lux btn-lux-primary btn-lux-large" type="submit">Continuar al pago seguro</button>
+    </form>
+    <p class="payment-note">Si la redireccion no empieza automaticamente, pulsa el boton.</p>
+  </div>
+</main>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const form = document.querySelector("[data-redsys-autosubmit]");
+    if (form) window.setTimeout(() => form.submit(), 650);
+  });
+</script>
+{% endblock %}

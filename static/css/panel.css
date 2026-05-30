@@ -1828,6 +1828,44 @@
   font-size: 1.08rem;
 }
 .client-login-summary p { margin: 5px 0 0; }
+.portal-booking-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.client-lux-body .portal-payment-badge.is-paid {
+  color: #b8ffd9;
+  border-color: rgba(80, 220, 151, 0.34);
+  background: rgba(7, 61, 46, 0.36);
+}
+.client-lux-body .portal-payment-badge.is-pending {
+  color: #f0d091;
+  border-color: rgba(240, 208, 145, 0.34);
+  background: rgba(214, 167, 92, 0.12);
+}
+.client-lux-body .portal-payment-badge.is-failed {
+  color: #ffd7ca;
+  border-color: rgba(255, 211, 196, 0.34);
+  background: rgba(120, 32, 20, 0.28);
+}
+.portal-pay-form {
+  margin-top: 14px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(240, 208, 145, 0.24);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(214, 167, 92, 0.12), rgba(7, 61, 46, 0.18));
+}
+.portal-pay-form span {
+  color: #f0d091;
+  font-weight: 900;
+}
 @media (max-width: 620px) {
-  .client-login-summary { align-items: stretch; flex-direction: column; }
+  .client-login-summary,
+  .portal-pay-form { align-items: stretch; flex-direction: column; }
 }

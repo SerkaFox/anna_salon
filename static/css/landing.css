@@ -984,3 +984,50 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   .booking-submit-row { align-items: stretch; flex-direction: column; }
   .booking-submit-row .btn-lux { width: 100%; }
 }
+
+.payment-result-section {
+  min-height: 72vh;
+  display: grid;
+  align-items: center;
+}
+.payment-result-card {
+  max-width: 760px;
+  padding: clamp(28px, 5vw, 58px);
+  border: 1px solid rgba(240, 208, 145, 0.28);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(214, 167, 92, 0.2), transparent 36%),
+    linear-gradient(145deg, rgba(255,255,255,0.12), rgba(255,255,255,0.035));
+  box-shadow: 0 34px 96px rgba(0,0,0,0.56), 0 18px 54px rgba(214,167,92,0.16);
+  backdrop-filter: blur(22px) saturate(132%);
+  text-align: center;
+}
+.payment-result-card h1 {
+  margin: 12px 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(2.25rem, 4vw, 4.1rem);
+  line-height: 1;
+  color: var(--text);
+}
+.payment-result-card p {
+  max-width: 560px;
+  margin: 0 auto 22px;
+  color: var(--muted);
+}
+.payment-summary {
+  width: min(100%, 420px);
+  margin: 22px auto;
+  padding: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid rgba(240,208,145,0.24);
+  border-radius: 18px;
+  color: var(--muted);
+  background: rgba(6,16,24,0.44);
+}
+.payment-summary strong { color: var(--gold-light); }
+.payment-note {
+  margin-top: 16px !important;
+  font-size: 0.9rem;
+}

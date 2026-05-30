@@ -1,6 +1,8 @@
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+import secrets
 
+from django.conf import settings
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count
 from django.http import FileResponse, Http404
@@ -29,6 +31,8 @@ from clients.rewards import client_reward_progress
 from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
 from salon.models import Zone
 from services_app.models import Service
+from payments.models import Payment as OnlinePayment
+from payments.redsys import RedsysConfigurationError, build_form_fields, build_merchant_parameters, get_payment_url, sanitize_redsys_payload
 
 from .permissions import IsAuthenticatedMobileUser
 from .serializers import (
@@ -160,6 +164,15 @@ def _first_error_message(errors):
 
 def _format_api_datetime(value):
     return timezone.localtime(value, timezone.get_default_timezone()).isoformat()
+
+
+def _build_redsys_order_number(booking_id):
+    prefix = f"{booking_id % 10000:04d}"
+    for _attempt in range(10):
+        order_number = f"{prefix}{secrets.token_hex(4).upper()}"
+        if not OnlinePayment.objects.filter(order_number=order_number).exists():
+            return order_number
+    raise serializers.ValidationError({"payment": ["No se pudo generar un número de pedido único."]})
 
 
 def _build_referral_tree(root_client):
@@ -839,6 +852,64 @@ class BookingDetailView(MobileApiMixin, APIView):
             message=f"Reserva actualizada desde API móvil para {booking.client}.",
         )
         return Response(BookingSerializer(booking, context={"request": request}).data)
+
+
+class BookingPaymentStartView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+
+        requested_amount = request.data.get("amount")
+        total_amount = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+        try:
+            amount = Decimal(str(requested_amount).replace(",", ".")) if requested_amount not in (None, "") else total_amount
+        except (InvalidOperation, ValueError):
+            raise serializers.ValidationError({"amount": ["Importe inválido."]})
+        if amount <= Decimal("0.00"):
+            raise serializers.ValidationError({"amount": ["El importe debe ser mayor que cero."]})
+        if total_amount > Decimal("0.00") and amount > total_amount:
+            raise serializers.ValidationError({"amount": ["El importe no puede superar el precio de la reserva."]})
+
+        method = request.data.get("method") or OnlinePayment.Methods.CARD
+        if method != OnlinePayment.Methods.CARD:
+            raise serializers.ValidationError({"method": ["Solo tarjeta está habilitada para TPV Redsys. Bizum queda preparado para una fase posterior."]})
+
+        payment = OnlinePayment.objects.create(
+            booking=booking,
+            amount=amount,
+            currency=getattr(settings, "REDSYS_CURRENCY", "978"),
+            order_number=_build_redsys_order_number(booking.pk),
+            method=method,
+            status=OnlinePayment.Statuses.PENDING,
+        )
+        merchant_parameters = build_merchant_parameters(payment, request=request)
+        try:
+            fields = build_form_fields(merchant_parameters)
+        except RedsysConfigurationError as exc:
+            payment.status = OnlinePayment.Statuses.FAILED
+            payment.raw_request = sanitize_redsys_payload(merchant_parameters)
+            payment.save(update_fields=["status", "raw_request", "updated_at"])
+            raise serializers.ValidationError({"payment": [str(exc)]}) from exc
+
+        payment.raw_request = sanitize_redsys_payload(merchant_parameters)
+        payment.save(update_fields=["raw_request", "updated_at"])
+
+        return Response(
+            {
+                "payment_id": payment.pk,
+                "booking": booking.pk,
+                "order_number": payment.order_number,
+                "amount": str(payment.amount),
+                "currency": payment.currency,
+                "provider": payment.provider,
+                "method": payment.method,
+                "status": payment.status,
+                "payment_url": get_payment_url(),
+                "form_fields": fields,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class BookingAvailabilityCheckView(MobileApiMixin, APIView):

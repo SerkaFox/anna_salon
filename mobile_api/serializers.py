@@ -11,6 +11,7 @@ from bookings.utils import combine_local, find_available_zone, fits_employee_sch
 from clients.models import Client, ClientRewardRule
 from clients.rewards import client_reward_progress
 from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
+from payments.models import Payment as OnlinePayment
 from salon.models import Zone
 from services_app.models import Service
 
@@ -438,6 +439,9 @@ class BookingSerializer(serializers.ModelSerializer):
     start_at = serializers.SerializerMethodField()
     end_at = serializers.SerializerMethodField()
     reward_rule_name = serializers.CharField(source="reward_rule.name", read_only=True, allow_null=True)
+    online_payment_status = serializers.SerializerMethodField()
+    online_payment_paid_total = serializers.SerializerMethodField()
+    online_payment_remaining_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -464,6 +468,9 @@ class BookingSerializer(serializers.ModelSerializer):
             "discount_amount_snapshot",
             "reward_rule",
             "reward_rule_name",
+            "online_payment_status",
+            "online_payment_paid_total",
+            "online_payment_remaining_amount",
             "employee_percent_snapshot",
             "employee_amount_snapshot",
             "salon_amount_snapshot",
@@ -476,6 +483,29 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_end_at(self, obj):
         return _format_local_datetime(obj.end_at)
+
+    def _payment_info(self, obj):
+        if hasattr(obj, "_mobile_online_payment_info"):
+            return obj._mobile_online_payment_info
+        payments = list(getattr(obj, "_prefetched_objects_cache", {}).get("online_payments", obj.online_payments.all()))
+        paid_total = sum((payment.amount for payment in payments if payment.status == OnlinePayment.Statuses.PAID), 0)
+        total_amount = obj.client_price_snapshot or obj.price_snapshot or 0
+        latest_payment = payments[0] if payments else None
+        obj._mobile_online_payment_info = {
+            "status": latest_payment.status if latest_payment else "",
+            "paid_total": paid_total,
+            "remaining_amount": max(total_amount - paid_total, 0),
+        }
+        return obj._mobile_online_payment_info
+
+    def get_online_payment_status(self, obj):
+        return self._payment_info(obj)["status"]
+
+    def get_online_payment_paid_total(self, obj):
+        return str(self._payment_info(obj)["paid_total"])
+
+    def get_online_payment_remaining_amount(self, obj):
+        return str(self._payment_info(obj)["remaining_amount"])
 
 
 class BookingWriteSerializer(serializers.Serializer):

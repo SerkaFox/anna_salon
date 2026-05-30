@@ -60,7 +60,21 @@
             <article class="booking-list-card">
               <strong>{{ booking.start_at|date:"d/m/Y H:i" }}</strong>
               <p>{{ booking.service }} · {{ booking.employee }}</p>
-              <span class="dashboard-badge">{{ booking.get_status_display }}</span>
+              <div class="portal-booking-meta">
+                <span class="dashboard-badge">{{ booking.get_status_display }}</span>
+                {% if booking.online_payment_is_paid %}
+                  <span class="dashboard-badge portal-payment-badge is-paid">Pagado online</span>
+                {% elif booking.online_payment_status == "pending" %}
+                  <span class="dashboard-badge portal-payment-badge is-pending">Pago pendiente</span>
+                {% endif %}
+              </div>
+              {% if booking.online_payment_can_pay %}
+                <form method="post" action="{% url 'clients:booking_payment' booking.id %}" class="portal-pay-form">
+                  {% csrf_token %}
+                  <span>{{ booking.online_payment_remaining_amount }} €</span>
+                  <button class="btn btn-small" type="submit">Pagar ahora</button>
+                </form>
+              {% endif %}
             </article>
           {% endfor %}
         </div>
@@ -213,6 +227,13 @@
               <strong>{{ booking.start_at|date:"d/m/Y H:i" }}</strong>
               <p>{{ booking.service }} · {{ booking.employee }}</p>
               <p class="muted-text">{{ booking.get_status_display }} · {{ booking.client_price_snapshot }} €</p>
+              {% if booking.online_payment_is_paid %}
+                <span class="dashboard-badge portal-payment-badge is-paid">Pagado online</span>
+              {% elif booking.online_payment_status == "pending" %}
+                <span class="dashboard-badge portal-payment-badge is-pending">Pago pendiente</span>
+              {% elif booking.online_payment_status == "failed" %}
+                <span class="dashboard-badge portal-payment-badge is-failed">Pago no completado</span>
+              {% endif %}
             </article>
           {% endfor %}
         </div>

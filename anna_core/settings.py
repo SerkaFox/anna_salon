@@ -105,6 +105,7 @@ INSTALLED_APPS = [
     'clients', # — база клиентов
     'employees', # — сотрудники
     'documents', # — recibos, facturas y exportación fiscal
+    'payments', # — TPV virtual / Redsys
     'auditlog', # — journal de cambios
     'core',
     'mobile_api',
@@ -184,3 +185,10 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
+REDSYS_MERCHANT_CODE = os.getenv('REDSYS_MERCHANT_CODE', '999008881')
+REDSYS_TERMINAL = os.getenv('REDSYS_TERMINAL', '001')
+REDSYS_SECRET_KEY = os.getenv('REDSYS_SECRET_KEY', '')
+REDSYS_ENVIRONMENT = os.getenv('REDSYS_ENVIRONMENT', 'test')
+REDSYS_CURRENCY = os.getenv('REDSYS_CURRENCY', '978')
+REDSYS_TRANSACTION_TYPE = os.getenv('REDSYS_TRANSACTION_TYPE', '0')

@@ -1,7 +1,9 @@
 from datetime import datetime
 from decimal import Decimal
+import secrets
 
 from django import forms
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -20,6 +22,8 @@ from bookings.models import Booking
 from bookings.models import BookingPhoto
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from employees.models import Employee
+from payments.models import Payment as OnlinePayment
+from payments.redsys import RedsysConfigurationError, build_form_fields, build_merchant_parameters, get_payment_url, sanitize_redsys_payload
 from .forms import ClientForm
 from .models import Client, ClientRewardRule
 from salon.models import Zone
@@ -40,6 +44,49 @@ def build_referral_tree(root_client):
         "name": root_client.full_name or str(root_client),
         "children": [build_referral_tree(client) for client in referred_clients],
     }
+
+
+def _build_client_redsys_order_number(booking_id):
+    prefix = f"{booking_id % 10000:04d}"
+    for _attempt in range(10):
+        order_number = f"{prefix}{secrets.token_hex(4).upper()}"
+        if not OnlinePayment.objects.filter(order_number=order_number).exists():
+            return order_number
+    raise ValueError("No se pudo generar un numero de pedido unico.")
+
+
+def _booking_online_payment_info(booking):
+    payments = list(getattr(booking, "_prefetched_objects_cache", {}).get("online_payments", booking.online_payments.all()))
+    paid_total = sum((payment.amount for payment in payments if payment.status == OnlinePayment.Statuses.PAID), Decimal("0.00"))
+    pending_total = sum((payment.amount for payment in payments if payment.status == OnlinePayment.Statuses.PENDING), Decimal("0.00"))
+    total_amount = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+    remaining_amount = max(total_amount - paid_total, Decimal("0.00"))
+    latest_payment = payments[0] if payments else None
+    return {
+        "paid_total": paid_total,
+        "pending_total": pending_total,
+        "total_amount": total_amount,
+        "remaining_amount": remaining_amount,
+        "latest_payment": latest_payment,
+        "status": latest_payment.status if latest_payment else "",
+        "is_paid": remaining_amount <= Decimal("0.00"),
+    }
+
+
+def _attach_online_payment_info(bookings):
+    for booking in bookings:
+        info = _booking_online_payment_info(booking)
+        booking.online_payment_status = info["status"]
+        booking.online_payment_paid_total = info["paid_total"]
+        booking.online_payment_pending_total = info["pending_total"]
+        booking.online_payment_remaining_amount = info["remaining_amount"]
+        booking.online_payment_is_paid = info["is_paid"]
+        booking.online_payment_can_pay = (
+            not info["is_paid"]
+            and info["total_amount"] > Decimal("0.00")
+            and booking.status not in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW}
+        )
+    return bookings
 
 
 @login_required
@@ -238,6 +285,71 @@ def client_portal_slots_api(request):
 
 
 @login_required
+@require_POST
+def client_booking_payment(request, pk):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+
+    booking = get_object_or_404(
+        Booking.objects.select_related("client", "employee", "service").prefetch_related("online_payments"),
+        pk=pk,
+        client=client,
+    )
+    if booking.status in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW}:
+        messages.error(request, "Esta reserva no se puede pagar online.")
+        return redirect("clients:portal")
+
+    payment_info = _booking_online_payment_info(booking)
+    if payment_info["remaining_amount"] <= Decimal("0.00"):
+        messages.success(request, "Esta reserva ya esta pagada.")
+        return redirect("clients:portal")
+
+    try:
+        order_number = _build_client_redsys_order_number(booking.pk)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("clients:portal")
+
+    payment = OnlinePayment.objects.create(
+        booking=booking,
+        amount=payment_info["remaining_amount"],
+        currency=getattr(settings, "REDSYS_CURRENCY", "978"),
+        order_number=order_number,
+        method=OnlinePayment.Methods.CARD,
+        status=OnlinePayment.Statuses.PENDING,
+    )
+    merchant_parameters = build_merchant_parameters(payment, request=request)
+    try:
+        form_fields = build_form_fields(merchant_parameters)
+    except RedsysConfigurationError as exc:
+        payment.status = OnlinePayment.Statuses.FAILED
+        payment.raw_request = sanitize_redsys_payload(merchant_parameters)
+        payment.save(update_fields=["status", "raw_request", "updated_at"])
+        messages.error(request, str(exc))
+        return redirect("clients:portal")
+
+    payment.raw_request = sanitize_redsys_payload(merchant_parameters)
+    payment.save(update_fields=["raw_request", "updated_at"])
+    log_event(
+        actor=request.user,
+        section="payment",
+        action="redsys_start",
+        instance=booking,
+        message=f"Pago Redsys iniciado desde portal cliente para reserva #{booking.pk}.",
+    )
+    return render(
+        request,
+        "payments/redsys_checkout.html",
+        {
+            "payment": payment,
+            "payment_url": get_payment_url(),
+            "form_fields": form_fields,
+        },
+    )
+
+
+@login_required
 def client_create(request):
     referred_by_id = request.GET.get("referred_by")
     initial = {}
@@ -423,7 +535,7 @@ def client_detail(request, pk):
     bookings = (
         Booking.objects
         .select_related("employee", "service", "zone")
-        .prefetch_related("photos")
+        .prefetch_related("photos", "online_payments")
         .filter(client=client)
         .order_by("-start_at")
     )
@@ -539,12 +651,14 @@ def _client_portal_context(request, client, booking_form=None):
     total_spent = sum((booking.client_price_snapshot for booking in done_bookings), Decimal("0.00"))
     total_visits = done_bookings.count()
     avg_ticket = total_spent / total_visits if total_visits else Decimal("0.00")
-    upcoming_bookings = (
+    upcoming_bookings = list(
         bookings.filter(start_at__gte=timezone.now())
         .exclude(status=Booking.Statuses.CANCELLED)
         .order_by("start_at")[:5]
     )
     history = list(bookings[:20])
+    _attach_online_payment_info(upcoming_bookings)
+    _attach_online_payment_info(history)
     rewards = client_reward_progress(client)
     photo_history = (
         BookingPhoto.objects

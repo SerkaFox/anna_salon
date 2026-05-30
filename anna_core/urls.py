@@ -17,6 +17,7 @@ urlpatterns = [
     path("sitemap.xml", core_views.sitemap_xml, name="sitemap_xml"),
     path("", include("accounts.urls")),
     path("api/v1/", include("mobile_api.urls")),
+    path("payments/", include("payments.urls")),
     path("panel/", include("dashboard.urls")),
     path("panel/clientes/", include("clients.urls")),
     path("panel/empleados/", include("employees.urls")),

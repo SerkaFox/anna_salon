@@ -1,0 +1,24 @@
+{% extends "core/public_base.html" %}
+
+{% block title %}Pago seguro | BRIMOON Studio{% endblock %}
+
+{% block content %}
+<main class="lux-section payment-result-section">
+  <div class="lux-container payment-result-card">
+    {% if status == "success" %}
+      <span class="lux-kicker">TPV seguro</span>
+      <h1>Pago recibido</h1>
+      <p>Hemos recibido la respuesta del banco. La reserva se marcara como pagada cuando Redsys envie la notificacion segura.</p>
+      <a class="btn-lux btn-lux-primary" href="{% url 'clients:portal' %}">Volver a mi cuenta</a>
+    {% else %}
+      <span class="lux-kicker">TPV seguro</span>
+      <h1>Pago no completado</h1>
+      <p>El pago no se ha completado o ha sido cancelado. Puedes volver a intentarlo o contactar con BRIMOON Studio.</p>
+      <div class="lux-actions">
+        <a class="btn-lux btn-lux-outline" href="{% url 'clients:portal' %}">Volver a mi cuenta</a>
+        <a class="btn-lux btn-lux-emerald" href="{% url 'home' %}#contacto">Contactar</a>
+      </div>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}
