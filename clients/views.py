@@ -23,7 +23,6 @@ from bookings.models import BookingPhoto
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from employees.models import Employee
 from payments.models import Payment as OnlinePayment
-from payments.redsys import RedsysConfigurationError, build_form_fields, build_merchant_parameters, get_payment_url, sanitize_redsys_payload
 from .forms import ClientForm
 from .models import Client, ClientRewardRule
 from salon.models import Zone
@@ -87,6 +86,27 @@ def _attach_online_payment_info(bookings):
             and booking.status not in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW}
         )
     return bookings
+
+
+def _is_future_portal_slot(slot):
+    current_time = timezone.localtime(timezone.now()).replace(second=0, microsecond=0)
+    return timezone.localtime(slot["start_at"]).replace(second=0, microsecond=0) > current_time
+
+
+def _create_temporary_paid_payment(booking, amount):
+    return OnlinePayment.objects.create(
+        booking=booking,
+        amount=amount,
+        currency=getattr(settings, "REDSYS_CURRENCY", "978"),
+        order_number=_build_client_redsys_order_number(booking.pk),
+        method=OnlinePayment.Methods.CARD,
+        status=OnlinePayment.Statuses.PAID,
+        redsys_response_code="MOCK",
+        redsys_authorisation_code="TEMP",
+        raw_request={"provider": "mock_client_portal"},
+        raw_response={"paid": True, "mode": "temporary_mock"},
+        paid_at=timezone.now(),
+    )
 
 
 @login_required
@@ -244,6 +264,7 @@ def client_portal_slots_api(request):
             zone=zone,
             step_minutes=MOBILE_SLOT_STEP_MINUTES,
         )
+        slots = [slot for slot in slots if _is_future_portal_slot(slot)]
         first_slot = slots[0] if slots else None
         employee_payload.append(
             {
@@ -306,47 +327,22 @@ def client_booking_payment(request, pk):
         return redirect("clients:portal")
 
     try:
-        order_number = _build_client_redsys_order_number(booking.pk)
+        _create_temporary_paid_payment(booking, payment_info["remaining_amount"])
     except ValueError as exc:
         messages.error(request, str(exc))
         return redirect("clients:portal")
-
-    payment = OnlinePayment.objects.create(
-        booking=booking,
-        amount=payment_info["remaining_amount"],
-        currency=getattr(settings, "REDSYS_CURRENCY", "978"),
-        order_number=order_number,
-        method=OnlinePayment.Methods.CARD,
-        status=OnlinePayment.Statuses.PENDING,
-    )
-    merchant_parameters = build_merchant_parameters(payment, request=request)
-    try:
-        form_fields = build_form_fields(merchant_parameters)
-    except RedsysConfigurationError as exc:
-        payment.status = OnlinePayment.Statuses.FAILED
-        payment.raw_request = sanitize_redsys_payload(merchant_parameters)
-        payment.save(update_fields=["status", "raw_request", "updated_at"])
-        messages.error(request, str(exc))
-        return redirect("clients:portal")
-
-    payment.raw_request = sanitize_redsys_payload(merchant_parameters)
-    payment.save(update_fields=["raw_request", "updated_at"])
+    if booking.status == Booking.Statuses.PENDING:
+        booking.status = Booking.Statuses.CONFIRMED
+        booking.save(update_fields=["status", "updated_at"])
     log_event(
         actor=request.user,
         section="payment",
-        action="redsys_start",
+        action="temporary_payment",
         instance=booking,
-        message=f"Pago Redsys iniciado desde portal cliente para reserva #{booking.pk}.",
+        message=f"Pago temporal confirmado desde portal cliente para reserva #{booking.pk}.",
     )
-    return render(
-        request,
-        "payments/redsys_checkout.html",
-        {
-            "payment": payment,
-            "payment_url": get_payment_url(),
-            "form_fields": form_fields,
-        },
-    )
+    messages.success(request, "Pago temporal confirmado. Tu reserva queda confirmada y pagada.")
+    return redirect("clients:portal")
 
 
 @login_required

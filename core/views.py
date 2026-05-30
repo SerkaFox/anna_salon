@@ -258,6 +258,11 @@ def _format_public_datetime(value):
     return timezone.localtime(value).isoformat()
 
 
+def _is_future_public_slot(slot):
+    current_time = timezone.localtime(timezone.now()).replace(second=0, microsecond=0)
+    return timezone.localtime(slot["start_at"]).replace(second=0, microsecond=0) > current_time
+
+
 def _public_booking_services():
     return Service.objects.filter(is_active=True).order_by("name")
 
@@ -432,6 +437,8 @@ def public_booking_slots(request):
                 }
             )
         for slot in slots:
+            if not _is_future_public_slot(slot):
+                continue
             slot_zone = zone
             if service.requires_zone and slot_zone is None:
                 slot_zone = find_available_zone(service, slot["start_at"], slot["end_at"])
