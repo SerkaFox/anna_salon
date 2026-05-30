@@ -20,7 +20,7 @@ from auditlog.services import log_event
 from bookings.forms import BookingForm
 from bookings.models import Booking
 from bookings.models import BookingPhoto
-from bookings.services import create_booking_prepayment, refund_booking_prepayment, refresh_booking_prepayments
+from bookings.services import calculate_booking_prepayment_amount, create_booking_prepayment, refund_booking_prepayment, refresh_booking_prepayments
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from employees.models import Employee
 from payments.models import Payment as OnlinePayment
@@ -76,13 +76,15 @@ def _booking_online_payment_info(booking):
 def _attach_online_payment_info(bookings):
     for booking in bookings:
         info = _booking_online_payment_info(booking)
+        prepayment = getattr(booking, "prepayment", None)
         booking.online_payment_status = info["status"]
         booking.online_payment_paid_total = info["paid_total"]
         booking.online_payment_pending_total = info["pending_total"]
         booking.online_payment_remaining_amount = info["remaining_amount"]
+        booking.prepayment_due_amount = calculate_booking_prepayment_amount(booking)
         booking.online_payment_is_paid = info["is_paid"]
         booking.online_payment_can_pay = (
-            not info["is_paid"]
+            not prepayment
             and info["total_amount"] > Decimal("0.00")
             and booking.status not in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW}
         )
@@ -328,9 +330,16 @@ def client_booking_payment(request, pk):
     if payment_info["remaining_amount"] <= Decimal("0.00"):
         messages.success(request, "Esta reserva ya esta pagada.")
         return redirect("clients:portal")
+    if getattr(booking, "prepayment", None):
+        messages.success(request, "Esta reserva ya tiene prepago.")
+        return redirect("clients:portal")
 
     try:
-        _create_temporary_paid_payment(booking, payment_info["remaining_amount"])
+        prepayment_amount = calculate_booking_prepayment_amount(booking)
+        if prepayment_amount <= Decimal("0.00"):
+            messages.error(request, "No se pudo calcular el prepago.")
+            return redirect("clients:portal")
+        _create_temporary_paid_payment(booking, prepayment_amount)
     except ValueError as exc:
         messages.error(request, str(exc))
         return redirect("clients:portal")

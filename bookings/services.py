@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -7,6 +8,15 @@ from django.utils import timezone
 from payments.models import Payment as OnlinePayment
 
 from .models import Booking, BookingPrepayment, BookingWaitlistEntry
+
+
+PREPAYMENT_PERCENT = Decimal("10.00")
+
+
+def calculate_booking_prepayment_amount(booking):
+    total = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+    amount = (Decimal(total) * PREPAYMENT_PERCENT / Decimal("100.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return max(amount, Decimal("0.00"))
 
 
 def create_booking_prepayment(booking, payment):

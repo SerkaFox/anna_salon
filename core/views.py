@@ -16,7 +16,7 @@ from django.views.decorators.http import require_POST
 from accounts.models import User
 from bookings.forms import BookingForm
 from bookings.models import Booking, BookingWaitlistEntry
-from bookings.services import create_booking_prepayment
+from bookings.services import calculate_booking_prepayment_amount, create_booking_prepayment
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from clients.models import Client
 from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
@@ -375,7 +375,7 @@ def _create_public_booking(values):
         if not form.is_valid():
             raise PublicBookingError({field: [str(item) for item in errors] for field, errors in form.errors.items()})
         booking = form.save()
-        amount = booking.client_price_snapshot or booking.price_snapshot or 0
+        amount = calculate_booking_prepayment_amount(booking)
         if amount:
             payment = OnlinePayment.objects.create(
                 booking=booking,
