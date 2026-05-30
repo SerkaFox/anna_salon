@@ -21,6 +21,7 @@ from clients.models import Client
 from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
 from accounts.permissions import get_client_profile
 from employees.models import Employee
+from payments.models import Payment as OnlinePayment
 from salon.models import Zone
 from services_app.models import Service
 
@@ -273,6 +274,15 @@ def _generate_client_username(name):
     return f"{base}{secrets.token_hex(3)}"
 
 
+def _generate_public_payment_order_number(booking_id):
+    prefix = f"{booking_id % 10000:04d}"
+    for _attempt in range(10):
+        order_number = f"{prefix}{secrets.token_hex(4).upper()}"
+        if not OnlinePayment.objects.filter(order_number=order_number).exists():
+            return order_number
+    raise PublicBookingError({"__all__": ["No se pudo generar el pago de la reserva."]})
+
+
 def _public_wants_json(request):
     return request.headers.get("x-requested-with") == "XMLHttpRequest" or "application/json" in request.headers.get("accept", "")
 
@@ -342,15 +352,30 @@ def _create_public_booking(values):
                 "zone": values["zone"].pk if values.get("zone") else "",
                 "start_at": timezone.localtime(values["start_at"]).strftime("%Y-%m-%dT%H:%M"),
                 "end_at": timezone.localtime(values["end_at"]).strftime("%Y-%m-%dT%H:%M"),
-                "status": Booking.Statuses.PENDING,
+                "status": Booking.Statuses.CONFIRMED,
                 "source": Booking.Sources.WEBSITE,
-                "notes": "Reserva creada desde la web publica.",
+                "notes": "Reserva creada desde la web publica. Pago temporal confirmado.",
             },
             allowed_clients=Client.objects.filter(pk=client.pk),
         )
         if not form.is_valid():
             raise PublicBookingError({field: [str(item) for item in errors] for field, errors in form.errors.items()})
         booking = form.save()
+        amount = booking.client_price_snapshot or booking.price_snapshot or 0
+        if amount:
+            OnlinePayment.objects.create(
+                booking=booking,
+                amount=amount,
+                currency=getattr(settings, "REDSYS_CURRENCY", "978"),
+                order_number=_generate_public_payment_order_number(booking.pk),
+                method=OnlinePayment.Methods.CARD,
+                status=OnlinePayment.Statuses.PAID,
+                redsys_response_code="MOCK",
+                redsys_authorisation_code="TEMP",
+                raw_request={"provider": "mock_public_checkout"},
+                raw_response={"paid": True, "mode": "temporary_mock"},
+                paid_at=timezone.now(),
+            )
     return user, booking
 
 
@@ -491,6 +516,8 @@ def public_booking(request):
         errors["password"] = [t["public_booking_error_password_required"]]
     elif len(values["password"]) < 6:
         errors["password"] = [t["public_booking_error_password_min"]]
+    if post.get("mock_payment_confirmed") != "1":
+        errors["__all__"] = [t["public_booking_error_payment_required"]]
 
     service = employee = zone = start_at = None
     try:

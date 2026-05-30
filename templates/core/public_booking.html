@@ -81,6 +81,7 @@
       <input type="hidden" name="start_at" value="{{ booking_values.start_at }}" data-start-input>
       <input type="hidden" name="employee" value="{{ booking_values.employee }}" data-employee-input>
       <input type="hidden" name="zone" value="{{ booking_values.zone }}" data-zone-input>
+      <input type="hidden" name="mock_payment_confirmed" value="" data-mock-payment-input>
 
       <div class="booking-details-section" data-details-section>
       <div class="booking-form-grid booking-details-grid">
@@ -123,6 +124,23 @@
       </div>
     </form>
 
+    <div class="booking-payment-modal" data-payment-modal hidden>
+      <div class="booking-payment-modal__backdrop" data-payment-cancel></div>
+      <section class="booking-payment-modal__card" role="dialog" aria-modal="true" aria-labelledby="booking-payment-title">
+        <span class="lux-kicker">BRIMOON Pay</span>
+        <h2 id="booking-payment-title">{{ t.public_booking_mock_title }}</h2>
+        <p>{{ t.public_booking_mock_text }}</p>
+        <div class="booking-payment-summary">
+          <span data-payment-service></span>
+          <strong data-payment-time></strong>
+        </div>
+        <div class="booking-payment-actions">
+          <button class="btn-lux btn-lux-primary btn-lux-large" type="button" data-payment-confirm>{{ t.public_booking_mock_pay }}</button>
+          <button class="btn-lux btn-lux-outline btn-lux-large" type="button" data-payment-cancel>{{ t.public_booking_mock_cancel }}</button>
+        </div>
+      </section>
+    </div>
+
     <aside class="public-booking-aside">
       <span class="lux-kicker">BRIMOON</span>
       <h2>{{ t.public_booking_aside_title }}</h2>
@@ -158,6 +176,11 @@
     const selectedSummaryText = form.querySelector('[data-selected-summary-text]');
     const editSlotButton = form.querySelector('[data-edit-slot]');
     const detailsSection = form.querySelector('[data-details-section]');
+    const mockPaymentInput = form.querySelector('[data-mock-payment-input]');
+    const paymentModal = document.querySelector('[data-payment-modal]');
+    const paymentConfirmButton = document.querySelector('[data-payment-confirm]');
+    const paymentService = document.querySelector('[data-payment-service]');
+    const paymentTime = document.querySelector('[data-payment-time]');
     let lastSlots = [];
     let activeDateRequest = 0;
     const currentLanguage = '{{ public_language|default:"es"|escapejs }}';
@@ -223,6 +246,7 @@
       startInput.value = '';
       employeeInput.value = '';
       zoneInput.value = '';
+      if (mockPaymentInput) mockPaymentInput.value = '';
       submitButton.disabled = true;
       if (existingAccountButton) existingAccountButton.disabled = true;
       form.classList.remove('is-time-selected');
@@ -425,9 +449,7 @@
       return true;
     }
 
-    form.addEventListener('submit', function (event) {
-      event.preventDefault();
-      if (!validateBeforeSubmit()) return;
+    function submitBooking() {
       const originalText = submitButton.textContent;
       submitButton.disabled = true;
       submitButton.textContent = messages.submitting;
@@ -451,6 +473,47 @@
           submitButton.disabled = false;
           submitButton.textContent = originalText;
         });
+    }
+
+    function openPaymentModal() {
+      if (!paymentModal) {
+        if (mockPaymentInput) mockPaymentInput.value = '1';
+        submitBooking();
+        return;
+      }
+      const selectedService = serviceSelect.options[serviceSelect.selectedIndex];
+      if (paymentService) paymentService.textContent = selectedService ? selectedService.textContent : '';
+      if (paymentTime) paymentTime.textContent = selectedSummaryText.textContent || status.textContent || '';
+      paymentModal.hidden = false;
+      document.body.classList.add('is-payment-modal-open');
+      if (paymentConfirmButton) paymentConfirmButton.focus();
+    }
+
+    function closePaymentModal() {
+      if (!paymentModal) return;
+      paymentModal.hidden = true;
+      document.body.classList.remove('is-payment-modal-open');
+    }
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!validateBeforeSubmit()) return;
+      if (!mockPaymentInput || mockPaymentInput.value !== '1') {
+        openPaymentModal();
+        return;
+      }
+      submitBooking();
+    });
+
+    if (paymentConfirmButton) {
+      paymentConfirmButton.addEventListener('click', function () {
+        if (mockPaymentInput) mockPaymentInput.value = '1';
+        closePaymentModal();
+        submitBooking();
+      });
+    }
+    document.querySelectorAll('[data-payment-cancel]').forEach(function (button) {
+      button.addEventListener('click', closePaymentModal);
     });
 
     if (existingAccountButton) {
