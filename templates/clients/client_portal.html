@@ -75,6 +75,19 @@
                   <button class="btn btn-small" type="submit">Pagar ahora</button>
                 </form>
               {% endif %}
+              {% if booking.prepayment %}
+                <div class="portal-prepayment-box">
+                  <span>Prepago: {{ booking.prepayment.amount }} € · {{ booking.prepayment.get_status_display }}</span>
+                  {% if booking.prepayment.is_refundable %}
+                    <form method="post" action="{% url 'clients:booking_prepayment_refund' booking.id %}">
+                      {% csrf_token %}
+                      <button class="btn btn-light btn-small" type="submit">Cancelar y devolver prepago</button>
+                    </form>
+                  {% else %}
+                    <small>Devolucion disponible hasta {{ booking.prepayment.refundable_until|date:"d/m/Y H:i" }}</small>
+                  {% endif %}
+                </div>
+              {% endif %}
             </article>
           {% endfor %}
         </div>

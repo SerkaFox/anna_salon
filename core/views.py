@@ -15,7 +15,8 @@ from django.views.decorators.http import require_POST
 
 from accounts.models import User
 from bookings.forms import BookingForm
-from bookings.models import Booking
+from bookings.models import Booking, BookingWaitlistEntry
+from bookings.services import create_booking_prepayment
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from clients.models import Client
 from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
@@ -308,6 +309,14 @@ def _public_booking_context(request, values=None, errors=None):
             "booking_non_field_errors": (errors or {}).get("__all__", []),
             "today": timezone.localdate().isoformat(),
             "slot_endpoint": reverse("public_booking_slots"),
+            "waitlist_employees": [
+                {
+                    "id": employee.pk,
+                    "name": employee.full_name,
+                    "service_ids": [service.pk for service in employee.services.all()],
+                }
+                for employee in Employee.objects.filter(is_active=True).prefetch_related("services").order_by("first_name", "last_name")
+            ],
         }
     )
     return context
@@ -368,7 +377,7 @@ def _create_public_booking(values):
         booking = form.save()
         amount = booking.client_price_snapshot or booking.price_snapshot or 0
         if amount:
-            OnlinePayment.objects.create(
+            payment = OnlinePayment.objects.create(
                 booking=booking,
                 amount=amount,
                 currency=getattr(settings, "REDSYS_CURRENCY", "978"),
@@ -381,6 +390,7 @@ def _create_public_booking(values):
                 raw_response={"paid": True, "mode": "temporary_mock"},
                 paid_at=timezone.now(),
             )
+            create_booking_prepayment(booking, payment)
     return user, booking
 
 
@@ -609,6 +619,63 @@ def public_booking(request):
     if _public_wants_json(request):
         return JsonResponse({"ok": True, "redirect": redirect_url, "username": user.username})
     return redirect(redirect_url)
+
+
+@require_POST
+def public_waitlist(request):
+    language = detect_public_language(request)
+    t = public_texts(language)
+    service_id = request.POST.get("service")
+    employee_id = request.POST.get("employee")
+    desired_date_text = request.POST.get("date")
+    name = (request.POST.get("name") or "").strip()
+    email = (request.POST.get("email") or "").strip()
+    phone = (request.POST.get("phone") or "").strip()
+    time_range = (request.POST.get("time_range") or "").strip()
+
+    errors = {}
+    if not name:
+        errors["name"] = [t["public_booking_error_name"]]
+    if not email and not phone:
+        errors["__all__"] = [t["public_waitlist_contact_required"]]
+
+    try:
+        service = Service.objects.get(pk=service_id, is_active=True)
+    except (Service.DoesNotExist, ValueError, TypeError):
+        service = None
+        errors["service"] = [t["public_booking_error_service"]]
+
+    try:
+        employee = Employee.objects.get(pk=employee_id, is_active=True)
+    except (Employee.DoesNotExist, ValueError, TypeError):
+        employee = None
+        errors["employee"] = [t["public_booking_error_employee"]]
+
+    try:
+        desired_date = datetime.strptime(desired_date_text or "", "%Y-%m-%d").date()
+    except ValueError:
+        desired_date = None
+        errors["date"] = [t["public_booking_error_future"]]
+
+    if desired_date and desired_date < timezone.localdate():
+        errors["date"] = [t["public_booking_error_future"]]
+    if service and employee and not employee.services.filter(pk=service.pk).exists():
+        errors["employee"] = [t["public_booking_error_employee"]]
+
+    if errors:
+        return JsonResponse({"ok": False, "errors": errors}, status=400)
+
+    entry = BookingWaitlistEntry.objects.create(
+        service=service,
+        employee=employee,
+        desired_date=desired_date,
+        time_range=time_range,
+        name=name,
+        email=email,
+        phone=phone,
+        source=Booking.Sources.WEBSITE,
+    )
+    return JsonResponse({"ok": True, "message": t["public_waitlist_success"], "waitlist_id": entry.pk})
 
 
 @require_POST

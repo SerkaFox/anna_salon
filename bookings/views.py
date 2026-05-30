@@ -24,6 +24,7 @@ from services_app.models import Service
 
 from .forms import BookingForm, BookingPhotoForm
 from .models import Booking, BookingPhoto
+from .services import notify_waitlist_for_booking_opening
 from .utils import (
     DEFAULT_WORK_END_HOUR,
     DEFAULT_WORK_START_HOUR,
@@ -212,7 +213,10 @@ def booking_create(request):
             else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
         )
         if form.is_valid():
+            old_status = booking.status
             booking = form.save()
+            if old_status != Booking.Statuses.CANCELLED and booking.status == Booking.Statuses.CANCELLED:
+                notify_waitlist_for_booking_opening(booking)
             log_event(
                 actor=request.user,
                 section="booking",
@@ -333,6 +337,7 @@ def booking_delete(request, pk):
     if request.method == "POST":
         booking_label = str(booking)
         booking_client = str(booking.client)
+        notify_waitlist_for_booking_opening(booking)
         booking.delete()
         log_event(
             actor=request.user,
@@ -986,8 +991,11 @@ def booking_status_api(request, pk):
     if status_value not in valid_statuses:
         return JsonResponse({"ok": False, "message": "Estado inválido."}, status=400)
 
+    old_status = booking.status
     booking.status = status_value
     booking.save(update_fields=["status", "updated_at"])
+    if old_status != Booking.Statuses.CANCELLED and booking.status == Booking.Statuses.CANCELLED:
+        notify_waitlist_for_booking_opening(booking)
     log_event(
         actor=request.user,
         section="booking",

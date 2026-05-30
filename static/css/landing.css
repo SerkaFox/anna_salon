@@ -969,6 +969,32 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   color: var(--gold-light);
   font-weight: 800;
 }
+.waitlist-card {
+  margin-top: 24px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  border: 1px solid rgba(240,208,145,0.24);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.09), rgba(7,61,46,0.22));
+  box-shadow: 0 24px 70px rgba(0,0,0,0.38);
+  backdrop-filter: blur(18px);
+}
+.waitlist-card h3 {
+  margin: 0;
+  color: var(--gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.55rem;
+}
+.waitlist-card p {
+  margin: 0;
+  color: var(--muted);
+}
+.waitlist-card .booking-alert.is-success {
+  border-color: rgba(80, 220, 151, 0.34);
+  background: rgba(7, 61, 46, 0.36);
+  color: #b8ffd9;
+}
 @media (max-width: 900px) {
   .public-booking-layout { grid-template-columns: 1fr; }
   .public-booking-aside { position: relative; top: 0; }

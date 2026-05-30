@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class Booking(models.Model):
@@ -141,3 +142,103 @@ class BookingPhoto(models.Model):
 
     def __str__(self):
         return f"{self.get_photo_type_display()} · {self.client} · {self.created_at:%d/%m/%Y %H:%M}"
+
+
+class BookingPrepayment(models.Model):
+    class Statuses(models.TextChoices):
+        PAID = "paid", "Pagada"
+        REFUNDED = "refunded", "Devuelta"
+        FORFEITED = "forfeited", "Para salon"
+
+    booking = models.OneToOneField(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="prepayment",
+        verbose_name="Reserva",
+    )
+    payment = models.OneToOneField(
+        "payments.Payment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="booking_prepayment",
+        verbose_name="Pago online",
+    )
+    amount = models.DecimalField("Importe de prepago", max_digits=10, decimal_places=2)
+    status = models.CharField("Estado", max_length=20, choices=Statuses.choices, default=Statuses.PAID)
+    refundable_until = models.DateTimeField("Devolucion disponible hasta")
+    refunded_at = models.DateTimeField("Devuelto el", null=True, blank=True)
+    forfeited_at = models.DateTimeField("Asignado al salon el", null=True, blank=True)
+    notes = models.TextField("Notas", blank=True)
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+    updated_at = models.DateTimeField("Actualizado", auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Prepago de reserva"
+        verbose_name_plural = "Prepagos de reservas"
+
+    @property
+    def is_refundable(self):
+        return self.status == self.Statuses.PAID and timezone.now() <= self.refundable_until
+
+    @property
+    def is_forfeitable(self):
+        return self.status == self.Statuses.PAID and timezone.now() > self.refundable_until
+
+    def refresh_forfeit_status(self):
+        if self.is_forfeitable:
+            self.status = self.Statuses.FORFEITED
+            self.forfeited_at = timezone.now()
+            self.save(update_fields=["status", "forfeited_at", "updated_at"])
+
+    def __str__(self):
+        return f"{self.booking} · {self.amount} EUR · {self.get_status_display()}"
+
+
+class BookingWaitlistEntry(models.Model):
+    class Statuses(models.TextChoices):
+        ACTIVE = "active", "Activa"
+        NOTIFIED = "notified", "Notificada"
+        BOOKED = "booked", "Convertida en reserva"
+        CANCELLED = "cancelled", "Cancelada"
+
+    client = models.ForeignKey(
+        "clients.Client",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="waitlist_entries",
+        verbose_name="Cliente",
+    )
+    service = models.ForeignKey(
+        "services_app.Service",
+        on_delete=models.PROTECT,
+        related_name="waitlist_entries",
+        verbose_name="Servicio",
+    )
+    employee = models.ForeignKey(
+        "employees.Employee",
+        on_delete=models.PROTECT,
+        related_name="waitlist_entries",
+        verbose_name="Empleado",
+    )
+    desired_date = models.DateField("Fecha deseada")
+    time_range = models.CharField("Rango horario", max_length=20, blank=True)
+    name = models.CharField("Nombre", max_length=180)
+    phone = models.CharField("Telefono", max_length=40, blank=True)
+    email = models.EmailField("Email", blank=True)
+    status = models.CharField("Estado", max_length=20, choices=Statuses.choices, default=Statuses.ACTIVE)
+    source = models.CharField("Origen", max_length=20, default=Booking.Sources.WEBSITE)
+    notes = models.TextField("Notas", blank=True)
+    notified_at = models.DateTimeField("Notificada el", null=True, blank=True)
+    created_at = models.DateTimeField("Creada", auto_now_add=True)
+    updated_at = models.DateTimeField("Actualizada", auto_now=True)
+
+    class Meta:
+        ordering = ["desired_date", "created_at"]
+        verbose_name = "Entrada en lista de espera"
+        verbose_name_plural = "Lista de espera"
+
+    def __str__(self):
+        return f"{self.name} · {self.employee} · {self.desired_date:%d/%m/%Y}"

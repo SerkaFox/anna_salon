@@ -20,6 +20,7 @@ from auditlog.services import log_event
 from bookings.forms import BookingForm
 from bookings.models import Booking
 from bookings.models import BookingPhoto
+from bookings.services import create_booking_prepayment, refund_booking_prepayment, refresh_booking_prepayments
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from employees.models import Employee
 from payments.models import Payment as OnlinePayment
@@ -94,7 +95,7 @@ def _is_future_portal_slot(slot):
 
 
 def _create_temporary_paid_payment(booking, amount):
-    return OnlinePayment.objects.create(
+    payment = OnlinePayment.objects.create(
         booking=booking,
         amount=amount,
         currency=getattr(settings, "REDSYS_CURRENCY", "978"),
@@ -107,6 +108,8 @@ def _create_temporary_paid_payment(booking, amount):
         raw_response={"paid": True, "mode": "temporary_mock"},
         paid_at=timezone.now(),
     )
+    create_booking_prepayment(booking, payment)
+    return payment
 
 
 @login_required
@@ -346,6 +349,38 @@ def client_booking_payment(request, pk):
 
 
 @login_required
+@require_POST
+def client_booking_prepayment_refund(request, pk):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+
+    booking = get_object_or_404(
+        Booking.objects.select_related("client", "employee", "service", "prepayment"),
+        pk=pk,
+        client=client,
+    )
+    prepayment = getattr(booking, "prepayment", None)
+    if not prepayment:
+        messages.error(request, "Esta reserva no tiene prepago.")
+        return redirect("clients:portal")
+
+    ok, message = refund_booking_prepayment(prepayment)
+    if ok:
+        log_event(
+            actor=request.user,
+            section="payment",
+            action="prepayment_refund",
+            instance=booking,
+            message=f"Prepago devuelto desde portal cliente para reserva #{booking.pk}.",
+        )
+        messages.success(request, message)
+    else:
+        messages.error(request, message)
+    return redirect("clients:portal")
+
+
+@login_required
 def client_create(request):
     referred_by_id = request.GET.get("referred_by")
     initial = {}
@@ -530,7 +565,7 @@ def client_detail(request, pk):
 
     bookings = (
         Booking.objects
-        .select_related("employee", "service", "zone")
+        .select_related("employee", "service", "zone", "prepayment")
         .prefetch_related("photos", "online_payments")
         .filter(client=client)
         .order_by("-start_at")
@@ -655,6 +690,8 @@ def _client_portal_context(request, client, booking_form=None):
     history = list(bookings[:20])
     _attach_online_payment_info(upcoming_bookings)
     _attach_online_payment_info(history)
+    refresh_booking_prepayments(upcoming_bookings)
+    refresh_booking_prepayments(history)
     rewards = client_reward_progress(client)
     photo_history = (
         BookingPhoto.objects

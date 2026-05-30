@@ -1865,6 +1865,22 @@
   color: #f0d091;
   font-weight: 900;
 }
+.portal-prepayment-box {
+  margin-top: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(25, 168, 118, 0.28);
+  border-radius: 16px;
+  background: rgba(7, 61, 46, 0.24);
+}
+.portal-prepayment-box span {
+  color: #b8ffd9;
+  font-weight: 800;
+}
+.portal-prepayment-box small {
+  color: #c6baaa;
+}
 @media (max-width: 620px) {
   .client-login-summary,
   .portal-pay-form { align-items: stretch; flex-direction: column; }

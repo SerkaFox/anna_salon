@@ -150,9 +150,36 @@
         <span>{{ t.trust_2_title }}</span>
         <span>{{ t.trust_4_title }}</span>
       </div>
+      <form class="waitlist-card" method="post" action="{% url 'public_waitlist' %}" data-waitlist-form>
+        {% csrf_token %}
+        <h3>{{ t.public_waitlist_title }}</h3>
+        <p>{{ t.public_waitlist_text }}</p>
+        <input type="hidden" name="service" data-waitlist-service>
+        <input type="hidden" name="date" data-waitlist-date>
+        <input type="hidden" name="time_range" data-waitlist-range>
+        <label class="lux-field">
+          <span>{{ t.public_waitlist_master }}</span>
+          <select class="lux-input" name="employee" data-waitlist-employee required></select>
+        </label>
+        <label class="lux-field">
+          <span>{{ t.public_booking_name }}</span>
+          <input class="lux-input" type="text" name="name" data-waitlist-name>
+        </label>
+        <label class="lux-field">
+          <span>{{ t.public_booking_email }}</span>
+          <input class="lux-input" type="email" name="email" data-waitlist-email>
+        </label>
+        <label class="lux-field">
+          <span>{{ t.public_booking_phone }}</span>
+          <input class="lux-input" type="tel" name="phone" data-waitlist-phone>
+        </label>
+        <div class="booking-alert" data-waitlist-message hidden></div>
+        <button class="btn-lux btn-lux-outline btn-lux-large" type="submit">{{ t.public_waitlist_submit }}</button>
+      </form>
     </aside>
   </div>
 </section>
+{{ waitlist_employees|json_script:"waitlist-employees-data" }}
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
@@ -181,6 +208,9 @@
     const paymentConfirmButton = document.querySelector('[data-payment-confirm]');
     const paymentService = document.querySelector('[data-payment-service]');
     const paymentTime = document.querySelector('[data-payment-time]');
+    const waitlistForm = document.querySelector('[data-waitlist-form]');
+    const waitlistEmployeesNode = document.getElementById('waitlist-employees-data');
+    const waitlistEmployees = waitlistEmployeesNode ? JSON.parse(waitlistEmployeesNode.textContent || '[]') : [];
     let lastSlots = [];
     let activeDateRequest = 0;
     const currentLanguage = '{{ public_language|default:"es"|escapejs }}';
@@ -309,6 +339,7 @@
       const visibleSlots = filteredSlots(slots);
       if (!visibleSlots.length) {
         status.textContent = messages.empty;
+        syncWaitlistForm();
         return;
       }
       status.textContent = messages.chooseMaster;
@@ -331,6 +362,36 @@
         card.appendChild(times);
         grid.appendChild(card);
       });
+      syncWaitlistForm();
+    }
+
+    function syncWaitlistForm() {
+      if (!waitlistForm) return;
+      const serviceInput = waitlistForm.querySelector('[data-waitlist-service]');
+      const dateInputTarget = waitlistForm.querySelector('[data-waitlist-date]');
+      const rangeInput = waitlistForm.querySelector('[data-waitlist-range]');
+      const employeeSelect = waitlistForm.querySelector('[data-waitlist-employee]');
+      const nameInput = waitlistForm.querySelector('[data-waitlist-name]');
+      const emailInput = waitlistForm.querySelector('[data-waitlist-email]');
+      const phoneInput = waitlistForm.querySelector('[data-waitlist-phone]');
+      if (serviceInput) serviceInput.value = serviceSelect.value || '';
+      if (dateInputTarget) dateInputTarget.value = dateInput.value || '';
+      if (rangeInput) rangeInput.value = rangeSelect.value || 'all';
+      if (nameInput) nameInput.value = form.querySelector('[name="name"]').value || nameInput.value;
+      if (emailInput) emailInput.value = form.querySelector('[name="email"]').value || emailInput.value;
+      if (phoneInput) phoneInput.value = form.querySelector('[name="phone"]').value || phoneInput.value;
+      if (!employeeSelect) return;
+      const selected = employeeSelect.value;
+      employeeSelect.innerHTML = '';
+      waitlistEmployees
+        .filter(function (employee) { return !serviceSelect.value || employee.service_ids.map(String).includes(String(serviceSelect.value)); })
+        .forEach(function (employee) {
+          const option = document.createElement('option');
+          option.value = employee.id;
+          option.textContent = employee.name;
+          employeeSelect.appendChild(option);
+        });
+      if (selected) employeeSelect.value = selected;
     }
 
     function loadSlots() {
@@ -551,6 +612,40 @@
       });
     }
 
+    if (waitlistForm) {
+      waitlistForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        syncWaitlistForm();
+        const messageBox = waitlistForm.querySelector('[data-waitlist-message]');
+        if (messageBox) { messageBox.hidden = true; messageBox.textContent = ''; }
+        fetch(waitlistForm.action, {
+          method: 'POST',
+          body: new FormData(waitlistForm),
+          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+          .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+          .then(function (result) {
+            const message = result.data.message || Object.values(result.data.errors || {})[0]?.[0] || messages.error;
+            if (messageBox) {
+              messageBox.textContent = message;
+              messageBox.hidden = false;
+              messageBox.classList.toggle('is-success', result.ok && result.data.ok);
+            }
+            if (result.ok && result.data.ok) waitlistForm.reset();
+            syncWaitlistForm();
+          })
+          .catch(function () {
+            if (messageBox) {
+              messageBox.textContent = messages.error;
+              messageBox.hidden = false;
+            }
+          });
+      });
+      ['input', 'change'].forEach(function (eventName) {
+        form.addEventListener(eventName, syncWaitlistForm);
+      });
+    }
+
     contactToggle.addEventListener('change', function () {
       contactFields.hidden = !contactToggle.checked;
     });
@@ -569,6 +664,7 @@
     } else {
       loadSlots();
     }
+    syncWaitlistForm();
   });
 </script>
 {% endblock %}

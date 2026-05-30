@@ -9,6 +9,7 @@ from .views import (
     client_detail,
     client_portal,
     client_booking_payment,
+    client_booking_prepayment_refund,
     client_portal_slots_api,
     use_referral_reward,
     set_client_language,
@@ -19,6 +20,7 @@ app_name = "clients"
 urlpatterns = [
     path("portal/", client_portal, name="portal"),
     path("portal/bookings/<int:pk>/payment/", client_booking_payment, name="booking_payment"),
+    path("portal/bookings/<int:pk>/prepayment/refund/", client_booking_prepayment_refund, name="booking_prepayment_refund"),
     path("portal/slots/", client_portal_slots_api, name="portal_slots_api"),
     path("portal/language/", set_client_language, name="set_language"),
     path("", client_list, name="list"),

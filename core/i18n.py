@@ -199,6 +199,47 @@ PUBLIC_BOOKING_TRANSLATIONS = {
 for language, translations in PUBLIC_BOOKING_TRANSLATIONS.items():
     PUBLIC_TRANSLATIONS[language].update(translations)
 
+PUBLIC_TRANSLATIONS["es"].update({
+    "public_waitlist_title": "Lista de espera",
+    "public_waitlist_text": "Si tu especialista esta completa, dejanos tus datos y te avisaremos cuando se libere un hueco.",
+    "public_waitlist_master": "Especialista deseada",
+    "public_waitlist_submit": "Apuntarme a la lista",
+    "public_waitlist_success": "Te hemos apuntado a la lista de espera.",
+    "public_waitlist_contact_required": "Indica telefono o email para poder avisarte.",
+})
+PUBLIC_TRANSLATIONS["ru"].update({
+    "public_waitlist_title": "Лист ожидания",
+    "public_waitlist_text": "Если у мастера всё занято, оставьте данные, и мы сообщим, когда появится окно.",
+    "public_waitlist_master": "Желаемый мастер",
+    "public_waitlist_submit": "Встать в очередь",
+    "public_waitlist_success": "Мы добавили вас в лист ожидания.",
+    "public_waitlist_contact_required": "Укажите телефон или email, чтобы мы могли связаться.",
+})
+PUBLIC_TRANSLATIONS["en"].update({
+    "public_waitlist_title": "Waitlist",
+    "public_waitlist_text": "If your preferred specialist is fully booked, leave your details and we will notify you when a slot opens.",
+    "public_waitlist_master": "Preferred specialist",
+    "public_waitlist_submit": "Join waitlist",
+    "public_waitlist_success": "You have been added to the waitlist.",
+    "public_waitlist_contact_required": "Enter phone or email so we can notify you.",
+})
+PUBLIC_TRANSLATIONS["de"].update({
+    "public_waitlist_title": "Warteliste",
+    "public_waitlist_text": "Wenn Ihre bevorzugte Spezialistin ausgebucht ist, hinterlassen Sie Ihre Daten und wir informieren Sie bei einem freien Termin.",
+    "public_waitlist_master": "Gewunschte Spezialistin",
+    "public_waitlist_submit": "Auf Warteliste setzen",
+    "public_waitlist_success": "Sie wurden auf die Warteliste gesetzt.",
+    "public_waitlist_contact_required": "Geben Sie Telefon oder Email an, damit wir Sie informieren konnen.",
+})
+PUBLIC_TRANSLATIONS["fr"].update({
+    "public_waitlist_title": "Liste d'attente",
+    "public_waitlist_text": "Si votre specialiste preferee est complete, laissez vos coordonnees et nous vous previendrons lorsqu'un creneau se libere.",
+    "public_waitlist_master": "Specialiste souhaitee",
+    "public_waitlist_submit": "Rejoindre la liste",
+    "public_waitlist_success": "Vous avez ete ajoutee a la liste d'attente.",
+    "public_waitlist_contact_required": "Indiquez telephone ou email pour que nous puissions vous prevenir.",
+})
+
 
 def normalize_public_language(language):
     code = (language or "").split(",", 1)[0].split(";", 1)[0].split("-", 1)[0].lower()
