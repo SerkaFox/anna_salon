@@ -62,7 +62,7 @@
           type="button"
           class="sidebar-group__toggle"
           data-sidebar-group-toggle
-          aria-expanded="{% if active_section == 'documents' or active_section == 'cashbox' or active_section == 'auditlog' %}true{% else %}false{% endif %}"
+          aria-expanded="{% if active_section == 'documents' or active_section == 'cashbox' or active_section == 'gallery' or active_section == 'auditlog' %}true{% else %}false{% endif %}"
         >
           <span class="sidebar-group__title">Administración</span>
           <span class="sidebar-group__chevron">⌄</span>
@@ -70,10 +70,11 @@
         <div
           class="sidebar-group__content"
           data-sidebar-group-content
-          {% if not active_section == 'documents' and not active_section == 'cashbox' and not active_section == 'auditlog' %}hidden{% endif %}
+          {% if not active_section == 'documents' and not active_section == 'cashbox' and not active_section == 'gallery' and not active_section == 'auditlog' %}hidden{% endif %}
         >
           <a class="nav-link {% if active_section == 'documents' %}active{% endif %}" href="{% url 'documents:list' %}">Documentos</a>
           <a class="nav-link {% if active_section == 'cashbox' %}active{% endif %}" href="{% url 'documents:cashbox' %}">Caja</a>
+          <a class="nav-link {% if active_section == 'gallery' %}active{% endif %}" href="{% url 'gallery:list' %}">Galería Instagram</a>
           <a class="nav-link {% if active_section == 'auditlog' %}active{% endif %}" href="{% url 'auditlog:list' %}">Auditoría</a>
         </div>
       </div>

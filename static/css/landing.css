@@ -995,11 +995,84 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   background: rgba(7, 61, 46, 0.36);
   color: #b8ffd9;
 }
+.instagram-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+  align-items: start;
+}
+.instagram-gallery-grid--featured {
+  margin-top: 30px;
+}
+.instagram-card {
+  min-height: 260px;
+  padding: 14px;
+  border: 1px solid rgba(240,208,145,0.22);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.105), rgba(7,61,46,0.2));
+  box-shadow: 0 28px 80px rgba(0,0,0,0.42);
+  backdrop-filter: blur(20px) saturate(132%);
+  overflow: hidden;
+}
+.instagram-card .instagram-media {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+}
+.instagram-link-card {
+  min-height: 240px;
+  padding: 22px;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  border-radius: 18px;
+  color: var(--text);
+  text-decoration: none;
+  background:
+    radial-gradient(circle at top right, rgba(214,167,92,0.22), transparent 36%),
+    linear-gradient(145deg, rgba(6,16,24,0.52), rgba(7,61,46,0.38));
+  transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease;
+}
+.instagram-link-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--gold-glow);
+}
+.instagram-link-card span {
+  color: var(--gold-light);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+.instagram-link-card strong {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.55rem;
+  color: var(--text);
+}
+.instagram-link-card p {
+  margin: 0;
+  color: var(--muted);
+}
+.empty-lux-state {
+  grid-column: 1 / -1;
+  padding: clamp(28px, 5vw, 58px);
+  border: 1px solid rgba(240,208,145,0.24);
+  border-radius: 24px;
+  text-align: center;
+  background: rgba(6,16,24,0.42);
+}
+.empty-lux-state h2 {
+  margin: 12px 0;
+  font-family: "Playfair Display", Georgia, serif;
+  color: var(--text);
+}
 @media (max-width: 900px) {
   .public-booking-layout { grid-template-columns: 1fr; }
   .public-booking-aside { position: relative; top: 0; }
   .slot-grid { grid-template-columns: 1fr; }
   .booking-date-range { grid-template-columns: 1fr; }
+  .instagram-gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 620px) {
   .booking-form-grid,
@@ -1009,6 +1082,7 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   .selected-slot-summary,
   .booking-submit-row { align-items: stretch; flex-direction: column; }
   .booking-submit-row .btn-lux { width: 100%; }
+  .instagram-gallery-grid { grid-template-columns: 1fr; }
 }
 
 .payment-result-section {

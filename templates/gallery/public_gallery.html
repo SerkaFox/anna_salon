@@ -1,0 +1,43 @@
+{% extends "core/public_base.html" %}
+
+{% block title %}Galería Instagram | BRIMOON Studio{% endblock %}
+{% block meta_description %}Galería de Instagram de BRIMOON Studio: trabajos, detalles y momentos del salón.{% endblock %}
+{% block og_title %}Galería Instagram | BRIMOON Studio{% endblock %}
+{% block og_description %}Trabajos y momentos de BRIMOON Studio desde Instagram.{% endblock %}
+
+{% block page_hero %}
+  <section class="content-hero">
+    <div class="lux-container">
+      <span class="lux-kicker">Instagram</span>
+      <h1>Galería BRIMOON Studio</h1>
+      <p>Trabajos, detalles y momentos recientes del salón.</p>
+    </div>
+  </section>
+{% endblock %}
+
+{% block content %}
+<section class="lux-section">
+  <div class="lux-container instagram-gallery-grid">
+    {% for post in posts %}
+      <article class="instagram-card">
+        {% if post.embed_html %}
+          {{ post.embed_html|safe }}
+        {% else %}
+          <a class="instagram-link-card" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
+            <span>Instagram</span>
+            <strong>{{ post.title|default:"Ver publicación" }}</strong>
+            {% if post.caption %}<p>{{ post.caption }}</p>{% endif %}
+          </a>
+        {% endif %}
+      </article>
+    {% empty %}
+      <div class="empty-lux-state">
+        <span class="lux-kicker">Instagram</span>
+        <h2>La galería se está preparando</h2>
+        <p>Pronto compartiremos aquí nuestros trabajos y momentos favoritos.</p>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+<script async src="https://www.instagram.com/embed.js"></script>
+{% endblock %}

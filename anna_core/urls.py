@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 from core import views as core_views
+from gallery import views as gallery_views
 
 
 urlpatterns = [
@@ -10,6 +11,7 @@ urlpatterns = [
     path("servicios/<slug:slug>/", core_views.service_detail, name="service_detail"),
     path("consejos/", core_views.advice_index, name="advice_index"),
     path("consejos/<slug:slug>/", core_views.article_detail, name="article_detail"),
+    path("galeria/", gallery_views.public_gallery, name="public_gallery"),
     path("reservar/", core_views.public_booking, name="public_booking"),
     path("reservar/slots/", core_views.public_booking_slots, name="public_booking_slots"),
     path("reservar/lista-espera/", core_views.public_waitlist, name="public_waitlist"),
@@ -26,6 +28,7 @@ urlpatterns = [
     path("panel/zonas/", include("salon.urls")),
     path("panel/reservas/", include("bookings.urls")),
     path("panel/documentos/", include("documents.urls")),
+    path("panel/galeria/", include("gallery.urls")),
     path("panel/auditoria/", include("auditlog.urls")),
     path("dj-admin/", admin.site.urls),
 ]

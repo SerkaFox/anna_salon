@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260523-09">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260614-01">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
@@ -110,6 +110,34 @@
       </div>
     </section>
 
+    {% if featured_instagram_posts %}
+      <section class="lux-section instagram-home-section">
+        <div class="lux-container">
+          <div class="lux-section-head">
+            <span class="lux-kicker">Instagram</span>
+            <h2>Momentos BRIMOON</h2>
+            <p>Publicaciones recientes seleccionadas desde nuestro Instagram.</p>
+          </div>
+          <div class="instagram-gallery-grid instagram-gallery-grid--featured">
+            {% for post in featured_instagram_posts %}
+              <article class="instagram-card">
+                {% if post.embed_html %}
+                  {{ post.embed_html|safe }}
+                {% else %}
+                  <a class="instagram-link-card" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
+                    <span>Instagram</span>
+                    <strong>{{ post.title|default:"Ver publicación" }}</strong>
+                    {% if post.caption %}<p>{{ post.caption }}</p>{% endif %}
+                  </a>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+          <div class="lux-actions centered"><a class="btn-lux btn-lux-outline" href="{% url 'public_gallery' %}">Ver galería Instagram</a></div>
+        </div>
+      </section>
+      <script async src="https://www.instagram.com/embed.js"></script>
+    {% endif %}
 
     <section class="lux-section seo-section" id="consejos">
       <div class="lux-container">

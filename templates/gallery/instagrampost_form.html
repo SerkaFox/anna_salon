@@ -1,0 +1,64 @@
+{% extends "panel_base.html" %}
+
+{% block title %}{% if is_edit %}Editar post{% else %}Nuevo post{% endif %} | BRIMOON Studio{% endblock %}
+{% block panel_title %}{% if is_edit %}Editar post{% else %}Nuevo post Instagram{% endif %}{% endblock %}
+{% block panel_subtitle %}Pega una URL o un blockquote oficial de Instagram. Los scripts se eliminan automáticamente.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'gallery:list' %}">← Volver</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+      </div>
+    {% endif %}
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.title.id_for_label }}">Título</label>
+        {{ form.title }}
+        {{ form.title.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ form.instagram_url.id_for_label }}">URL Instagram</label>
+        {{ form.instagram_url }}
+        {{ form.instagram_url.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ form.sort_order.id_for_label }}">Orden</label>
+        {{ form.sort_order }}
+        {{ form.sort_order.errors }}
+      </div>
+      <div class="field field-checkbox">
+        <label for="{{ form.active.id_for_label }}">Activo</label>
+        <div class="checkbox-row">{{ form.active }} <span>Visible en la web</span></div>
+        {{ form.active.errors }}
+      </div>
+      <div class="field field-checkbox">
+        <label for="{{ form.featured.id_for_label }}">Destacado</label>
+        <div class="checkbox-row">{{ form.featured }} <span>Mostrar en la portada</span></div>
+        {{ form.featured.errors }}
+      </div>
+    </div>
+    <div class="field">
+      <label for="{{ form.embed_html.id_for_label }}">Embed blockquote</label>
+      {{ form.embed_html }}
+      {{ form.embed_html.errors }}
+      <p class="muted-text">Solo se guardará el blockquote de Instagram. No se guardará ningún script.</p>
+    </div>
+    <div class="field">
+      <label for="{{ form.caption.id_for_label }}">Texto interno o descripción</label>
+      {{ form.caption }}
+      {{ form.caption.errors }}
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">{% if is_edit %}Guardar cambios{% else %}Crear post{% endif %}</button>
+      <a class="btn btn-light" href="{% url 'gallery:list' %}">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

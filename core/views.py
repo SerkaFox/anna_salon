@@ -23,6 +23,7 @@ from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
 from accounts.permissions import get_client_profile
 from employees.models import Employee
 from payments.models import Payment as OnlinePayment
+from gallery.models import InstagramPost
 from salon.models import Zone
 from services_app.models import Service
 
@@ -703,7 +704,12 @@ def home(request):
         "makesOffer": [{"@type": "Offer", "itemOffered": {"@type": "Service", "name": service["title"]}} for service in services],
     }, ensure_ascii=False)
     context = _base_context(request, reverse("home"))
-    context.update({"services": services, "articles": articles[:3], "schema_json": schema})
+    context.update({
+        "services": services,
+        "articles": articles[:3],
+        "featured_instagram_posts": InstagramPost.objects.filter(active=True, featured=True).order_by("sort_order", "-created_at", "-id")[:3],
+        "schema_json": schema,
+    })
     return render(request, "core/home.html", context)
 
 

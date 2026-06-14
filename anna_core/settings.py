@@ -106,6 +106,7 @@ INSTALLED_APPS = [
     'employees', # — сотрудники
     'documents', # — recibos, facturas y exportación fiscal
     'payments', # — TPV virtual / Redsys
+    'gallery', # — Instagram gallery
     'auditlog', # — journal de cambios
     'core',
     'mobile_api',

@@ -1,0 +1,22 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Desactivar post | BRIMOON Studio{% endblock %}
+{% block panel_title %}Desactivar post{% endblock %}
+{% block panel_subtitle %}Puedes desactivarlo para ocultarlo sin perder la configuración.{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'gallery:list' %}">← Volver</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <h2>{{ post.title|default:"Post Instagram" }}</h2>
+  <p class="muted-text">{{ post.instagram_url }}</p>
+  <form method="post" class="form-actions">
+    {% csrf_token %}
+    <button class="btn btn-danger" type="submit" name="mode" value="deactivate">Desactivar</button>
+    <button class="btn btn-danger" type="submit" name="mode" value="delete">Eliminar definitivamente</button>
+    <a class="btn btn-light" href="{% url 'gallery:list' %}">Cancelar</a>
+  </form>
+</section>
+{% endblock %}

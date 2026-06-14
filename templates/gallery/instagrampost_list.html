@@ -1,0 +1,67 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Galería Instagram | BRIMOON Studio{% endblock %}
+{% block panel_title %}Galería Instagram{% endblock %}
+{% block panel_subtitle %}Posts y reels visibles en la web. Total: {{ posts_count }}{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn" href="{% url 'gallery:create' %}">+ Nuevo post</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="get" class="search-bar">
+    <input class="input" type="text" name="q" value="{{ query }}" placeholder="Buscar por título, URL o texto">
+    <select class="input" name="status">
+      <option value="">Todos</option>
+      <option value="active" {% if status == "active" %}selected{% endif %}>Solo activos</option>
+      <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Solo inactivos</option>
+    </select>
+    <button class="btn" type="submit">Buscar</button>
+    <a class="btn btn-light" href="{% url 'gallery:list' %}">Limpiar</a>
+  </form>
+</section>
+
+<section class="panel-card">
+  {% if posts %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Orden</th>
+            <th>Post</th>
+            <th>Destacado</th>
+            <th>Activo</th>
+            <th>Creado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for post in posts %}
+            <tr>
+              <td>{{ post.sort_order }}</td>
+              <td>
+                <strong>{{ post.title|default:"Post Instagram" }}</strong>
+                <p class="muted-text">{{ post.instagram_url }}</p>
+              </td>
+              <td>{% if post.featured %}<span class="status-pill is-active">Sí</span>{% else %}<span class="status-pill is-inactive">No</span>{% endif %}</td>
+              <td>{% if post.active %}<span class="status-pill is-active">Sí</span>{% else %}<span class="status-pill is-inactive">No</span>{% endif %}</td>
+              <td>{{ post.created_at|date:"d/m/Y H:i" }}</td>
+              <td class="actions-cell actions-inline">
+                <a class="btn btn-light btn-small" href="{% url 'gallery:update' post.pk %}">Editar</a>
+                <a class="btn btn-danger btn-small" href="{% url 'gallery:delete' post.pk %}">Desactivar</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>No hay posts todavía</h2>
+      <p>Añade un post o reel de Instagram para mostrarlo en la web.</p>
+      <a class="btn" href="{% url 'gallery:create' %}">Crear post</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}
