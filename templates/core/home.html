@@ -210,6 +210,47 @@
         toggle.setAttribute('aria-expanded', 'false');
         panel.classList.remove('is-open');
       }));
+
+      const carousel = document.querySelector('.instagram-carousel');
+      if (carousel && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const slides = Array.from(carousel.querySelectorAll('.instagram-carousel__slide'));
+        let index = 0;
+        let timer = null;
+        let resumeTimer = null;
+
+        function scrollToNext() {
+          if (slides.length < 2) return;
+          index = (index + 1) % slides.length;
+          carousel.scrollTo({ left: slides[index].offsetLeft - carousel.offsetLeft, behavior: 'smooth' });
+        }
+
+        function start() {
+          if (timer || slides.length < 2) return;
+          timer = window.setInterval(scrollToNext, 4200);
+        }
+
+        function stop() {
+          if (timer) {
+            window.clearInterval(timer);
+            timer = null;
+          }
+        }
+
+        function pauseAndResume() {
+          stop();
+          if (resumeTimer) window.clearTimeout(resumeTimer);
+          resumeTimer = window.setTimeout(start, 6500);
+        }
+
+        carousel.addEventListener('mouseenter', stop);
+        carousel.addEventListener('mouseleave', start);
+        carousel.addEventListener('focusin', stop);
+        carousel.addEventListener('focusout', start);
+        carousel.addEventListener('wheel', pauseAndResume, { passive: true });
+        carousel.addEventListener('touchstart', pauseAndResume, { passive: true });
+        carousel.addEventListener('pointerdown', pauseAndResume);
+        start();
+      }
     });
   </script>
 </body>
