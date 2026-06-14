@@ -40,11 +40,11 @@
             <tr>
               <td>
                 <strong>{{ post.title|default:"Post Instagram" }}</strong>
-                {% if post.embed_html %}
-                  <div class="gallery-panel-preview">{{ post.embed_html|safe }}</div>
-                {% else %}
-                  <p class="muted-text">Sin embed guardado</p>
-                {% endif %}
+                <a class="gallery-panel-preview" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
+                  <span>Instagram</span>
+                  <strong>Ver publicación</strong>
+                  <small>No se carga el embed en el panel</small>
+                </a>
               </td>
               <td>
                 <a href="{{ post.instagram_url }}" target="_blank" rel="noopener">{{ post.instagram_url }}</a>
@@ -69,5 +69,15 @@
     </div>
   {% endif %}
 </section>
-<script async src="https://www.instagram.com/embed.js"></script>
+{% if page_obj.has_other_pages %}
+  <nav class="pagination" aria-label="Paginación de galería">
+    {% if page_obj.has_previous %}
+      <a class="btn btn-light btn-small" href="?{% if page_query %}{{ page_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+    {% endif %}
+    <span class="pagination__current">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a class="btn btn-light btn-small" href="?{% if page_query %}{{ page_query }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+    {% endif %}
+  </nav>
+{% endif %}
 {% endblock %}

@@ -1050,6 +1050,35 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
 .instagram-carousel__slide iframe {
   max-height: 492px !important;
 }
+.instagram-deferred-card {
+  min-height: 240px;
+  height: 100%;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 22px;
+  border-radius: 18px;
+  color: var(--text);
+  text-align: left;
+  background:
+    radial-gradient(circle at top right, rgba(240,208,145,0.2), transparent 38%),
+    linear-gradient(145deg, rgba(6,16,24,0.62), rgba(7,61,46,0.42));
+}
+.instagram-deferred-card span {
+  color: var(--gold-light);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.instagram-deferred-card strong {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.55rem;
+}
+.instagram-deferred-card p {
+  margin: 0;
+  color: var(--muted);
+}
 .instagram-card .instagram-media {
   min-width: 0 !important;
   max-width: 100% !important;

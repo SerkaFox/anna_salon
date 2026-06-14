@@ -110,7 +110,16 @@
             {% for post in homepage_instagram_posts %}
               <article class="instagram-card instagram-carousel__slide">
                 {% if post.embed_html %}
-                  {{ post.embed_html|safe }}
+                  {% if forloop.counter <= 3 %}
+                    {{ post.embed_html|safe }}
+                  {% else %}
+                    <div class="instagram-deferred-card">
+                      <span>Instagram</span>
+                      <strong>BRIMOON Studio</strong>
+                      <p>La publicación se cargará al llegar a este punto.</p>
+                    </div>
+                    <template class="instagram-embed-template">{{ post.embed_html|safe }}</template>
+                  {% endif %}
                 {% else %}
                   <a class="instagram-link-card" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
                     <span>Instagram</span>
@@ -221,7 +230,36 @@
         function scrollToNext() {
           if (slides.length < 2) return;
           index = (index + 1) % slides.length;
+          hydrateNearby(index);
           carousel.scrollTo({ left: slides[index].offsetLeft - carousel.offsetLeft, behavior: 'smooth' });
+        }
+
+        function processInstagramEmbeds() {
+          if (window.instgrm && window.instgrm.Embeds) {
+            window.instgrm.Embeds.process();
+          }
+        }
+
+        function hydrateSlide(slideIndex) {
+          const slide = slides[(slideIndex + slides.length) % slides.length];
+          if (!slide || slide.dataset.instagramHydrated === 'true') return;
+          const template = slide.querySelector('.instagram-embed-template');
+          if (!template) {
+            slide.dataset.instagramHydrated = 'true';
+            return;
+          }
+          const placeholder = slide.querySelector('.instagram-deferred-card');
+          if (placeholder) placeholder.remove();
+          slide.insertAdjacentHTML('afterbegin', template.innerHTML);
+          template.remove();
+          slide.dataset.instagramHydrated = 'true';
+          processInstagramEmbeds();
+        }
+
+        function hydrateNearby(slideIndex) {
+          hydrateSlide(slideIndex);
+          hydrateSlide(slideIndex + 1);
+          hydrateSlide(slideIndex + 2);
         }
 
         function start() {
@@ -243,6 +281,7 @@
             return distance < best.distance ? { index: slideIndex, distance } : best;
           }, { index: index, distance: Number.POSITIVE_INFINITY });
           index = nearest.index;
+          hydrateNearby(index);
           if (resumeTimer) window.clearTimeout(resumeTimer);
           resumeTimer = window.setTimeout(start, 6500);
         }
@@ -254,6 +293,7 @@
         carousel.addEventListener('wheel', pauseAndResume, { passive: true });
         carousel.addEventListener('touchstart', pauseAndResume, { passive: true });
         carousel.addEventListener('pointerdown', pauseAndResume);
+        hydrateNearby(0);
         start();
       }
     });

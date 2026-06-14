@@ -341,20 +341,28 @@
 }
 
 .gallery-panel-preview {
+  display: grid;
+  gap: 4px;
   max-width: 260px;
-  max-height: 220px;
   margin-top: 8px;
-  overflow: hidden;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(255,255,255,0.72);
+  color: var(--text);
+  text-decoration: none;
 }
 
-.gallery-panel-preview .instagram-media {
-  min-width: 0 !important;
-  max-width: 100% !important;
-  width: 100% !important;
-  margin: 0 !important;
+.gallery-panel-preview span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gallery-panel-preview small {
+  color: var(--muted);
 }
 
 .booking-data-row td {

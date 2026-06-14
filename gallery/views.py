@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.db.models import Q
+from django.core.paginator import Paginator
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -37,7 +38,20 @@ def instagram_post_list(request):
         posts = posts.filter(active=True)
     elif status == "inactive":
         posts = posts.filter(active=False)
-    context = {"active_section": "gallery", "posts": posts, "query": query, "status": status, "posts_count": posts.count()}
+    posts_count = posts.count()
+    paginator = Paginator(posts, 12)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    page_query = request.GET.copy()
+    page_query.pop("page", None)
+    context = {
+        "active_section": "gallery",
+        "posts": page_obj.object_list,
+        "page_obj": page_obj,
+        "page_query": page_query.urlencode(),
+        "query": query,
+        "status": status,
+        "posts_count": posts_count,
+    }
     return render(request, "gallery/instagrampost_list.html", context)
 
 
