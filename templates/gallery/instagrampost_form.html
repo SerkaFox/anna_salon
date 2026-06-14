@@ -17,46 +17,26 @@
         {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
       </div>
     {% endif %}
+    <div class="field">
+      <label for="{{ form.pasted_input.id_for_label }}">{{ form.pasted_input.label }}</label>
+      {{ form.pasted_input }}
+      {{ form.pasted_input.errors }}
+      <p class="muted-text">Puedes pegar el embed oficial completo o solo la URL del post/reel. No se guardará ningún script.</p>
+    </div>
     <div class="form-grid">
-      <div class="field">
-        <label for="{{ form.title.id_for_label }}">Título</label>
-        {{ form.title }}
-        {{ form.title.errors }}
-      </div>
-      <div class="field">
-        <label for="{{ form.instagram_url.id_for_label }}">URL Instagram</label>
-        {{ form.instagram_url }}
-        {{ form.instagram_url.errors }}
-      </div>
-      <div class="field">
-        <label for="{{ form.sort_order.id_for_label }}">Orden</label>
-        {{ form.sort_order }}
-        {{ form.sort_order.errors }}
-      </div>
       <div class="field field-checkbox">
         <label for="{{ form.active.id_for_label }}">Activo</label>
-        <div class="checkbox-row">{{ form.active }} <span>Visible en la web</span></div>
+        <div class="checkbox-row">{{ form.active }} <span>{{ form.active.label }}</span></div>
         {{ form.active.errors }}
       </div>
       <div class="field field-checkbox">
         <label for="{{ form.featured.id_for_label }}">Destacado</label>
-        <div class="checkbox-row">{{ form.featured }} <span>Mostrar en la portada</span></div>
+        <div class="checkbox-row">{{ form.featured }} <span>{{ form.featured.label }}</span></div>
         {{ form.featured.errors }}
       </div>
     </div>
-    <div class="field">
-      <label for="{{ form.embed_html.id_for_label }}">Embed blockquote</label>
-      {{ form.embed_html }}
-      {{ form.embed_html.errors }}
-      <p class="muted-text">Solo se guardará el blockquote de Instagram. No se guardará ningún script.</p>
-    </div>
-    <div class="field">
-      <label for="{{ form.caption.id_for_label }}">Texto interno o descripción</label>
-      {{ form.caption }}
-      {{ form.caption.errors }}
-    </div>
     <div class="form-actions">
-      <button class="btn" type="submit">{% if is_edit %}Guardar cambios{% else %}Crear post{% endif %}</button>
+      <button class="btn" type="submit">Guardar publicación</button>
       <a class="btn btn-light" href="{% url 'gallery:list' %}">Cancelar</a>
     </div>
   </form>

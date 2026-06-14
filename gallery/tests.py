@@ -80,3 +80,23 @@ class InstagramGalleryViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Galería Instagram")
+
+    def test_panel_create_accepts_single_url(self):
+        owner = User.objects.create_user(username="owner2", password="testpass123", role=User.ROLE_OWNER)
+        self.client.force_login(owner)
+
+        response = self.client.post(
+            reverse("gallery:create"),
+            {
+                "pasted_input": "https://www.instagram.com/p/from-panel/",
+                "active": "on",
+                "featured": "on",
+            },
+        )
+
+        self.assertRedirects(response, reverse("gallery:list"))
+        post = InstagramPost.objects.get(instagram_url="https://www.instagram.com/p/from-panel/")
+        self.assertEqual(post.title[:14], "Post Instagram")
+        self.assertIn("instagram-media", post.embed_html)
+        self.assertTrue(post.active)
+        self.assertTrue(post.featured)

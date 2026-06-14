@@ -28,25 +28,30 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>Orden</th>
-            <th>Post</th>
+            <th>Preview</th>
+            <th>URL</th>
             <th>Destacado</th>
             <th>Activo</th>
-            <th>Creado</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {% for post in posts %}
             <tr>
-              <td>{{ post.sort_order }}</td>
               <td>
                 <strong>{{ post.title|default:"Post Instagram" }}</strong>
-                <p class="muted-text">{{ post.instagram_url }}</p>
+                {% if post.embed_html %}
+                  <div class="gallery-panel-preview">{{ post.embed_html|safe }}</div>
+                {% else %}
+                  <p class="muted-text">Sin embed guardado</p>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{{ post.instagram_url }}" target="_blank" rel="noopener">{{ post.instagram_url }}</a>
+                <p class="muted-text">{{ post.created_at|date:"d/m/Y H:i" }}</p>
               </td>
               <td>{% if post.featured %}<span class="status-pill is-active">Sí</span>{% else %}<span class="status-pill is-inactive">No</span>{% endif %}</td>
               <td>{% if post.active %}<span class="status-pill is-active">Sí</span>{% else %}<span class="status-pill is-inactive">No</span>{% endif %}</td>
-              <td>{{ post.created_at|date:"d/m/Y H:i" }}</td>
               <td class="actions-cell actions-inline">
                 <a class="btn btn-light btn-small" href="{% url 'gallery:update' post.pk %}">Editar</a>
                 <a class="btn btn-danger btn-small" href="{% url 'gallery:delete' post.pk %}">Desactivar</a>
@@ -64,4 +69,5 @@
     </div>
   {% endif %}
 </section>
+<script async src="https://www.instagram.com/embed.js"></script>
 {% endblock %}

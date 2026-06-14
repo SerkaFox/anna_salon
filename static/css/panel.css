@@ -340,6 +340,23 @@
   margin: 0;
 }
 
+.gallery-panel-preview {
+  max-width: 260px;
+  max-height: 220px;
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.72);
+}
+
+.gallery-panel-preview .instagram-media {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+
 .booking-data-row td {
   border-bottom: 0;
 }
