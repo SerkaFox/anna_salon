@@ -66,6 +66,23 @@ class InstagramGalleryViewTests(TestCase):
         self.assertNotContains(response, "Inactive")
         self.assertContains(response, "https://www.instagram.com/embed.js")
 
+    def test_homepage_gallery_uses_active_instagram_posts(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Active")
+        self.assertNotContains(response, "Inactive")
+        self.assertContains(response, "https://www.instagram.com/embed.js")
+
+    def test_homepage_gallery_falls_back_to_static_images(self):
+        InstagramPost.objects.all().delete()
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Manicura, extensiones y tratamientos.png")
+        self.assertContains(response, "Definición, depilación y lifting de cejas.png")
+
     def test_panel_requires_login(self):
         response = self.client.get(reverse("gallery:list"))
 

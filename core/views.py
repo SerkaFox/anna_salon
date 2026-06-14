@@ -692,6 +692,7 @@ def set_public_language(request):
 
 def home(request):
     language, t, services, articles = _localized_context(request)
+    homepage_instagram_posts = InstagramPost.objects.filter(active=True).order_by("-featured", "sort_order", "-created_at", "-id")[:6]
     schema = json.dumps({
         "@context": "https://schema.org",
         "@type": "BeautySalon",
@@ -707,7 +708,7 @@ def home(request):
     context.update({
         "services": services,
         "articles": articles[:3],
-        "featured_instagram_posts": InstagramPost.objects.filter(active=True, featured=True).order_by("sort_order", "-created_at", "-id")[:3],
+        "homepage_instagram_posts": homepage_instagram_posts,
         "schema_json": schema,
     })
     return render(request, "core/home.html", context)

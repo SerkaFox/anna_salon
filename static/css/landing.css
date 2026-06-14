@@ -1004,6 +1004,9 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
 .instagram-gallery-grid--featured {
   margin-top: 30px;
 }
+.instagram-gallery-grid--home {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .instagram-card {
   min-height: 260px;
   padding: 14px;
@@ -1072,7 +1075,8 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   .public-booking-aside { position: relative; top: 0; }
   .slot-grid { grid-template-columns: 1fr; }
   .booking-date-range { grid-template-columns: 1fr; }
-  .instagram-gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .instagram-gallery-grid,
+  .instagram-gallery-grid--home { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 620px) {
   .booking-form-grid,
@@ -1082,7 +1086,8 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   .selected-slot-summary,
   .booking-submit-row { align-items: stretch; flex-direction: column; }
   .booking-submit-row .btn-lux { width: 100%; }
-  .instagram-gallery-grid { grid-template-columns: 1fr; }
+  .instagram-gallery-grid,
+  .instagram-gallery-grid--home { grid-template-columns: 1fr; }
 }
 
 .payment-result-section {
