@@ -1,4 +1,5 @@
 import json
+import random
 import secrets
 from datetime import datetime, timedelta
 
@@ -692,7 +693,8 @@ def set_public_language(request):
 
 def home(request):
     language, t, services, articles = _localized_context(request)
-    homepage_instagram_posts = InstagramPost.objects.filter(active=True).order_by("-featured", "sort_order", "-created_at", "-id")
+    homepage_instagram_posts = list(InstagramPost.objects.filter(active=True))
+    random.shuffle(homepage_instagram_posts)
     schema = json.dumps({
         "@context": "https://schema.org",
         "@type": "BeautySalon",
