@@ -238,6 +238,11 @@
 
         function pauseAndResume() {
           stop();
+          const nearest = slides.reduce((best, slide, slideIndex) => {
+            const distance = Math.abs(slide.offsetLeft - carousel.scrollLeft);
+            return distance < best.distance ? { index: slideIndex, distance } : best;
+          }, { index: index, distance: Number.POSITIVE_INFINITY });
+          index = nearest.index;
           if (resumeTimer) window.clearTimeout(resumeTimer);
           resumeTimer = window.setTimeout(start, 6500);
         }
