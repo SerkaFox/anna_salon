@@ -1007,6 +1007,35 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
 .instagram-gallery-grid--home {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.instagram-carousel {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(280px, 360px);
+  gap: 18px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 10px 4px 22px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(240,208,145,0.62) rgba(255,255,255,0.08);
+}
+.instagram-carousel::-webkit-scrollbar {
+  height: 8px;
+}
+.instagram-carousel::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+}
+.instagram-carousel::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, var(--gold), var(--gold-light));
+  border-radius: 999px;
+}
+.instagram-carousel__slide {
+  width: min(360px, calc(100vw - 42px));
+  height: 520px;
+  scroll-snap-align: start;
+}
 .instagram-card {
   min-height: 260px;
   padding: 14px;
@@ -1016,6 +1045,10 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   box-shadow: 0 28px 80px rgba(0,0,0,0.42);
   backdrop-filter: blur(20px) saturate(132%);
   overflow: hidden;
+}
+.instagram-carousel__slide .instagram-media,
+.instagram-carousel__slide iframe {
+  max-height: 492px !important;
 }
 .instagram-card .instagram-media {
   min-width: 0 !important;
@@ -1077,6 +1110,7 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   .booking-date-range { grid-template-columns: 1fr; }
   .instagram-gallery-grid,
   .instagram-gallery-grid--home { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .instagram-carousel { grid-auto-columns: minmax(270px, 340px); }
 }
 @media (max-width: 620px) {
   .booking-form-grid,
@@ -1088,6 +1122,14 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   .booking-submit-row .btn-lux { width: 100%; }
   .instagram-gallery-grid,
   .instagram-gallery-grid--home { grid-template-columns: 1fr; }
+  .instagram-carousel {
+    grid-auto-columns: minmax(260px, calc(100vw - 34px));
+    margin-inline: -2px;
+  }
+  .instagram-carousel__slide {
+    width: calc(100vw - 34px);
+    height: 500px;
+  }
 }
 
 .payment-result-section {
