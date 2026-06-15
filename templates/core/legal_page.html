@@ -1,0 +1,35 @@
+{% extends "core/public_base.html" %}
+
+{% block title %}{{ page.title }} | BRIMOON Studio{% endblock %}
+{% block meta_description %}{{ page.summary }}{% endblock %}
+{% block og_title %}{{ page.title }} | BRIMOON Studio{% endblock %}
+{% block og_description %}{{ page.summary }}{% endblock %}
+
+{% block page_hero %}
+<section class="content-hero">
+  <div class="lux-container">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      <a href="{% url 'home' %}">Inicio</a>
+      <span>{{ page.title }}</span>
+    </nav>
+    <span class="lux-kicker">Legal</span>
+    <h1>{{ page.title }}</h1>
+    <p>{{ page.summary }}</p>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+<section class="lux-section article-layout">
+  <article class="lux-container article-body">
+    {% for heading, body in page.sections %}
+      <h2>{{ heading }}</h2>
+      <p>{{ body }}</p>
+    {% endfor %}
+    <div class="inline-cta">
+      <strong>Contacto legal</strong>
+      <a class="btn-lux btn-lux-outline" href="mailto:serkafox@gmail.com">serkafox@gmail.com</a>
+    </div>
+  </article>
+</section>
+{% endblock %}

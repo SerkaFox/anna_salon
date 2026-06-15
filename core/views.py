@@ -202,6 +202,95 @@ ARTICLES = [
     },
 ]
 
+LEGAL_PAGES = {
+    "privacy_policy": {
+        "title": "Política de privacidad",
+        "summary": "Información sobre el tratamiento de datos en BRIMOON Studio / Anna Salon y el uso de integraciones con Instagram.",
+        "sections": [
+            (
+                "Quiénes somos",
+                "BRIMOON Studio / Anna Salon ofrece servicios de belleza y publica información comercial en brimoon.es. Para cuestiones sobre privacidad o solicitudes relacionadas con datos, puedes escribir a serkafox@gmail.com.",
+            ),
+            (
+                "Uso de Instagram API",
+                "El sitio puede utilizar la API de Instagram o herramientas de Meta para sincronizar medios públicos o profesionales de cuentas de Instagram autorizadas. Esta integración se usa para mostrar una galería o portfolio de trabajos en brimoon.es y para gestionar la integración entre reservas, contenido visual y galería.",
+            ),
+            (
+                "Datos que pueden tratarse",
+                "Si una cuenta autorizada se conecta a la integración, podemos tratar el identificador de cuenta de Instagram, el nombre de usuario si está disponible, identificadores de medios, texto de caption, tipo de medio, URL del medio, URL de miniatura, permalink y fecha u hora de publicación. También pueden conservarse registros técnicos necesarios para seguridad, diagnóstico y sincronización.",
+            ),
+            (
+                "Finalidad del tratamiento",
+                "Los datos se usan para mostrar trabajos o publicaciones profesionales autorizadas en la galería de brimoon.es, mantener la integración de galería y reservas, revisar errores de sincronización y proteger el servicio.",
+            ),
+            (
+                "Pagos",
+                "Esta integración de Instagram no recoge datos de tarjetas ni datos bancarios. Los procesos de pago, cuando existan, se gestionan por los proveedores de pago correspondientes y no forman parte de la sincronización de Instagram.",
+            ),
+            (
+                "Conservación y solicitudes",
+                "Los datos se conservan mientras sean necesarios para la galería, la gestión del servicio o requisitos técnicos razonables. Puedes solicitar información o eliminación de datos escribiendo a serkafox@gmail.com.",
+            ),
+        ],
+    },
+    "terms": {
+        "title": "Términos de servicio",
+        "summary": "Condiciones generales de uso del sitio web, la galería y las integraciones públicas de BRIMOON Studio / Anna Salon.",
+        "sections": [
+            (
+                "Uso del sitio",
+                "El sitio brimoon.es ofrece información sobre BRIMOON Studio / Anna Salon, servicios de belleza, reserva de citas y una galería de trabajos. Al utilizar el sitio, aceptas hacerlo de forma lícita y respetuosa con el funcionamiento del servicio.",
+            ),
+            (
+                "Reservas y contenido",
+                "La información de servicios, disponibilidad, galería y publicaciones puede actualizarse con el tiempo. Las reservas pueden estar sujetas a confirmación, disponibilidad del equipo y condiciones indicadas durante el proceso de cita.",
+            ),
+            (
+                "Integración con Instagram",
+                "El sitio puede usar la API de Instagram para sincronizar medios públicos o profesionales desde cuentas autorizadas. Dicho contenido se utiliza para mostrar portfolio, trabajos realizados o publicaciones relacionadas con el salón.",
+            ),
+            (
+                "Datos y pagos",
+                "La integración con Instagram puede tratar datos técnicos y de medios descritos en la Política de privacidad. Esta integración no recoge datos de tarjetas ni datos bancarios.",
+            ),
+            (
+                "Cambios del servicio",
+                "BRIMOON Studio / Anna Salon puede modificar contenidos, páginas, integraciones o disponibilidad del sitio cuando sea necesario para operación, seguridad o mejora del servicio.",
+            ),
+            (
+                "Contacto",
+                "Para consultas sobre estos términos o sobre la integración con Instagram, puedes escribir a serkafox@gmail.com.",
+            ),
+        ],
+    },
+    "data_deletion": {
+        "title": "Instrucciones de eliminación de datos",
+        "summary": "Cómo solicitar la eliminación de datos asociados a la integración de Instagram de BRIMOON Studio / Anna Salon.",
+        "sections": [
+            (
+                "Solicitud por email",
+                "Puedes solicitar la eliminación de datos asociados a la integración de Instagram escribiendo a serkafox@gmail.com. Indica el nombre de la cuenta de Instagram conectada, el motivo de la solicitud y un contacto para responder.",
+            ),
+            (
+                "Datos que pueden eliminarse",
+                "La solicitud puede referirse al identificador de cuenta de Instagram, nombre de usuario si está disponible, identificadores de medios, captions, tipo de medio, URL del medio, miniaturas, permalinks, fechas de publicación y registros técnicos relacionados con la sincronización.",
+            ),
+            (
+                "Desconectar desde Meta o Instagram",
+                "Además de escribirnos, puedes desconectar la aplicación desde la configuración de Meta o Instagram. Revisa las secciones de aplicaciones, sitios web, integraciones empresariales o permisos conectados y elimina el acceso de la aplicación relacionada con BRIMOON Studio / Anna Salon.",
+            ),
+            (
+                "Después de desconectar",
+                "Al desconectar la aplicación, la sincronización futura debería detenerse. Si necesitas que eliminemos datos ya almacenados en nuestro sistema, envía igualmente la solicitud por email a serkafox@gmail.com.",
+            ),
+            (
+                "Pagos",
+                "Estas instrucciones se refieren a datos de Instagram y galería. La integración no recoge datos de tarjetas ni datos bancarios.",
+            ),
+        ],
+    },
+}
+
 
 def _absolute_url(request, path):
     return f"{SITE_DOMAIN}{path}"
@@ -716,6 +805,13 @@ def home(request):
     return render(request, "core/home.html", context)
 
 
+def legal_page(request, page_key):
+    page = LEGAL_PAGES[page_key]
+    context = _base_context(request, reverse(page_key))
+    context.update({"page": page})
+    return render(request, "core/legal_page.html", context)
+
+
 def service_index(request):
     language, t, services, articles = _localized_context(request)
     schema = json.dumps({
@@ -789,6 +885,9 @@ def sitemap_xml(request):
         reverse("public_booking"),
         reverse("service_index"),
         reverse("advice_index"),
+        reverse("privacy_policy"),
+        reverse("terms"),
+        reverse("data_deletion"),
     ]
     paths += [reverse("service_detail", args=[service["slug"]]) for service in SERVICES]
     paths += [reverse("article_detail", args=[article["slug"]]) for article in ARTICLES]

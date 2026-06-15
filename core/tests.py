@@ -12,6 +12,30 @@ from employees.models import Employee, EmployeeWeeklyShift
 from services_app.models import Service
 
 
+class PublicLegalPageTests(TestCase):
+    def test_privacy_policy_page_returns_200(self):
+        response = self.client.get(reverse("privacy_policy"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Política de privacidad")
+        self.assertContains(response, "Instagram")
+        self.assertContains(response, "serkafox@gmail.com")
+
+    def test_terms_page_returns_200(self):
+        response = self.client.get(reverse("terms"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Términos de servicio")
+        self.assertContains(response, "BRIMOON Studio")
+
+    def test_data_deletion_page_returns_200(self):
+        response = self.client.get(reverse("data_deletion"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Instrucciones de eliminación de datos")
+        self.assertContains(response, "desconectar")
+
+
 class PublicBookingTests(TestCase):
     def setUp(self):
         self.browser = DjangoClient()
