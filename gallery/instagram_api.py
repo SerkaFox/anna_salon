@@ -4,6 +4,7 @@ from urllib.request import urlopen
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ValidationError
 from django.utils.dateparse import parse_datetime
 
 from .models import InstagramPost
@@ -81,11 +82,22 @@ def sync_instagram_media(access_token=None, account_id=None):
     synced_count = 0
     created_count = 0
     updated_count = 0
+    skipped_count = 0
+    errors = []
 
     for item in media_items:
-        post, created = upsert_instagram_media_item(item)
-        if not post:
+        media_id = str(item.get("id") or "").strip() or "unknown"
+        try:
+            post, created = upsert_instagram_media_item(item)
+        except (ValidationError, Exception) as exc:
+            skipped_count += 1
+            errors.append({"media_id": media_id, "error": str(exc)})
             continue
+        if not post:
+            skipped_count += 1
+            errors.append({"media_id": media_id, "error": "Media sin id o permalink."})
+            continue
+
         synced_count += 1
         if created:
             created_count += 1
@@ -96,4 +108,6 @@ def sync_instagram_media(access_token=None, account_id=None):
         "synced": synced_count,
         "created": created_count,
         "updated": updated_count,
+        "skipped": skipped_count,
+        "errors": errors,
     }

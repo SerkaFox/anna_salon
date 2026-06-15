@@ -74,7 +74,13 @@ def instagram_sync(request):
     except Exception as exc:
         messages.error(request, f"No se pudo sincronizar Instagram: {exc}")
     else:
-        messages.success(request, f"{result['synced']} publicaciones sincronizadas.")
+        messages.success(
+            request,
+            f"{result['synced']} publicaciones sincronizadas. "
+            f"{result['created']} nuevas, {result['updated']} actualizadas, {result['skipped']} omitidas.",
+        )
+        for error in result.get("errors", [])[:5]:
+            messages.error(request, f"Instagram media {error['media_id']}: {error['error']}")
     return redirect("gallery:list")
 
 

@@ -15,6 +15,8 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"{result['synced']} publicaciones sincronizadas "
-                f"({result['created']} nuevas, {result['updated']} actualizadas)."
+                f"({result['created']} nuevas, {result['updated']} actualizadas, {result['skipped']} omitidas)."
             )
         )
+        for error in result.get("errors", []):
+            self.stderr.write(f"Instagram media {error['media_id']}: {error['error']}")

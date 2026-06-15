@@ -121,6 +121,20 @@ class InstagramAPISyncTests(TestCase):
         self.assertTrue(InstagramPost.objects.filter(pk=manual.pk).exists())
         self.assertEqual(InstagramPost.objects.count(), 2)
 
+    @patch("gallery.instagram_api.upsert_instagram_media_item")
+    @patch("gallery.instagram_api.fetch_instagram_media")
+    def test_sync_skips_invalid_item_and_continues(self, mocked_fetch, mocked_upsert):
+        mocked_fetch.return_value = [{"id": "bad-media"}, {"id": "good-media"}]
+        good_post = InstagramPost(instagram_media_id="good-media", instagram_url="https://www.instagram.com/p/good/")
+        mocked_upsert.side_effect = [ValidationError("bad media"), (good_post, True)]
+
+        result = sync_instagram_media()
+
+        self.assertEqual(result["synced"], 1)
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(result["errors"][0]["media_id"], "bad-media")
+
 
 class InstagramGalleryViewTests(TestCase):
     def setUp(self):
