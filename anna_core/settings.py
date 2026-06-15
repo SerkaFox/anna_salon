@@ -88,6 +88,11 @@ CSRF_TRUSTED_ORIGINS = [
 SITE_URL = os.getenv('SITE_URL', 'https://brimoon.es')
 PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', SITE_URL)
 APP_DOWNLOAD_URL = os.getenv('APP_DOWNLOAD_URL', 'https://brimoon.es/app/')
+META_APP_ID = os.getenv('META_APP_ID', '')
+META_APP_SECRET = os.getenv('META_APP_SECRET', '')
+INSTAGRAM_ACCESS_TOKEN = os.getenv('INSTAGRAM_ACCESS_TOKEN', '')
+INSTAGRAM_ACCOUNT_ID = os.getenv('INSTAGRAM_ACCOUNT_ID', '17841425950738982')
+INSTAGRAM_WEBHOOK_VERIFY_TOKEN = os.getenv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', 'brimoon_instagram_verify_2026')
 
 INSTALLED_APPS = [
     'django.contrib.admin',

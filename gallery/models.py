@@ -126,9 +126,15 @@ def sanitize_instagram_embed(value):
 
 class InstagramPost(models.Model):
     title = models.CharField("Titulo", max_length=160, blank=True)
+    instagram_media_id = models.CharField("ID de media Instagram", max_length=80, blank=True, null=True, unique=True)
     instagram_url = models.URLField("URL de Instagram")
     embed_html = models.TextField("Embed blockquote", blank=True)
     caption = models.TextField("Texto", blank=True)
+    media_type = models.CharField("Tipo de media", max_length=40, blank=True)
+    media_url = models.URLField("URL de media", max_length=1000, blank=True)
+    thumbnail_url = models.URLField("URL de miniatura", max_length=1000, blank=True)
+    published_at = models.DateTimeField("Publicado en Instagram", null=True, blank=True)
+    synced_from_api = models.BooleanField("Sincronizado por API", default=False)
     active = models.BooleanField("Activo", default=True)
     featured = models.BooleanField("Destacado", default=False)
     sort_order = models.PositiveIntegerField("Orden", default=0)

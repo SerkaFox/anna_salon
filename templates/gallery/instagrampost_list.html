@@ -5,6 +5,10 @@
 {% block panel_subtitle %}Posts y reels visibles en la web. Total: {{ posts_count }}{% endblock %}
 
 {% block panel_actions %}
+  <form method="post" action="{% url 'gallery:instagram_sync' %}" class="inline-form">
+    {% csrf_token %}
+    <button class="btn btn-light" type="submit">Sincronizar Instagram</button>
+  </form>
   <a class="btn" href="{% url 'gallery:create' %}">+ Nuevo post</a>
 {% endblock %}
 

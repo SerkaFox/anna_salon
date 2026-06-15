@@ -23,7 +23,10 @@
         {% if post.embed_html %}
           {{ post.embed_html|safe }}
         {% else %}
-          <a class="instagram-link-card" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
+          <a class="instagram-link-card{% if post.media_url or post.thumbnail_url %} instagram-media-card{% endif %}" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
+            {% if post.media_url or post.thumbnail_url %}
+              <img src="{{ post.thumbnail_url|default:post.media_url }}" alt="{{ post.caption|default:'Publicación de Instagram BRIMOON Studio' }}" loading="lazy">
+            {% endif %}
             <span>Instagram</span>
             <strong>{{ post.title|default:"Ver publicación" }}</strong>
             {% if post.caption %}<p>{{ post.caption }}</p>{% endif %}

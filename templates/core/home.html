@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260614-03">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260615-01">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
@@ -121,7 +121,10 @@
                     <template class="instagram-embed-template">{{ post.embed_html|safe }}</template>
                   {% endif %}
                 {% else %}
-                  <a class="instagram-link-card" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
+                  <a class="instagram-link-card{% if post.media_url or post.thumbnail_url %} instagram-media-card{% endif %}" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
+                    {% if post.media_url or post.thumbnail_url %}
+                      <img src="{{ post.thumbnail_url|default:post.media_url }}" alt="{{ post.caption|default:'Publicación de Instagram BRIMOON Studio' }}" loading="lazy">
+                    {% endif %}
                     <span>Instagram</span>
                     <strong>{{ post.title|default:"Ver publicación" }}</strong>
                     {% if post.caption %}<p>{{ post.caption }}</p>{% endif %}

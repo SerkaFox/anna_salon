@@ -15,6 +15,7 @@ urlpatterns = [
     path("privacy-policy/", core_views.legal_page, {"page_key": "privacy_policy"}, name="privacy_policy"),
     path("terms/", core_views.legal_page, {"page_key": "terms"}, name="terms"),
     path("data-deletion/", core_views.legal_page, {"page_key": "data_deletion"}, name="data_deletion"),
+    path("webhooks/instagram/", gallery_views.instagram_webhook, name="instagram_webhook"),
     path("reservar/", core_views.public_booking, name="public_booking"),
     path("reservar/slots/", core_views.public_booking_slots, name="public_booking_slots"),
     path("reservar/lista-espera/", core_views.public_waitlist, name="public_waitlist"),

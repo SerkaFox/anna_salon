@@ -1119,6 +1119,32 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   margin: 0;
   color: var(--muted);
 }
+.instagram-media-card {
+  align-content: start;
+  padding: 0;
+  overflow: hidden;
+}
+.instagram-media-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+}
+.instagram-media-card span,
+.instagram-media-card strong,
+.instagram-media-card p {
+  margin-inline: 18px;
+}
+.instagram-media-card span {
+  margin-top: 18px;
+}
+.instagram-media-card p {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-bottom: 18px;
+}
 .empty-lux-state {
   grid-column: 1 / -1;
   padding: clamp(28px, 5vw, 58px);
