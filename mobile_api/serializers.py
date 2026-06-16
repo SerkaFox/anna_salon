@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from accounts.permissions import can_access_booking, can_access_employee, get_client_profile, get_employee_profile, is_admin_user, scope_clients_queryset
+from bookings.client_actions import booking_amount_due, booking_refundable_until, can_client_cancel, can_client_reschedule
 from bookings.forms import BookingForm
 from bookings.models import Booking
 from bookings.utils import combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
@@ -446,6 +447,11 @@ class BookingSerializer(serializers.ModelSerializer):
     paid_amount = serializers.SerializerMethodField()
     latest_payment_id = serializers.SerializerMethodField()
     can_pay = serializers.SerializerMethodField()
+    amount_due = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
+    can_refund = serializers.SerializerMethodField()
+    refundable_until = serializers.SerializerMethodField()
+    can_reschedule = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -479,6 +485,11 @@ class BookingSerializer(serializers.ModelSerializer):
             "paid_amount",
             "latest_payment_id",
             "can_pay",
+            "amount_due",
+            "can_cancel",
+            "can_refund",
+            "refundable_until",
+            "can_reschedule",
             "employee_percent_snapshot",
             "employee_amount_snapshot",
             "salon_amount_snapshot",
@@ -528,6 +539,21 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_can_pay(self, obj):
         return self._payment_info(obj)["can_pay"]
+
+    def get_amount_due(self, obj):
+        return str(booking_amount_due(obj))
+
+    def get_can_cancel(self, obj):
+        return can_client_cancel(obj)
+
+    def get_can_refund(self, obj):
+        return timezone.now() <= booking_refundable_until(obj) and self._payment_info(obj)["paid_total"] > 0
+
+    def get_refundable_until(self, obj):
+        return _format_local_datetime(booking_refundable_until(obj))
+
+    def get_can_reschedule(self, obj):
+        return can_client_reschedule(obj)
 
 
 class BookingWriteSerializer(serializers.Serializer):

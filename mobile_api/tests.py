@@ -12,7 +12,7 @@ from accounts.models import User
 from bookings.models import Booking
 from clients.models import Client
 from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock, EmployeeWeeklyShift
-from payments.models import Payment
+from payments.models import Payment, PaymentRefund
 from salon.models import Zone
 from services_app.models import Service
 
@@ -628,3 +628,124 @@ class MobileApiMvpTests(TestCase):
         payment = Payment.objects.get(pk=payload["payment_id"])
         self.assertEqual(payment.amount, Decimal("12.00"))
         self.assertEqual(payment.stripe_checkout_session_id, "cs_mobile")
+
+    def _future_start(self, days=8, hour=10):
+        start_at = timezone.now() + timedelta(days=days)
+        while start_at.weekday() == 6:
+            start_at += timedelta(days=1)
+        return start_at.replace(hour=hour, minute=0, second=0, microsecond=0)
+
+    def test_mobile_cancel_paid_booking_creates_refund_when_allowed(self):
+        booking = self._create_booking(employee=self.employee, zone=self.zone, start_at=self._future_start())
+        payment = Payment.objects.create(
+            booking=booking,
+            amount=Decimal("20.00"),
+            currency="eur",
+            order_number="stripe-mobile-refundable",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            stripe_payment_intent_id="pi_mobile_refund",
+            paid_at=timezone.now(),
+        )
+        self._auth(self.owner_user)
+
+        with patch("payments.stripe_service.stripe.Refund.create", return_value={"id": "re_mobile", "status": "succeeded"}):
+            response = self.api_client.post(reverse("mobile_api:booking_cancel", args=[booking.pk]), format="json")
+
+        self.assertEqual(response.status_code, 200)
+        booking.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
+        self.assertEqual(payment.status, Payment.Statuses.REFUNDED)
+        self.assertEqual(payment.amount_refunded, Decimal("20.00"))
+        self.assertTrue(PaymentRefund.objects.filter(stripe_refund_id="re_mobile").exists())
+
+    def test_mobile_reschedule_paid_booking_preserves_payment(self):
+        booking = self._create_booking(employee=self.employee, zone=self.zone, start_at=self._future_start())
+        payment = Payment.objects.create(
+            booking=booking,
+            amount=Decimal("15.00"),
+            currency="eur",
+            order_number="stripe-mobile-reschedule",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            paid_at=timezone.now(),
+        )
+        new_start = self._future_start(days=9, hour=11)
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:booking_client_reschedule", args=[booking.pk]),
+            {"start_at": new_start.isoformat(), "employee": self.employee.pk, "zone": self.zone.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        booking.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(booking.start_at, new_start)
+        self.assertEqual(payment.status, Payment.Statuses.PAID)
+
+    @override_settings(STRIPE_SECRET_KEY="sk_test_mock", STRIPE_CURRENCY="eur")
+    @patch("payments.stripe_service.stripe.checkout.Session.create")
+    def test_mobile_edit_services_higher_price_returns_extra_checkout(self, mocked_create):
+        mocked_create.return_value = SimpleNamespace(
+            id="cs_mobile_extra",
+            url="https://checkout.stripe.test/mobile-extra",
+            payment_intent="pi_mobile_extra",
+        )
+        booking = self._create_booking(employee=self.employee, zone=self.zone, start_at=self._future_start())
+        Payment.objects.create(
+            booking=booking,
+            amount=Decimal("50.00"),
+            currency="eur",
+            order_number="stripe-mobile-extra-paid",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            paid_at=timezone.now(),
+        )
+        expensive_service = Service.objects.create(
+            name="Color premium",
+            duration_minutes=90,
+            price=Decimal("80.00"),
+            requires_zone=True,
+            is_active=True,
+        )
+        expensive_service.allowed_zones.add(self.zone)
+        self.employee.services.add(expensive_service)
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:booking_edit_services", args=[booking.pk]),
+            {"service": expensive_service.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["extra_due"], "30.00")
+        self.assertEqual(payload["checkout_url"], "https://checkout.stripe.test/mobile-extra")
+        extra_payment = Payment.objects.get(pk=payload["payment_id"])
+        self.assertEqual(extra_payment.status, Payment.Statuses.EXTRA_PAYMENT_PENDING)
+        self.assertEqual(extra_payment.amount, Decimal("30.00"))
+
+    def test_mobile_client_cannot_access_another_client_booking(self):
+        client_user = User.objects.create_user(username="client-mobile", password="testpass123", role=User.ROLE_CLIENT)
+        self.client_obj.user = client_user
+        self.client_obj.save(update_fields=["user"])
+        other_booking = self._create_booking(
+            employee=self.other_employee,
+            client=self.other_client,
+            zone=self.other_zone,
+            start_at=self._future_start(hour=12),
+        )
+        self._auth(client_user)
+
+        detail_response = self.api_client.get(reverse("mobile_api:booking_detail", args=[other_booking.pk]))
+        cancel_response = self.api_client.post(reverse("mobile_api:booking_cancel", args=[other_booking.pk]), format="json")
+
+        self.assertEqual(detail_response.status_code, 403)
+        self.assertEqual(cancel_response.status_code, 403)

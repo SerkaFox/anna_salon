@@ -1,0 +1,111 @@
+{% extends "client_portal_base.html" %}
+
+{% block title %}Reserva | BRIMOON Studio{% endblock %}
+{% block portal_title %}Detalle de reserva{% endblock %}
+{% block portal_subtitle %}Consulta, paga o cambia tu cita.{% endblock %}
+
+{% block portal_content %}
+<section class="content-grid">
+  <article class="panel-card">
+    <div class="dashboard-section-head">
+      <div>
+        <h2>{{ booking.service }}</h2>
+        <p class="muted-text">{{ booking.start_at|date:"d/m/Y H:i" }} · {{ booking.employee }}</p>
+      </div>
+      <span class="dashboard-badge">{{ booking.get_status_display }}</span>
+    </div>
+    <div class="detail-grid">
+      <span>Servicio</span><strong>{{ booking.service }}</strong>
+      <span>Especialista</span><strong>{{ booking.employee }}</strong>
+      <span>Fecha</span><strong>{{ booking.start_at|date:"d/m/Y H:i" }}</strong>
+      <span>Zona</span><strong>{% if booking.zone %}{{ booking.zone }}{% else %}—{% endif %}</strong>
+      <span>Precio</span><strong>{{ booking.client_price_snapshot }} €</strong>
+      <span>Pagado</span><strong>{{ paid_amount }} €</strong>
+      <span>Pendiente</span><strong>{{ amount_due }} €</strong>
+      <span>Devolución</span><strong>Disponible hasta {{ refundable_until|date:"d/m/Y H:i" }}</strong>
+    </div>
+    {% if amount_due > 0 and booking.status != "cancelled" %}
+      <form method="post" action="{% url 'clients:booking_payment' booking.id %}" class="portal-pay-form">
+        {% csrf_token %}
+        <span>Pago pendiente · {{ amount_due }} €</span>
+        <button class="btn" type="submit">Pagar reserva</button>
+      </form>
+    {% endif %}
+  </article>
+
+  <article class="panel-card">
+    <h2>Cambiar cita</h2>
+    {% if can_reschedule %}
+      <form method="post" action="{% url 'clients:booking_reschedule' booking.id %}" class="entity-form">
+        {% csrf_token %}
+        <div class="form-grid">
+          <div class="field">
+            <label for="reschedule-start">Nueva fecha y hora</label>
+            <input class="input" id="reschedule-start" name="start_at" type="datetime-local" required>
+          </div>
+          <div class="field">
+            <label for="reschedule-employee">Especialista</label>
+            <select class="input" id="reschedule-employee" name="employee">
+              {% for employee in employees %}
+                <option value="{{ employee.id }}" {% if employee.id == booking.employee_id %}selected{% endif %}>{{ employee.full_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% if zones %}
+            <div class="field">
+              <label for="reschedule-zone">Zona</label>
+              <select class="input" id="reschedule-zone" name="zone">
+                <option value="">Automática</option>
+                {% for zone in zones %}
+                  <option value="{{ zone.id }}" {% if booking.zone_id == zone.id %}selected{% endif %}>{{ zone.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          {% endif %}
+        </div>
+        <button class="btn btn-light" type="submit">Cambiar cita</button>
+      </form>
+    {% else %}
+      <p class="muted-text">No se puede cambiar la cita con menos de 24 horas de antelación. Contacta con el salón.</p>
+    {% endif %}
+  </article>
+</section>
+
+<section class="content-grid">
+  <article class="panel-card">
+    <h2>Añadir o cambiar servicio</h2>
+    <p class="muted-text">Si el nuevo importe es mayor, se abrirá Stripe Checkout para pagar la diferencia. Si es menor, el salón revisará la diferencia manualmente.</p>
+    <form method="post" action="{% url 'clients:booking_change_service' booking.id %}" class="entity-form">
+      {% csrf_token %}
+      <div class="field">
+        <label for="booking-service">Servicio</label>
+        <select class="input" id="booking-service" name="service" required>
+          {% for service in services %}
+            <option value="{{ service.id }}" {% if service.id == booking.service_id %}selected{% endif %}>{{ service.name }} · {{ service.price }} €</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-light" type="submit">Actualizar servicio</button>
+    </form>
+  </article>
+
+  <article class="panel-card">
+    <h2>Cancelar reserva</h2>
+    {% if can_cancel %}
+      {% if can_reschedule %}
+        <p class="muted-text">Si cancelas ahora, se devolverá la señal automáticamente cuando el pago Stripe sea reembolsable.</p>
+      {% else %}
+        <p class="muted-text">Puedes cancelar, pero no se devolverá la señal porque faltan menos de 24 horas.</p>
+      {% endif %}
+      <form method="post" action="{% url 'clients:booking_cancel' booking.id %}">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">Cancelar reserva</button>
+      </form>
+    {% else %}
+      <p class="muted-text">Esta reserva ya no se puede cancelar desde tu cuenta.</p>
+    {% endif %}
+  </article>
+</section>
+
+<p><a class="btn btn-light" href="{% url 'clients:portal' %}">Volver a mi cuenta</a></p>
+{% endblock %}

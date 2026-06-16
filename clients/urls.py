@@ -8,7 +8,11 @@ from .views import (
     client_delete,
     client_detail,
     client_portal,
+    client_booking_detail,
     client_booking_payment,
+    client_booking_cancel,
+    client_booking_reschedule,
+    client_booking_change_service,
     client_booking_prepayment_refund,
     client_portal_slots_api,
     use_referral_reward,
@@ -19,7 +23,11 @@ app_name = "clients"
 
 urlpatterns = [
     path("portal/", client_portal, name="portal"),
+    path("portal/bookings/<int:pk>/", client_booking_detail, name="booking_detail"),
     path("portal/bookings/<int:pk>/payment/", client_booking_payment, name="booking_payment"),
+    path("portal/bookings/<int:pk>/cancel/", client_booking_cancel, name="booking_cancel"),
+    path("portal/bookings/<int:pk>/reschedule/", client_booking_reschedule, name="booking_reschedule"),
+    path("portal/bookings/<int:pk>/service/", client_booking_change_service, name="booking_change_service"),
     path("portal/bookings/<int:pk>/prepayment/refund/", client_booking_prepayment_refund, name="booking_prepayment_refund"),
     path("portal/slots/", client_portal_slots_api, name="portal_slots_api"),
     path("portal/language/", set_client_language, name="set_language"),

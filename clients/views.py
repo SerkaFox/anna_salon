@@ -18,6 +18,16 @@ from django.views.decorators.http import require_POST
 from accounts.permissions import can_access_client, get_client_profile, scope_clients_queryset
 from auditlog.services import log_event
 from bookings.forms import BookingForm
+from bookings.client_actions import (
+    booking_amount_due,
+    booking_paid_amount,
+    booking_refundable_until,
+    can_client_cancel,
+    can_client_reschedule,
+    cancel_booking,
+    change_booking_service,
+    reschedule_booking,
+)
 from bookings.models import Booking
 from bookings.models import BookingPhoto
 from bookings.services import calculate_booking_prepayment_amount, create_booking_prepayment, refund_booking_prepayment, refresh_booking_prepayments
@@ -84,6 +94,10 @@ def _attach_online_payment_info(bookings):
         booking.online_payment_remaining_amount = info["remaining_amount"]
         booking.prepayment_due_amount = calculate_booking_prepayment_amount(booking)
         booking.online_payment_due_amount = get_booking_checkout_amount(booking)
+        booking.amount_due = booking_amount_due(booking)
+        booking.refundable_until = booking_refundable_until(booking)
+        booking.can_cancel = can_client_cancel(booking)
+        booking.can_reschedule = can_client_reschedule(booking)
         booking.online_payment_is_paid = info["is_paid"]
         booking.online_payment_can_pay = (
             not prepayment
@@ -350,6 +364,127 @@ def client_booking_payment(request, pk):
         message=f"Stripe Checkout creado desde portal cliente para reserva #{booking.pk}.",
     )
     return redirect(payment.checkout_url)
+
+
+def _client_booking_queryset(client):
+    return (
+        Booking.objects
+        .select_related("client", "employee", "service", "zone", "prepayment")
+        .prefetch_related("online_payments", "online_payments__refunds")
+        .filter(client=client)
+    )
+
+
+def _client_booking_detail_context(booking, extra=None):
+    _attach_online_payment_info([booking])
+    services = Service.objects.filter(is_active=True, employees=booking.employee).order_by("name").distinct()
+    context = {
+        "booking": booking,
+        "services": services,
+        "paid_amount": booking_paid_amount(booking),
+        "amount_due": booking_amount_due(booking),
+        "refundable_until": booking_refundable_until(booking),
+        "can_cancel": can_client_cancel(booking),
+        "can_reschedule": can_client_reschedule(booking),
+        "employees": Employee.objects.filter(is_active=True, services=booking.service).order_by("first_name", "last_name").distinct(),
+        "zones": booking.service.allowed_zones.filter(is_active=True).order_by("name") if booking.service.requires_zone else Zone.objects.none(),
+    }
+    if extra:
+        context.update(extra)
+    return context
+
+
+@login_required
+def client_booking_detail(request, pk):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+    booking = get_object_or_404(_client_booking_queryset(client), pk=pk)
+    return render(request, "clients/client_booking_detail.html", _client_booking_detail_context(booking))
+
+
+@login_required
+@require_POST
+def client_booking_cancel(request, pk):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+    booking = get_object_or_404(_client_booking_queryset(client), pk=pk)
+    try:
+        message, _refunds = cancel_booking(booking)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("clients:booking_detail", pk=booking.pk)
+    log_event(
+        actor=request.user,
+        section="booking",
+        action="client_cancel",
+        instance=booking,
+        message=f"Reserva cancelada por cliente desde portal: #{booking.pk}.",
+    )
+    messages.success(request, message)
+    return redirect("clients:booking_detail", pk=booking.pk)
+
+
+@login_required
+@require_POST
+def client_booking_reschedule(request, pk):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+    booking = get_object_or_404(_client_booking_queryset(client), pk=pk)
+    try:
+        start_at = datetime.strptime(request.POST.get("start_at", ""), "%Y-%m-%dT%H:%M")
+        start_at = timezone.make_aware(start_at, timezone.get_default_timezone())
+    except ValueError:
+        messages.error(request, "Selecciona una fecha y hora válida.")
+        return redirect("clients:booking_detail", pk=booking.pk)
+    employee = booking.employee
+    employee_id = request.POST.get("employee")
+    if employee_id:
+        employee = get_object_or_404(Employee, pk=employee_id, is_active=True)
+    zone = booking.zone
+    zone_id = request.POST.get("zone")
+    if zone_id:
+        zone = get_object_or_404(Zone, pk=zone_id, is_active=True)
+    try:
+        reschedule_booking(booking, start_at=start_at, employee=employee, zone=zone)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("clients:booking_detail", pk=booking.pk)
+    log_event(
+        actor=request.user,
+        section="booking",
+        action="client_reschedule",
+        instance=booking,
+        message=f"Reserva reprogramada por cliente desde portal: #{booking.pk}.",
+    )
+    messages.success(request, "La cita se ha cambiado correctamente.")
+    return redirect("clients:booking_detail", pk=booking.pk)
+
+
+@login_required
+@require_POST
+def client_booking_change_service(request, pk):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+    booking = get_object_or_404(_client_booking_queryset(client), pk=pk)
+    service = get_object_or_404(Service, pk=request.POST.get("service"), is_active=True)
+    try:
+        result = change_booking_service(booking, service=service, request=request)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("clients:booking_detail", pk=booking.pk)
+    payment = result["payment"]
+    if payment:
+        messages.info(request, "El cambio aumenta el importe. Completa el pago extra para confirmar la diferencia.")
+        return redirect(payment.checkout_url)
+    if result["manual_refund_required"]:
+        messages.warning(request, "El cambio reduce el importe. El salón revisará la diferencia manualmente.")
+    else:
+        messages.success(request, "Servicio actualizado correctamente.")
+    return redirect("clients:booking_detail", pk=booking.pk)
 
 
 @login_required

@@ -12,7 +12,7 @@ from django.utils import timezone
 from bookings.models import Booking
 from bookings.services import create_booking_prepayment
 
-from .models import Payment
+from .models import Payment, PaymentRefund
 
 
 def _decimal_setting(value):
@@ -33,8 +33,9 @@ def get_booking_checkout_amount(booking):
     return Decimal(amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def create_pending_stripe_payment(booking):
-    amount = get_booking_checkout_amount(booking)
+def create_pending_stripe_payment(booking, amount=None, *, status=None, reason="booking_payment"):
+    amount = amount if amount is not None else get_booking_checkout_amount(booking)
+    amount = Decimal(amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if amount <= Decimal("0.00"):
         raise ValidationError("La reserva no tiene importe para pagar.")
     return Payment.objects.create(
@@ -44,7 +45,8 @@ def create_pending_stripe_payment(booking):
         order_number=f"stripe-{uuid.uuid4().hex}",
         provider=Payment.Providers.STRIPE,
         method=Payment.Methods.CARD,
-        status=Payment.Statuses.PENDING,
+        status=status or Payment.Statuses.PENDING,
+        raw_request={"reason": reason},
     )
 
 
@@ -256,6 +258,92 @@ def handle_payment_intent_failed(event):
         return payment
 
 
+def _refund_status_from_stripe(stripe_status):
+    if stripe_status == "succeeded":
+        return PaymentRefund.Statuses.REFUNDED
+    if stripe_status == "failed":
+        return PaymentRefund.Statuses.FAILED
+    if stripe_status == "canceled":
+        return PaymentRefund.Statuses.CANCELLED
+    return PaymentRefund.Statuses.PENDING
+
+
+def _sync_payment_refund_status(payment):
+    refunded_total = sum(
+        (refund.amount for refund in payment.refunds.filter(status=PaymentRefund.Statuses.REFUNDED)),
+        Decimal("0.00"),
+    )
+    pending_exists = payment.refunds.filter(status=PaymentRefund.Statuses.PENDING).exists()
+    payment.amount_refunded = refunded_total
+    if pending_exists:
+        payment.status = Payment.Statuses.REFUND_PENDING
+    elif refunded_total >= payment.amount and refunded_total > Decimal("0.00"):
+        payment.status = Payment.Statuses.REFUNDED
+        payment.refunded_at = timezone.now()
+    elif refunded_total > Decimal("0.00"):
+        payment.status = Payment.Statuses.PARTIALLY_REFUNDED
+    payment.save(update_fields=["amount_refunded", "status", "updated_at", "refunded_at"])
+
+
+def create_refund(payment, amount=None, reason="requested_by_customer"):
+    if payment.provider != Payment.Providers.STRIPE:
+        raise ValidationError("Solo los pagos Stripe pueden devolverse automáticamente.")
+    if not payment.stripe_payment_intent_id:
+        raise ValidationError("El pago no tiene PaymentIntent de Stripe.")
+    if not getattr(settings, "STRIPE_SECRET_KEY", ""):
+        raise ValidationError("Stripe no está configurado.")
+    amount = Decimal(amount if amount is not None else payment.refundable_amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if amount <= Decimal("0.00"):
+        raise ValidationError("No hay importe disponible para devolver.")
+    if amount > payment.refundable_amount:
+        raise ValidationError("El importe de devolución supera el importe disponible.")
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    refund_data = stripe.Refund.create(
+        payment_intent=payment.stripe_payment_intent_id,
+        amount=int((amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+        reason=reason,
+        metadata={"payment_id": str(payment.pk), "booking_id": str(payment.booking_id)},
+    )
+    plain = _stripe_plain(refund_data)
+    refund = PaymentRefund.objects.create(
+        payment=payment,
+        amount=amount,
+        status=_refund_status_from_stripe(_object_get(refund_data, "status", "")),
+        stripe_refund_id=_object_get(refund_data, "id", ""),
+        reason=reason,
+        raw_response=plain,
+        refunded_at=timezone.now() if _object_get(refund_data, "status", "") == "succeeded" else None,
+    )
+    payment.stripe_refund_id = refund.stripe_refund_id
+    payment.refund_reason = reason
+    payment.save(update_fields=["stripe_refund_id", "refund_reason", "updated_at"])
+    _sync_payment_refund_status(payment)
+    return refund
+
+
+def _find_refund_from_event(refund_object):
+    refund_id = _object_get(refund_object, "id", "")
+    if not refund_id:
+        return None
+    return PaymentRefund.objects.select_related("payment").filter(stripe_refund_id=refund_id).first()
+
+
+def handle_refund_updated(event):
+    refund_object = _event_object(event)
+    with transaction.atomic():
+        refund = _find_refund_from_event(refund_object)
+        if refund is None:
+            return None
+        refund.status = _refund_status_from_stripe(_object_get(refund_object, "status", ""))
+        refund.raw_response = _stripe_plain(refund_object)
+        if refund.status == PaymentRefund.Statuses.REFUNDED and refund.refunded_at is None:
+            refund.refunded_at = timezone.now()
+        refund.save(update_fields=["status", "raw_response", "refunded_at"])
+        _sync_payment_refund_status(refund.payment)
+        return refund
+
+
 def handle_stripe_event(event):
     event_type = _event_type(event)
     if event_type == "checkout.session.completed":
@@ -266,4 +354,6 @@ def handle_stripe_event(event):
         return handle_payment_intent_succeeded(event)
     if event_type == "payment_intent.payment_failed":
         return handle_payment_intent_failed(event)
+    if event_type in {"refund.updated", "charge.refunded"}:
+        return handle_refund_updated(event)
     return None

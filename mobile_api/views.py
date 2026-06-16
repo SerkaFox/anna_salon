@@ -7,6 +7,7 @@ from django.db.models.deletion import ProtectedError
 from django.db.models import Count
 from django.http import FileResponse, Http404
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import PermissionDenied
 from rest_framework import generics, serializers, status
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -16,6 +17,7 @@ from rest_framework.views import APIView
 from accounts.permissions import can_access_booking, can_access_client, can_access_employee, get_client_profile, get_employee_profile, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
 from auditlog.services import log_event
 from bookings.models import Booking, BookingPhoto
+from bookings.client_actions import cancel_booking, change_booking_service, reschedule_booking
 from bookings.utils import (
     MOBILE_SLOT_STEP_MINUTES,
     build_available_slots_for_day,
@@ -938,6 +940,74 @@ class BookingStripeCheckoutView(MobileApiMixin, APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class BookingCancelView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        booking = generics.get_object_or_404(
+            Booking.objects.select_related("client", "employee", "service", "zone").prefetch_related("online_payments", "online_payments__refunds"),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        try:
+            message, refunds = cancel_booking(booking)
+        except Exception as exc:
+            raise serializers.ValidationError({"booking": [str(exc)]}) from exc
+        booking.refresh_from_db()
+        return Response(
+            {
+                "message": message,
+                "refunds": [refund.pk for refund in refunds],
+                "booking": BookingSerializer(booking, context={"request": request}).data,
+            }
+        )
+
+
+class BookingClientRescheduleView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        start_raw = request.data.get("start_at")
+        start_at = parse_datetime(start_raw or "")
+        if start_at is None:
+            raise serializers.ValidationError({"start_at": ["Fecha inválida."]})
+        if timezone.is_naive(start_at):
+            start_at = timezone.make_aware(start_at, timezone.get_default_timezone())
+        employee = booking.employee
+        if request.data.get("employee"):
+            employee = generics.get_object_or_404(Employee, pk=request.data["employee"], is_active=True)
+        zone = booking.zone
+        if request.data.get("zone"):
+            zone = generics.get_object_or_404(Zone, pk=request.data["zone"], is_active=True)
+        try:
+            booking = reschedule_booking(booking, start_at=start_at, employee=employee, zone=zone)
+        except Exception as exc:
+            raise serializers.ValidationError({"booking": [str(exc)]}) from exc
+        return Response(BookingSerializer(booking, context={"request": request}).data)
+
+
+class BookingEditServicesView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        service = generics.get_object_or_404(Service, pk=request.data.get("service"), is_active=True)
+        try:
+            result = change_booking_service(booking, service=service, request=request)
+        except Exception as exc:
+            raise serializers.ValidationError({"booking": [str(exc)]}) from exc
+        booking = result["booking"]
+        payload = {
+            "booking": BookingSerializer(booking, context={"request": request}).data,
+            "extra_due": str(result["extra_due"]),
+            "manual_refund_required": result["manual_refund_required"],
+        }
+        if result["payment"]:
+            payload["payment_id"] = result["payment"].pk
+            payload["checkout_url"] = result["payment"].checkout_url
+        return Response(payload)
 
 
 class BookingAvailabilityCheckView(MobileApiMixin, APIView):
