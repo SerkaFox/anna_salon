@@ -1,3 +1,4 @@
+import json
 import uuid
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
@@ -113,14 +114,31 @@ def verify_webhook_signature(payload, sig_header):
     return stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
 
 
-def _to_plain(value):
+def _stripe_plain(value):
     if hasattr(value, "to_dict_recursive"):
-        return value.to_dict_recursive()
+        value = value.to_dict_recursive()
+    elif hasattr(value, "to_dict"):
+        value = value.to_dict()
     if isinstance(value, dict):
-        return {key: _to_plain(item) for key, item in value.items()}
+        return {key: _stripe_plain(item) for key, item in value.items()}
     if isinstance(value, list):
-        return [_to_plain(item) for item in value]
+        return [_stripe_plain(item) for item in value]
+    try:
+        json.dumps(value)
+    except TypeError:
+        return str(value)
     return value
+
+
+def safe_stripe_event_payload(event):
+    event_object = _event_object(event)
+    return {
+        "id": _object_get(event, "id", ""),
+        "type": _event_type(event),
+        "livemode": bool(_object_get(event, "livemode", False)),
+        "created": _object_get(event, "created", None),
+        "data": _stripe_plain(event_object),
+    }
 
 
 def _event_type(event):
@@ -178,7 +196,7 @@ def _mark_paid(payment, event, *, session=None, intent=None):
     payment.status = Payment.Statuses.PAID
     if payment.paid_at is None:
         payment.paid_at = timezone.now()
-    payment.raw_event = _to_plain(event)
+    payment.raw_event = safe_stripe_event_payload(event)
     payment.save(
         update_fields=[
             "status",
@@ -211,7 +229,7 @@ def handle_checkout_session_expired(event):
         payment = _find_payment_from_session(session)
         if payment.status != Payment.Statuses.PAID:
             payment.status = Payment.Statuses.EXPIRED
-            payment.raw_event = _to_plain(event)
+            payment.raw_event = safe_stripe_event_payload(event)
             payment.save(update_fields=["status", "raw_event", "updated_at"])
         return payment
 
@@ -233,7 +251,7 @@ def handle_payment_intent_failed(event):
             return None
         if payment.status != Payment.Statuses.PAID:
             payment.status = Payment.Statuses.FAILED
-            payment.raw_event = _to_plain(event)
+            payment.raw_event = safe_stripe_event_payload(event)
             payment.save(update_fields=["status", "raw_event", "updated_at"])
         return payment
 

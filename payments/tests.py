@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import stripe
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -288,7 +289,113 @@ class StripePaymentTests(TestCase):
         self.assertEqual(payment.status, Payment.Statuses.PAID)
         self.assertEqual(payment.stripe_payment_intent_id, "pi_completed")
         self.assertIsNotNone(payment.paid_at)
+        self.assertIsInstance(payment.raw_event, dict)
+        self.assertEqual(payment.raw_event["type"], "checkout.session.completed")
+        self.assertEqual(payment.raw_event["data"]["id"], "cs_completed")
         self.assertEqual(self.booking.status, Booking.Statuses.CONFIRMED)
+
+    @patch("payments.views.verify_webhook_signature")
+    def test_checkout_session_completed_accepts_stripe_event_object(self, mocked_verify):
+        payment = Payment.objects.create(
+            booking=self.booking,
+            amount=Decimal("10.00"),
+            currency="eur",
+            order_number="stripe-event-object",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PENDING,
+            stripe_checkout_session_id="cs_event_object",
+        )
+        mocked_verify.return_value = stripe.Event.construct_from(
+            {
+                "id": "evt_completed_object",
+                "type": "checkout.session.completed",
+                "livemode": False,
+                "created": 1780000000,
+                "data": {
+                    "object": {
+                        "id": "cs_event_object",
+                        "object": "checkout.session",
+                        "payment_intent": "pi_event_object",
+                        "metadata": {"payment_id": str(payment.pk), "booking_id": str(self.booking.pk)},
+                        "customer_details": {"email": "maria@example.test"},
+                    }
+                },
+            },
+            "sk_test_mock",
+        )
+
+        response = self.client.post(
+            reverse("payments:stripe_webhook"),
+            data=b"{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="valid",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Statuses.PAID)
+        self.assertEqual(payment.raw_event["id"], "evt_completed_object")
+        self.assertEqual(payment.raw_event["type"], "checkout.session.completed")
+        self.assertEqual(payment.raw_event["data"]["id"], "cs_event_object")
+        self.assertNotIn("Event", str(payment.raw_event))
+
+    @patch("payments.views.verify_webhook_signature")
+    def test_payment_intent_succeeded_accepts_stripe_event_object(self, mocked_verify):
+        payment = Payment.objects.create(
+            booking=self.booking,
+            amount=Decimal("10.00"),
+            currency="eur",
+            order_number="stripe-intent-object",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PENDING,
+            stripe_payment_intent_id="pi_event_succeeded",
+        )
+        mocked_verify.return_value = stripe.Event.construct_from(
+            {
+                "id": "evt_intent_succeeded",
+                "type": "payment_intent.succeeded",
+                "livemode": False,
+                "created": 1780000001,
+                "data": {"object": {"id": "pi_event_succeeded", "object": "payment_intent"}},
+            },
+            "sk_test_mock",
+        )
+
+        response = self.client.post(
+            reverse("payments:stripe_webhook"),
+            data=b"{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="valid",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Statuses.PAID)
+        self.assertEqual(payment.raw_event["type"], "payment_intent.succeeded")
+
+    @patch("payments.views.verify_webhook_signature")
+    def test_unknown_stripe_event_returns_ok(self, mocked_verify):
+        mocked_verify.return_value = stripe.Event.construct_from(
+            {
+                "id": "evt_unknown",
+                "type": "customer.created",
+                "livemode": False,
+                "created": 1780000002,
+                "data": {"object": {"id": "cus_test", "object": "customer"}},
+            },
+            "sk_test_mock",
+        )
+
+        response = self.client.post(
+            reverse("payments:stripe_webhook"),
+            data=b"{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="valid",
+        )
+
+        self.assertEqual(response.status_code, 200)
 
     @patch("payments.views.verify_webhook_signature")
     def test_checkout_session_expired_marks_payment_expired(self, mocked_verify):
