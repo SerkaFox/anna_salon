@@ -342,10 +342,12 @@
 
 .gallery-panel-preview {
   display: grid;
-  gap: 4px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
   max-width: 260px;
   margin-top: 8px;
-  padding: 14px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(255,255,255,0.72);
@@ -353,16 +355,22 @@
   text-decoration: none;
 }
 
-.gallery-panel-preview span {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.gallery-panel-preview img,
+.gallery-panel-preview video,
+.gallery-panel-preview__empty {
+  width: 58px;
+  height: 58px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: rgba(17, 37, 27, 0.18);
 }
 
-.gallery-panel-preview small {
-  color: var(--muted);
+.gallery-panel-preview span {
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.28;
 }
 
 .booking-data-row td {

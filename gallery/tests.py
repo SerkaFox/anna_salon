@@ -155,7 +155,6 @@ class InstagramGalleryViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Active")
         self.assertNotContains(response, "Inactive")
-        self.assertContains(response, "https://www.instagram.com/embed.js")
 
     def test_homepage_gallery_uses_active_instagram_posts(self):
         response = self.client.get(reverse("home"))
@@ -163,7 +162,92 @@ class InstagramGalleryViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Active")
         self.assertNotContains(response, "Inactive")
-        self.assertContains(response, "https://www.instagram.com/embed.js")
+
+    def test_synced_image_renders_native_img(self):
+        InstagramPost.objects.create(
+            instagram_media_id="image-media",
+            instagram_url="https://www.instagram.com/p/native-image/",
+            caption="Native image",
+            media_type="IMAGE",
+            media_url="https://cdn.example.com/native-image.jpg",
+            synced_from_api=True,
+            active=True,
+        )
+
+        response = self.client.get(reverse("public_gallery"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<img', html=False)
+        self.assertContains(response, "https://cdn.example.com/native-image.jpg")
+        self.assertNotContains(response, "instagram-media")
+
+    def test_synced_video_renders_native_video(self):
+        InstagramPost.objects.create(
+            instagram_media_id="video-media",
+            instagram_url="https://www.instagram.com/reel/native-video/",
+            caption="Native video",
+            media_type="VIDEO",
+            media_url="https://cdn.example.com/native-video.mp4",
+            synced_from_api=True,
+            active=True,
+        )
+
+        response = self.client.get(reverse("public_gallery"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<video", html=False)
+        self.assertContains(response, "https://cdn.example.com/native-video.mp4")
+        self.assertNotContains(response, "instagram-media")
+
+    def test_manual_embeds_hidden_when_synced_posts_exist(self):
+        InstagramPost.objects.create(
+            title="Manual embed",
+            instagram_url="https://www.instagram.com/p/manual-embed/",
+            embed_html=VALID_EMBED,
+            active=True,
+        )
+        InstagramPost.objects.create(
+            instagram_media_id="api-media",
+            instagram_url="https://www.instagram.com/p/api-visible/",
+            caption="API visible",
+            media_type="IMAGE",
+            media_url="https://cdn.example.com/api-visible.jpg",
+            synced_from_api=True,
+            active=True,
+        )
+
+        response = self.client.get(reverse("public_gallery"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "API visible")
+        self.assertNotContains(response, "Manual embed")
+        self.assertNotContains(response, "C6gTZD5NAFJ")
+
+    def test_inactive_synced_posts_are_hidden(self):
+        InstagramPost.objects.create(
+            instagram_media_id="hidden-media",
+            instagram_url="https://www.instagram.com/p/hidden-api/",
+            caption="Hidden API",
+            media_type="IMAGE",
+            media_url="https://cdn.example.com/hidden.jpg",
+            synced_from_api=True,
+            active=False,
+        )
+        InstagramPost.objects.create(
+            instagram_media_id="visible-media",
+            instagram_url="https://www.instagram.com/p/visible-api/",
+            caption="Visible API",
+            media_type="IMAGE",
+            media_url="https://cdn.example.com/visible.jpg",
+            synced_from_api=True,
+            active=True,
+        )
+
+        response = self.client.get(reverse("public_gallery"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Visible API")
+        self.assertNotContains(response, "Hidden API")
 
     def test_homepage_gallery_falls_back_to_static_images(self):
         InstagramPost.objects.all().delete()
@@ -242,7 +326,7 @@ class InstagramGalleryViewTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    @patch("gallery.views.sync_instagram_media", return_value={"synced": 2, "created": 2, "updated": 0})
+    @patch("gallery.views.sync_instagram_media", return_value={"synced": 2, "created": 2, "updated": 0, "skipped": 0, "errors": []})
     def test_sync_endpoint_allows_owner(self, mocked_sync):
         owner = User.objects.create_user(username="sync-owner", password="testpass123", role=User.ROLE_OWNER)
         self.client.force_login(owner)
@@ -251,6 +335,31 @@ class InstagramGalleryViewTests(TestCase):
 
         self.assertRedirects(response, reverse("gallery:list"))
         mocked_sync.assert_called_once_with()
+
+    def test_deactivate_manual_posts_action(self):
+        owner = User.objects.create_user(username="manual-owner", password="testpass123", role=User.ROLE_OWNER)
+        self.client.force_login(owner)
+        manual = InstagramPost.objects.create(
+            instagram_url="https://www.instagram.com/p/manual-deactivate/",
+            embed_html=VALID_EMBED,
+            active=True,
+        )
+        api_post = InstagramPost.objects.create(
+            instagram_media_id="api-stays-active",
+            instagram_url="https://www.instagram.com/p/api-stays-active/",
+            media_type="IMAGE",
+            media_url="https://cdn.example.com/api.jpg",
+            synced_from_api=True,
+            active=True,
+        )
+
+        response = self.client.post(reverse("gallery:deactivate_manual"))
+
+        self.assertRedirects(response, reverse("gallery:list"))
+        manual.refresh_from_db()
+        api_post.refresh_from_db()
+        self.assertFalse(manual.active)
+        self.assertTrue(api_post.active)
 
     def test_oauth_callback_route_is_public(self):
         response = self.client.get(reverse("gallery:instagram_callback"))

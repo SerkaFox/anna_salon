@@ -1,0 +1,58 @@
+<dialog class="portfolio-modal" data-portfolio-modal aria-label="Trabajo de BRIMOON Studio">
+  <div class="portfolio-modal__panel">
+    <button class="portfolio-modal__close" type="button" data-portfolio-close aria-label="Cerrar">×</button>
+    <div class="portfolio-modal__media" data-portfolio-modal-media></div>
+    <div class="portfolio-modal__content">
+      <p data-portfolio-modal-caption></p>
+      <a href="#" target="_blank" rel="noopener" data-portfolio-modal-link>Ver en Instagram</a>
+    </div>
+  </div>
+</dialog>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const modal = document.querySelector('[data-portfolio-modal]');
+    if (!modal || typeof modal.showModal !== 'function') return;
+    const mediaSlot = modal.querySelector('[data-portfolio-modal-media]');
+    const captionSlot = modal.querySelector('[data-portfolio-modal-caption]');
+    const link = modal.querySelector('[data-portfolio-modal-link]');
+    const close = modal.querySelector('[data-portfolio-close]');
+
+    function renderMedia(button) {
+      const mediaType = button.dataset.mediaType || '';
+      const mediaUrl = button.dataset.mediaUrl || '';
+      const thumbnailUrl = button.dataset.thumbnailUrl || mediaUrl;
+      mediaSlot.innerHTML = '';
+      if (!mediaUrl && !thumbnailUrl) return;
+      if (mediaType === 'VIDEO' || mediaType === 'REEL') {
+        const video = document.createElement('video');
+        video.controls = true;
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.preload = 'metadata';
+        const source = document.createElement('source');
+        source.src = mediaUrl;
+        video.appendChild(source);
+        mediaSlot.appendChild(video);
+        return;
+      }
+      const image = document.createElement('img');
+      image.src = thumbnailUrl;
+      image.alt = 'Trabajo de BRIMOON Studio';
+      mediaSlot.appendChild(image);
+    }
+
+    document.querySelectorAll('[data-portfolio-open]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        renderMedia(button);
+        captionSlot.textContent = button.dataset.caption || '';
+        link.href = button.dataset.permalink || '#';
+        modal.showModal();
+      });
+    });
+    close.addEventListener('click', function () { modal.close(); });
+    modal.addEventListener('click', function (event) {
+      if (event.target === modal) modal.close();
+    });
+  });
+</script>

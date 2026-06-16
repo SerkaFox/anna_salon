@@ -1,0 +1,47 @@
+<article class="portfolio-card{% if carousel %} portfolio-carousel__slide{% endif %}">
+  {% if post.synced_from_api %}
+    <button
+      type="button"
+      class="portfolio-card__media"
+      data-portfolio-open
+      data-media-type="{{ post.media_type }}"
+      data-media-url="{{ post.media_url|default:post.thumbnail_url }}"
+      data-thumbnail-url="{{ post.thumbnail_url|default:post.media_url }}"
+      data-caption="{{ post.caption|default:'' }}"
+      data-permalink="{{ post.instagram_url }}"
+      aria-label="Abrir trabajo de BRIMOON Studio"
+    >
+      {% if post.media_type == "VIDEO" or post.media_type == "REEL" %}
+        <video autoplay muted loop playsinline preload="metadata">
+          <source src="{{ post.media_url }}">
+        </video>
+        <span class="portfolio-card__play" aria-hidden="true">▶</span>
+      {% else %}
+        <img
+          src="{{ post.thumbnail_url|default:post.media_url }}"
+          alt="{{ post.caption|default:'Trabajo de BRIMOON Studio' }}"
+          loading="lazy"
+        >
+        {% if post.media_type == "CAROUSEL_ALBUM" %}
+          <span class="portfolio-card__badge" aria-label="Carrusel">+</span>
+        {% endif %}
+      {% endif %}
+    </button>
+    <div class="portfolio-card__body">
+      {% if post.caption %}<p class="portfolio-card__caption">{{ post.caption }}</p>{% endif %}
+      <div class="portfolio-card__meta">
+        {% if post.published_at %}<time datetime="{{ post.published_at|date:'c' }}">{{ post.published_at|date:"d/m/Y" }}</time>{% endif %}
+        <a href="{{ post.instagram_url }}" target="_blank" rel="noopener">Ver en Instagram</a>
+      </div>
+    </div>
+  {% elif post.embed_html %}
+    <div class="portfolio-card__manual-embed">
+      {{ post.embed_html|safe }}
+    </div>
+  {% else %}
+    <a class="portfolio-card__fallback" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
+      <strong>{{ post.caption|default:post.title|default:"Trabajo BRIMOON" }}</strong>
+      <span>Ver en Instagram</span>
+    </a>
+  {% endif %}
+</article>

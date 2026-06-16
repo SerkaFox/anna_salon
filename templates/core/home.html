@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260615-01">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260616-portfolio">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
@@ -101,36 +101,14 @@
           <h2>Nuestros trabajos</h2>
           <p>{{ t.experience_text }}</p>
           <div class="lux-actions">
-            <a class="btn-lux btn-lux-outline" href="{% url 'public_gallery' %}">Ver galería Instagram</a>
+            <a class="btn-lux btn-lux-outline" href="{% url 'public_gallery' %}">Ver galería</a>
             <a class="btn-lux btn-lux-ghost" href="#contacto">{{ t.contact_button }}</a>
           </div>
         </div>
         {% if homepage_instagram_posts %}
-          <div class="instagram-carousel" aria-label="Galería Instagram">
+          <div class="portfolio-carousel" aria-label="Galería de trabajos BRIMOON Studio">
             {% for post in homepage_instagram_posts %}
-              <article class="instagram-card instagram-carousel__slide">
-                {% if post.embed_html %}
-                  {% if forloop.counter <= 3 %}
-                    {{ post.embed_html|safe }}
-                  {% else %}
-                    <div class="instagram-deferred-card">
-                      <span>Instagram</span>
-                      <strong>BRIMOON Studio</strong>
-                      <p>La publicación se cargará al llegar a este punto.</p>
-                    </div>
-                    <template class="instagram-embed-template">{{ post.embed_html|safe }}</template>
-                  {% endif %}
-                {% else %}
-                  <a class="instagram-link-card{% if post.media_url or post.thumbnail_url %} instagram-media-card{% endif %}" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
-                    {% if post.media_url or post.thumbnail_url %}
-                      <img src="{{ post.thumbnail_url|default:post.media_url }}" alt="{{ post.caption|default:'Publicación de Instagram BRIMOON Studio' }}" loading="lazy">
-                    {% endif %}
-                    <span>Instagram</span>
-                    <strong>{{ post.title|default:"Ver publicación" }}</strong>
-                    {% if post.caption %}<p>{{ post.caption }}</p>{% endif %}
-                  </a>
-                {% endif %}
-              </article>
+              {% include "gallery/_portfolio_card.html" with post=post carousel=True %}
             {% endfor %}
           </div>
         {% else %}
@@ -141,9 +119,6 @@
           </div>
         {% endif %}
       </div>
-      {% if homepage_instagram_posts %}
-      <script async src="https://www.instagram.com/embed.js"></script>
-      {% endif %}
     </section>
 
     <section class="lux-section seo-section" id="consejos">
@@ -208,6 +183,13 @@
     </div>
   </footer>
 
+  {% if homepage_instagram_posts %}
+    {% include "gallery/_portfolio_modal.html" %}
+    {% if homepage_gallery_source == "manual" %}
+      <script async src="https://www.instagram.com/embed.js"></script>
+    {% endif %}
+  {% endif %}
+
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const toggle = document.querySelector('[data-menu-toggle]');
@@ -223,9 +205,9 @@
         panel.classList.remove('is-open');
       }));
 
-      const carousel = document.querySelector('.instagram-carousel');
+      const carousel = document.querySelector('.portfolio-carousel');
       if (carousel && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        const slides = Array.from(carousel.querySelectorAll('.instagram-carousel__slide'));
+        const slides = Array.from(carousel.querySelectorAll('.portfolio-carousel__slide'));
         let index = 0;
         let timer = null;
         let resumeTimer = null;
@@ -235,34 +217,6 @@
           index = (index + 1) % slides.length;
           hydrateNearby(index);
           carousel.scrollTo({ left: slides[index].offsetLeft - carousel.offsetLeft, behavior: 'smooth' });
-        }
-
-        function processInstagramEmbeds() {
-          if (window.instgrm && window.instgrm.Embeds) {
-            window.instgrm.Embeds.process();
-          }
-        }
-
-        function hydrateSlide(slideIndex) {
-          const slide = slides[(slideIndex + slides.length) % slides.length];
-          if (!slide || slide.dataset.instagramHydrated === 'true') return;
-          const template = slide.querySelector('.instagram-embed-template');
-          if (!template) {
-            slide.dataset.instagramHydrated = 'true';
-            return;
-          }
-          const placeholder = slide.querySelector('.instagram-deferred-card');
-          if (placeholder) placeholder.remove();
-          slide.insertAdjacentHTML('afterbegin', template.innerHTML);
-          template.remove();
-          slide.dataset.instagramHydrated = 'true';
-          processInstagramEmbeds();
-        }
-
-        function hydrateNearby(slideIndex) {
-          hydrateSlide(slideIndex);
-          hydrateSlide(slideIndex + 1);
-          hydrateSlide(slideIndex + 2);
         }
 
         function start() {
@@ -284,7 +238,6 @@
             return distance < best.distance ? { index: slideIndex, distance } : best;
           }, { index: index, distance: Number.POSITIVE_INFINITY });
           index = nearest.index;
-          hydrateNearby(index);
           if (resumeTimer) window.clearTimeout(resumeTimer);
           resumeTimer = window.setTimeout(start, 6500);
         }
@@ -296,7 +249,6 @@
         carousel.addEventListener('wheel', pauseAndResume, { passive: true });
         carousel.addEventListener('touchstart', pauseAndResume, { passive: true });
         carousel.addEventListener('pointerdown', pauseAndResume);
-        hydrateNearby(0);
         start();
       }
     });

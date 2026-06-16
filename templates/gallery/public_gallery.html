@@ -1,14 +1,14 @@
 {% extends "core/public_base.html" %}
 
-{% block title %}Galería Instagram | BRIMOON Studio{% endblock %}
-{% block meta_description %}Galería de Instagram de BRIMOON Studio: trabajos, detalles y momentos del salón.{% endblock %}
-{% block og_title %}Galería Instagram | BRIMOON Studio{% endblock %}
-{% block og_description %}Trabajos y momentos de BRIMOON Studio desde Instagram.{% endblock %}
+{% block title %}Galería | BRIMOON Studio{% endblock %}
+{% block meta_description %}Galería de BRIMOON Studio: trabajos, detalles y momentos del salón.{% endblock %}
+{% block og_title %}Galería | BRIMOON Studio{% endblock %}
+{% block og_description %}Trabajos y momentos de BRIMOON Studio.{% endblock %}
 
 {% block page_hero %}
   <section class="content-hero">
     <div class="lux-container">
-      <span class="lux-kicker">Instagram</span>
+      <span class="lux-kicker">Portfolio</span>
       <h1>Galería BRIMOON Studio</h1>
       <p>Trabajos, detalles y momentos recientes del salón.</p>
     </div>
@@ -17,30 +17,20 @@
 
 {% block content %}
 <section class="lux-section">
-  <div class="lux-container instagram-gallery-grid">
+  <div class="lux-container portfolio-grid">
     {% for post in posts %}
-      <article class="instagram-card">
-        {% if post.embed_html %}
-          {{ post.embed_html|safe }}
-        {% else %}
-          <a class="instagram-link-card{% if post.media_url or post.thumbnail_url %} instagram-media-card{% endif %}" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
-            {% if post.media_url or post.thumbnail_url %}
-              <img src="{{ post.thumbnail_url|default:post.media_url }}" alt="{{ post.caption|default:'Publicación de Instagram BRIMOON Studio' }}" loading="lazy">
-            {% endif %}
-            <span>Instagram</span>
-            <strong>{{ post.title|default:"Ver publicación" }}</strong>
-            {% if post.caption %}<p>{{ post.caption }}</p>{% endif %}
-          </a>
-        {% endif %}
-      </article>
+      {% include "gallery/_portfolio_card.html" with post=post %}
     {% empty %}
       <div class="empty-lux-state">
-        <span class="lux-kicker">Instagram</span>
+        <span class="lux-kicker">Portfolio</span>
         <h2>La galería se está preparando</h2>
         <p>Pronto compartiremos aquí nuestros trabajos y momentos favoritos.</p>
       </div>
     {% endfor %}
   </div>
 </section>
-<script async src="https://www.instagram.com/embed.js"></script>
+{% include "gallery/_portfolio_modal.html" %}
+{% if uses_manual_embeds %}
+  <script async src="https://www.instagram.com/embed.js"></script>
+{% endif %}
 {% endblock %}

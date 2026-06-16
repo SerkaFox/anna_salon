@@ -18,16 +18,19 @@ from core.i18n import PUBLIC_LANGUAGES, detect_public_language, public_texts
 from .forms import InstagramPostForm
 from .instagram_api import sync_instagram_media
 from .models import InstagramPost
+from .selectors import get_public_instagram_posts
 
 
 logger = logging.getLogger(__name__)
 
 
 def public_gallery(request):
-    posts = InstagramPost.objects.filter(active=True).order_by("sort_order", "-created_at", "-id")
+    posts, gallery_source = get_public_instagram_posts()
     language = detect_public_language(request)
     context = {
         "posts": posts,
+        "gallery_source": gallery_source,
+        "uses_manual_embeds": gallery_source == "manual",
         "public_language": language,
         "public_languages": PUBLIC_LANGUAGES,
         "t": public_texts(language),
@@ -41,9 +44,14 @@ def public_gallery(request):
 def instagram_post_list(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
+    source = request.GET.get("source", "").strip()
     posts = InstagramPost.objects.all()
     if query:
         posts = posts.filter(Q(title__icontains=query) | Q(caption__icontains=query) | Q(instagram_url__icontains=query))
+    if source == "api":
+        posts = posts.filter(synced_from_api=True)
+    elif source == "manual":
+        posts = posts.filter(synced_from_api=False)
     if status == "active":
         posts = posts.filter(active=True)
     elif status == "inactive":
@@ -60,7 +68,9 @@ def instagram_post_list(request):
         "page_query": page_query.urlencode(),
         "query": query,
         "status": status,
+        "source": source,
         "posts_count": posts_count,
+        "manual_embed_count": InstagramPost.objects.filter(synced_from_api=False, embed_html__gt="", active=True).count(),
     }
     return render(request, "gallery/instagrampost_list.html", context)
 
@@ -81,6 +91,15 @@ def instagram_sync(request):
         )
         for error in result.get("errors", [])[:5]:
             messages.error(request, f"Instagram media {error['media_id']}: {error['error']}")
+    return redirect("gallery:list")
+
+
+@login_required
+@admin_required
+@require_POST
+def deactivate_manual_posts(request):
+    count = InstagramPost.objects.filter(synced_from_api=False, embed_html__gt="", active=True).update(active=False)
+    messages.success(request, f"{count} posts manuales desactivados.")
     return redirect("gallery:list")
 
 

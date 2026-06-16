@@ -1,5 +1,4 @@
 import json
-import random
 import secrets
 from datetime import datetime, timedelta
 
@@ -24,7 +23,7 @@ from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
 from accounts.permissions import get_client_profile
 from employees.models import Employee
 from payments.models import Payment as OnlinePayment
-from gallery.models import InstagramPost
+from gallery.selectors import get_public_instagram_posts
 from salon.models import Zone
 from services_app.models import Service
 
@@ -782,8 +781,7 @@ def set_public_language(request):
 
 def home(request):
     language, t, services, articles = _localized_context(request)
-    homepage_instagram_posts = list(InstagramPost.objects.filter(active=True))
-    random.shuffle(homepage_instagram_posts)
+    homepage_instagram_posts, homepage_gallery_source = get_public_instagram_posts(limit=9)
     schema = json.dumps({
         "@context": "https://schema.org",
         "@type": "BeautySalon",
@@ -800,6 +798,7 @@ def home(request):
         "services": services,
         "articles": articles[:3],
         "homepage_instagram_posts": homepage_instagram_posts,
+        "homepage_gallery_source": homepage_gallery_source,
         "schema_json": schema,
     })
     return render(request, "core/home.html", context)
