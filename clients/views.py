@@ -6,7 +6,7 @@ from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
@@ -24,6 +24,7 @@ from bookings.services import calculate_booking_prepayment_amount, create_bookin
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from employees.models import Employee
 from payments.models import Payment as OnlinePayment
+from payments.stripe_service import create_checkout_session, create_pending_stripe_payment, get_booking_checkout_amount
 from .forms import ClientForm
 from .models import Client, ClientRewardRule
 from salon.models import Zone
@@ -82,6 +83,7 @@ def _attach_online_payment_info(bookings):
         booking.online_payment_pending_total = info["pending_total"]
         booking.online_payment_remaining_amount = info["remaining_amount"]
         booking.prepayment_due_amount = calculate_booking_prepayment_amount(booking)
+        booking.online_payment_due_amount = get_booking_checkout_amount(booking)
         booking.online_payment_is_paid = info["is_paid"]
         booking.online_payment_can_pay = (
             not prepayment
@@ -335,26 +337,19 @@ def client_booking_payment(request, pk):
         return redirect("clients:portal")
 
     try:
-        prepayment_amount = calculate_booking_prepayment_amount(booking)
-        if prepayment_amount <= Decimal("0.00"):
-            messages.error(request, "No se pudo calcular el prepago.")
-            return redirect("clients:portal")
-        _create_temporary_paid_payment(booking, prepayment_amount)
-    except ValueError as exc:
+        payment = create_pending_stripe_payment(booking)
+        create_checkout_session(payment, request)
+    except (ValueError, ValidationError) as exc:
         messages.error(request, str(exc))
         return redirect("clients:portal")
-    if booking.status == Booking.Statuses.PENDING:
-        booking.status = Booking.Statuses.CONFIRMED
-        booking.save(update_fields=["status", "updated_at"])
     log_event(
         actor=request.user,
         section="payment",
-        action="temporary_payment",
+        action="stripe_checkout_create",
         instance=booking,
-        message=f"Pago temporal confirmado desde portal cliente para reserva #{booking.pk}.",
+        message=f"Stripe Checkout creado desde portal cliente para reserva #{booking.pk}.",
     )
-    messages.success(request, "Pago temporal confirmado. Tu reserva queda confirmada y pagada.")
-    return redirect("clients:portal")
+    return redirect(payment.checkout_url)
 
 
 @login_required

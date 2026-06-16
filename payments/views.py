@@ -1,12 +1,15 @@
 from django.db import transaction
+from django.core.exceptions import ValidationError
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.http import HttpResponseBadRequest, HttpResponse
+import stripe
 
 from .models import Payment
 from .redsys import RedsysSignatureError, is_successful_response, sanitize_redsys_payload, verify_signature
+from .stripe_service import handle_stripe_event, verify_webhook_signature
 
 
 @csrf_exempt
@@ -66,3 +69,29 @@ def redsys_success(request):
 
 def redsys_error(request):
     return render(request, "payments/redsys_result.html", {"status": "error"})
+
+
+def stripe_success(request):
+    return render(request, "payments/stripe_result.html", {"status": "success"})
+
+
+def stripe_cancel(request):
+    return render(request, "payments/stripe_result.html", {"status": "cancel"})
+
+
+@csrf_exempt
+@require_POST
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE", "")
+    try:
+        event = verify_webhook_signature(payload, sig_header)
+    except (ValueError, ValidationError, stripe.error.SignatureVerificationError):
+        return HttpResponseBadRequest("Invalid Stripe signature.")
+
+    try:
+        handle_stripe_event(event)
+    except Payment.DoesNotExist:
+        return HttpResponseBadRequest("Unknown Stripe payment.")
+
+    return HttpResponse("OK")

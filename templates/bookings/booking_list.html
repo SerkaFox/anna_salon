@@ -57,6 +57,7 @@
           <th>Zona</th>
           <th>Estado</th>
           <th>Origen</th>
+          <th>Pago online</th>
           <th>Cliente €</th>
           <th>Empleado €</th>
           <th>Salón €</th>
@@ -77,6 +78,12 @@
             <td>{{ booking.get_status_display }}</td>
             <td>{{ booking.get_source_display }}</td>
             <td>
+              {{ booking.online_payment_status_label }}
+              {% if booking.online_payment_paid_total %}
+                <div class="muted-text">{{ booking.online_payment_paid_total }} €</div>
+              {% endif %}
+            </td>
+            <td>
               {{ booking.client_price_snapshot }} €
               {% if booking.referral_reward_applied %}
                 <div class="muted-text">Premio aplicado</div>
@@ -86,7 +93,7 @@
             <td>{{ booking.salon_amount_snapshot }} €</td>
           </tr>
           <tr class="booking-actions-row">
-            <td colspan="10">
+            <td colspan="11">
               <div class="booking-actions">
                 <span class="booking-actions__label">Acciones</span>
                 <a class="btn btn-light btn-small" href="{% url 'bookings:update' booking.id %}">Editar</a>
@@ -120,6 +127,12 @@
                       {{ booking.payable_document.number }}
                     </a>
                   {% endif %}
+                  <form method="post" action="{% url 'bookings:stripe_checkout' booking.id %}">
+                    {% csrf_token %}
+                    <button class="btn btn-light btn-small" type="submit" {% if booking.online_payment_is_paid %}disabled{% endif %}>
+                      {% if booking.online_payment_is_paid %}Pagado online{% else %}Enviar enlace de pago{% endif %}
+                    </button>
+                  </form>
                   <a class="btn btn-light btn-small" href="{% url 'bookings:delete' booking.id %}">Eliminar</a>
                 {% endif %}
               </div>
@@ -127,7 +140,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="10">
+            <td colspan="11">
               <div class="empty-state">
                 <h2>No hay reservas</h2>
                 <p>No se encontraron reservas con los filtros actuales.</p>

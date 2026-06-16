@@ -442,6 +442,10 @@ class BookingSerializer(serializers.ModelSerializer):
     online_payment_status = serializers.SerializerMethodField()
     online_payment_paid_total = serializers.SerializerMethodField()
     online_payment_remaining_amount = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
+    paid_amount = serializers.SerializerMethodField()
+    latest_payment_id = serializers.SerializerMethodField()
+    can_pay = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -471,6 +475,10 @@ class BookingSerializer(serializers.ModelSerializer):
             "online_payment_status",
             "online_payment_paid_total",
             "online_payment_remaining_amount",
+            "payment_status",
+            "paid_amount",
+            "latest_payment_id",
+            "can_pay",
             "employee_percent_snapshot",
             "employee_amount_snapshot",
             "salon_amount_snapshot",
@@ -495,6 +503,8 @@ class BookingSerializer(serializers.ModelSerializer):
             "status": latest_payment.status if latest_payment else "",
             "paid_total": paid_total,
             "remaining_amount": max(total_amount - paid_total, 0),
+            "latest_payment_id": latest_payment.pk if latest_payment else None,
+            "can_pay": total_amount > paid_total and obj.status not in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW},
         }
         return obj._mobile_online_payment_info
 
@@ -506,6 +516,18 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_online_payment_remaining_amount(self, obj):
         return str(self._payment_info(obj)["remaining_amount"])
+
+    def get_payment_status(self, obj):
+        return self._payment_info(obj)["status"]
+
+    def get_paid_amount(self, obj):
+        return str(self._payment_info(obj)["paid_total"])
+
+    def get_latest_payment_id(self, obj):
+        return self._payment_info(obj)["latest_payment_id"]
+
+    def get_can_pay(self, obj):
+        return self._payment_info(obj)["can_pay"]
 
 
 class BookingWriteSerializer(serializers.Serializer):

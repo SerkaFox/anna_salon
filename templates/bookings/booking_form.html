@@ -109,6 +109,11 @@
       <button type="submit" class="btn">
         {% if is_edit %}Guardar cambios{% else %}Crear reserva{% endif %}
       </button>
+      {% if is_edit and booking and request.user.can_manage_staff %}
+        <button class="btn btn-light" type="submit" formaction="{% url 'bookings:stripe_checkout' booking.id %}">
+          Enviar enlace de pago
+        </button>
+      {% endif %}
       <a href="{% url 'bookings:list' %}" class="btn btn-light">Cancelar</a>
     </div>
   </form>

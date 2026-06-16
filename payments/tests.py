@@ -1,6 +1,8 @@
 import base64
 from datetime import datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -184,3 +186,154 @@ class RedsysPaymentTests(TestCase):
             "Ds_MerchantParameters": encoded,
             "Ds_Signature": sign_merchant_parameters(encoded, payment.order_number),
         }
+
+
+@override_settings(
+    STRIPE_SECRET_KEY="sk_test_mock",
+    STRIPE_WEBHOOK_SECRET="whsec_mock",
+    STRIPE_CURRENCY="eur",
+    BOOKING_DEPOSIT_AMOUNT_EUR="10.00",
+    PUBLIC_BASE_URL="https://example.test",
+    ALLOWED_HOSTS=["testserver", "example.test"],
+)
+class StripePaymentTests(TestCase):
+    def setUp(self):
+        self.owner_user = User.objects.create_user(username="stripe-owner", password="testpass123", role=User.ROLE_OWNER)
+        self.client_obj = Client.objects.create(first_name="Maria", last_name="Lopez", email="maria@example.test")
+        self.service = Service.objects.create(name="Manicura", duration_minutes=60, price=Decimal("50.00"), requires_zone=False, is_active=True)
+        self.employee = Employee.objects.create(first_name="Lucia", last_name="Lopez", commission_percent=Decimal("40.00"), is_active=True)
+        self.employee.services.add(self.service)
+        start_at = timezone.make_aware(datetime(2026, 4, 27, 10, 0))
+        self.booking = Booking.objects.create(
+            employee=self.employee,
+            client=self.client_obj,
+            service=self.service,
+            start_at=start_at,
+            end_at=start_at + timedelta(minutes=self.service.duration_minutes),
+            status=Booking.Statuses.PENDING,
+            source=Booking.Sources.WEBSITE,
+            price_snapshot=self.service.price,
+            duration_snapshot=self.service.duration_minutes,
+            original_client_price_snapshot=self.service.price,
+            client_price_snapshot=self.service.price,
+            discount_amount_snapshot=Decimal("0.00"),
+            employee_percent_snapshot=Decimal("40.00"),
+            employee_amount_snapshot=Decimal("20.00"),
+            salon_amount_snapshot=Decimal("30.00"),
+        )
+
+    @patch("payments.stripe_service.stripe.checkout.Session.create")
+    def test_panel_checkout_creates_payment_and_returns_link(self, mocked_create):
+        mocked_create.return_value = SimpleNamespace(
+            id="cs_test_123",
+            url="https://checkout.stripe.test/session",
+            payment_intent="pi_test_123",
+        )
+        self.client.force_login(self.owner_user)
+
+        response = self.client.post(reverse("bookings:stripe_checkout", args=[self.booking.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "https://checkout.stripe.test/session")
+        payment = Payment.objects.get(provider=Payment.Providers.STRIPE)
+        self.assertEqual(payment.booking, self.booking)
+        self.assertEqual(payment.amount, Decimal("10.00"))
+        self.assertEqual(payment.currency, "eur")
+        self.assertEqual(payment.stripe_checkout_session_id, "cs_test_123")
+
+    def test_webhook_invalid_signature_rejected(self):
+        response = self.client.post(
+            reverse("payments:stripe_webhook"),
+            data=b'{"type":"checkout.session.completed"}',
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="bad",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    @patch("payments.views.verify_webhook_signature")
+    def test_checkout_session_completed_marks_payment_paid(self, mocked_verify):
+        payment = Payment.objects.create(
+            booking=self.booking,
+            amount=Decimal("10.00"),
+            currency="eur",
+            order_number="stripe-completed",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PENDING,
+            stripe_checkout_session_id="cs_completed",
+        )
+        mocked_verify.return_value = {
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": "cs_completed",
+                    "payment_intent": "pi_completed",
+                    "metadata": {"payment_id": str(payment.pk), "booking_id": str(self.booking.pk)},
+                    "customer_details": {"email": "maria@example.test"},
+                }
+            },
+        }
+
+        response = self.client.post(
+            reverse("payments:stripe_webhook"),
+            data=b"{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="valid",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payment.refresh_from_db()
+        self.booking.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Statuses.PAID)
+        self.assertEqual(payment.stripe_payment_intent_id, "pi_completed")
+        self.assertIsNotNone(payment.paid_at)
+        self.assertEqual(self.booking.status, Booking.Statuses.CONFIRMED)
+
+    @patch("payments.views.verify_webhook_signature")
+    def test_checkout_session_expired_marks_payment_expired(self, mocked_verify):
+        payment = Payment.objects.create(
+            booking=self.booking,
+            amount=Decimal("10.00"),
+            currency="eur",
+            order_number="stripe-expired",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PENDING,
+            stripe_checkout_session_id="cs_expired",
+        )
+        mocked_verify.return_value = {
+            "type": "checkout.session.expired",
+            "data": {"object": {"id": "cs_expired", "metadata": {"payment_id": str(payment.pk)}}},
+        }
+
+        response = self.client.post(
+            reverse("payments:stripe_webhook"),
+            data=b"{}",
+            content_type="application/json",
+            HTTP_STRIPE_SIGNATURE="valid",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Statuses.EXPIRED)
+
+    def test_paid_booking_delete_becomes_cancelled_with_manual_refund_message(self):
+        Payment.objects.create(
+            booking=self.booking,
+            amount=Decimal("10.00"),
+            currency="eur",
+            order_number="stripe-paid-delete",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            paid_at=timezone.now(),
+        )
+        self.client.force_login(self.owner_user)
+
+        response = self.client.post(reverse("bookings:delete", args=[self.booking.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, Booking.Statuses.CANCELLED)
+        self.assertContains(response, "Reembolso pendiente de gestión manual")

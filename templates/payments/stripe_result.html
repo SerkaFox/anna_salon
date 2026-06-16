@@ -1,0 +1,23 @@
+{% extends "core/public_base.html" %}
+
+{% block title %}Pago Stripe | BRIMOON Studio{% endblock %}
+{% block meta_description %}Resultado del pago online de BRIMOON Studio.{% endblock %}
+
+{% block page_hero %}
+  <section class="content-hero">
+    <div class="lux-container">
+      <span class="lux-kicker">Pago online</span>
+      {% if status == "success" %}
+        <h1>Pago enviado</h1>
+        <p>Stripe nos avisará cuando el pago quede confirmado. Puedes volver a tu cuenta para revisar la reserva.</p>
+      {% else %}
+        <h1>Pago cancelado</h1>
+        <p>No se ha confirmado ningún pago. Puedes intentarlo de nuevo desde tu cuenta o contactar con BRIMOON Studio.</p>
+      {% endif %}
+      <div class="lux-actions">
+        <a class="btn-lux btn-lux-primary" href="{% url 'clients:portal' %}">Mi cuenta</a>
+        <a class="btn-lux btn-lux-outline" href="{% url 'home' %}">Inicio</a>
+      </div>
+    </div>
+  </section>
+{% endblock %}

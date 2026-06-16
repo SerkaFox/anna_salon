@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import FileResponse
 from django.http import JsonResponse
@@ -25,6 +26,8 @@ from services_app.models import Service
 from .forms import BookingForm, BookingPhotoForm
 from .models import Booking, BookingPhoto
 from .services import notify_waitlist_for_booking_opening
+from payments.models import Payment as OnlinePayment
+from payments.stripe_service import create_checkout_session, create_pending_stripe_payment
 from .utils import (
     DEFAULT_WORK_END_HOUR,
     DEFAULT_WORK_START_HOUR,
@@ -52,6 +55,38 @@ def _build_booking_photo_context(booking):
         "compare_before_photo": latest_before,
         "compare_after_photo": latest_after,
     }
+
+
+def _booking_payment_info(booking):
+    payments = list(getattr(booking, "_prefetched_objects_cache", {}).get("online_payments", booking.online_payments.all()))
+    latest_payment = payments[0] if payments else None
+    paid_total = sum((payment.amount for payment in payments if payment.status == OnlinePayment.Statuses.PAID), 0)
+    pending_payment = next((payment for payment in payments if payment.status == OnlinePayment.Statuses.PENDING), None)
+    return {
+        "latest_payment": latest_payment,
+        "pending_payment": pending_payment,
+        "status": latest_payment.status if latest_payment else "",
+        "paid_total": paid_total,
+        "is_paid": paid_total > 0,
+    }
+
+
+def _payment_status_label(status):
+    return {
+        "": "Sin pago",
+        OnlinePayment.Statuses.PENDING: "Pago pendiente",
+        OnlinePayment.Statuses.PAID: "Pagado",
+        OnlinePayment.Statuses.FAILED: "Fallido",
+        OnlinePayment.Statuses.EXPIRED: "Expirado",
+        OnlinePayment.Statuses.CANCELLED: "Cancelado",
+        OnlinePayment.Statuses.REFUNDED: "Devuelto",
+    }.get(status, status)
+
+
+def _start_stripe_checkout_for_booking(booking, request):
+    payment = create_pending_stripe_payment(booking)
+    session = create_checkout_session(payment, request)
+    return payment, session
 
 
 def _parse_block_start_end(date_str, start_time_str, end_time_str):
@@ -110,6 +145,11 @@ def booking_list(request):
         booking.payable_document = payable_document
         booking.balance_due = payable_document.balance_due if payable_document else booking.client_price_snapshot
         booking.is_fully_paid = booking.balance_due <= 0
+        payment_info = _booking_payment_info(booking)
+        booking.online_payment_status = payment_info["status"]
+        booking.online_payment_status_label = _payment_status_label(payment_info["status"])
+        booking.online_payment_paid_total = payment_info["paid_total"]
+        booking.online_payment_is_paid = payment_info["is_paid"]
 
     context = {
         "active_section": "bookings",
@@ -297,7 +337,14 @@ def booking_update(request, pk):
             else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
         )
         if form.is_valid():
+            payment_info = _booking_payment_info(booking)
+            paid_booking_changed = payment_info["is_paid"] and any(
+                form.cleaned_data.get(field) != getattr(booking, field)
+                for field in ("service", "employee", "zone", "start_at", "end_at")
+            )
             booking = form.save()
+            if paid_booking_changed:
+                messages.warning(request, "Reserva pagada. El cambio no ajusta el importe cobrado; revisa manualmente si hace falta.")
             log_event(
                 actor=request.user,
                 section="booking",
@@ -338,6 +385,20 @@ def booking_delete(request, pk):
         booking_label = str(booking)
         booking_client = str(booking.client)
         notify_waitlist_for_booking_opening(booking)
+        payment_info = _booking_payment_info(booking)
+        if payment_info["is_paid"]:
+            booking.status = Booking.Statuses.CANCELLED
+            booking.save(update_fields=["status", "updated_at"])
+            log_event(
+                actor=request.user,
+                section="booking",
+                action="cancel",
+                instance=booking,
+                message=f"Reserva pagada cancelada: {booking_label}.",
+                metadata={"client": booking_client, "refund": "manual_pending"},
+            )
+            messages.warning(request, "Reserva pagada. Reembolso pendiente de gestión manual.")
+            return redirect("bookings:list")
         booking.delete()
         log_event(
             actor=request.user,
@@ -355,6 +416,74 @@ def booking_delete(request, pk):
         {
             "active_section": "bookings",
             "booking": booking,
+        },
+    )
+
+
+@login_required
+def booking_pay(request, pk):
+    booking = get_object_or_404(
+        Booking.objects.select_related("client", "employee", "service", "zone").prefetch_related("online_payments"),
+        pk=pk,
+    )
+    if not can_access_booking(request.user, booking):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
+
+    payment_info = _booking_payment_info(booking)
+    if request.method == "POST":
+        if booking.status in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW}:
+            messages.error(request, "Esta reserva no se puede pagar online.")
+            return redirect("booking_pay", pk=booking.pk)
+        if payment_info["is_paid"]:
+            messages.success(request, "Esta reserva ya está pagada.")
+            return redirect("booking_pay", pk=booking.pk)
+        try:
+            payment, _session = _start_stripe_checkout_for_booking(booking, request)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("booking_pay", pk=booking.pk)
+        return redirect(payment.checkout_url)
+
+    return render(
+        request,
+        "bookings/booking_pay.html",
+        {
+            "booking": booking,
+            "payment_info": payment_info,
+            "payment_status_label": _payment_status_label(payment_info["status"]),
+        },
+    )
+
+
+@login_required
+@require_POST
+def booking_stripe_checkout(request, pk):
+    if not request.user.can_manage_staff:
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
+    booking = get_object_or_404(
+        Booking.objects.select_related("client", "employee", "service", "zone").prefetch_related("online_payments"),
+        pk=pk,
+    )
+    payment_info = _booking_payment_info(booking)
+    if payment_info["is_paid"]:
+        messages.success(request, "Esta reserva ya está pagada.")
+        return redirect("bookings:list")
+    try:
+        payment, _session = _start_stripe_checkout_for_booking(booking, request)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("bookings:list")
+    return render(
+        request,
+        "bookings/booking_payment_link.html",
+        {
+            "active_section": "bookings",
+            "booking": booking,
+            "payment": payment,
         },
     )
 

@@ -1,0 +1,42 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Enlace de pago | BRIMOON Studio{% endblock %}
+{% block panel_title %}Enlace de pago{% endblock %}
+{% block panel_subtitle %}Reserva #{{ booking.id }} · {{ booking.client }} · {{ payment.amount }} {{ payment.currency|upper }}{% endblock %}
+
+{% block panel_actions %}
+  <a class="btn btn-light" href="{% url 'bookings:list' %}">← Reservas</a>
+{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <div class="dashboard-section-head">
+    <div>
+      <h2>Enviar enlace de pago</h2>
+      <p class="muted-text">El pago solo se marcará como pagado cuando Stripe envíe el webhook válido.</p>
+    </div>
+  </div>
+  <div class="entity-form">
+    <div class="field">
+      <label for="stripe-checkout-url">URL de pago</label>
+      <input id="stripe-checkout-url" class="input" type="text" value="{{ payment.checkout_url }}" readonly>
+    </div>
+    <div class="form-actions">
+      <a class="btn" href="{{ payment.checkout_url }}" target="_blank" rel="noopener">Abrir Stripe Checkout</a>
+      <button class="btn btn-light" type="button" data-copy-payment-link>Copiar enlace</button>
+    </div>
+  </div>
+</section>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const button = document.querySelector("[data-copy-payment-link]");
+  const input = document.getElementById("stripe-checkout-url");
+  if (!button || !input || !navigator.clipboard) return;
+  button.addEventListener("click", function () {
+    navigator.clipboard.writeText(input.value);
+    button.textContent = "Copiado";
+    window.setTimeout(function () { button.textContent = "Copiar enlace"; }, 1600);
+  });
+});
+</script>
+{% endblock %}

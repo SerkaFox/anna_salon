@@ -33,6 +33,7 @@ from salon.models import Zone
 from services_app.models import Service
 from payments.models import Payment as OnlinePayment
 from payments.redsys import RedsysConfigurationError, build_form_fields, build_merchant_parameters, get_payment_url, sanitize_redsys_payload
+from payments.stripe_service import create_checkout_session, create_pending_stripe_payment
 
 from .permissions import IsAuthenticatedMobileUser
 from .serializers import (
@@ -907,6 +908,33 @@ class BookingPaymentStartView(MobileApiMixin, APIView):
                 "status": payment.status,
                 "payment_url": get_payment_url(),
                 "form_fields": fields,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class BookingStripeCheckoutView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        if booking.status in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW}:
+            raise serializers.ValidationError({"payment": ["Esta reserva no se puede pagar online."]})
+        paid_total = sum(
+            (payment.amount for payment in booking.online_payments.filter(status=OnlinePayment.Statuses.PAID)),
+            Decimal("0.00"),
+        )
+        if paid_total > Decimal("0.00"):
+            raise serializers.ValidationError({"payment": ["Esta reserva ya está pagada."]})
+        try:
+            payment = create_pending_stripe_payment(booking)
+            create_checkout_session(payment, request)
+        except Exception as exc:
+            raise serializers.ValidationError({"payment": [str(exc)]}) from exc
+        return Response(
+            {
+                "checkout_url": payment.checkout_url,
+                "payment_id": payment.pk,
             },
             status=status.HTTP_201_CREATED,
         )

@@ -14,6 +14,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "method",
         "status",
         "redsys_response_code",
+        "stripe_checkout_session_id",
         "created_at",
         "paid_at",
     )
@@ -23,5 +24,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "booking__client__first_name",
         "booking__client__last_name",
         "redsys_authorisation_code",
+        "stripe_checkout_session_id",
+        "stripe_payment_intent_id",
     )
     readonly_fields = ("created_at", "updated_at", "paid_at")

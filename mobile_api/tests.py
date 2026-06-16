@@ -1,7 +1,9 @@
 from datetime import datetime, time, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -10,6 +12,7 @@ from accounts.models import User
 from bookings.models import Booking
 from clients.models import Client
 from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock, EmployeeWeeklyShift
+from payments.models import Payment
 from salon.models import Zone
 from services_app.models import Service
 
@@ -186,9 +189,9 @@ class MobileApiMvpTests(TestCase):
         ids = {item["id"] for item in response.json()["results"]}
         self.assertEqual(ids, {own_booking.pk, other_booking.pk})
 
-    def test_employee_can_see_only_own_bookings(self):
+    def test_employee_can_see_team_bookings(self):
         own_booking = self._create_booking(employee=self.employee, client=self.client_obj)
-        self._create_booking(
+        other_booking = self._create_booking(
             employee=self.other_employee,
             client=self.other_client,
             zone=self.other_zone,
@@ -200,7 +203,7 @@ class MobileApiMvpTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         ids = {item["id"] for item in response.json()["results"]}
-        self.assertEqual(ids, {own_booking.pk})
+        self.assertEqual(ids, {own_booking.pk, other_booking.pk})
 
     def test_booking_creation_rejects_overlapping_employee_booking(self):
         self._create_booking(employee=self.employee, zone=self.zone)
@@ -240,7 +243,7 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("no realiza el servicio", str(response.json()).lower())
 
-    def test_booking_creation_rejects_missing_zone_when_service_requires_zone(self):
+    def test_booking_creation_auto_assigns_zone_when_service_requires_zone(self):
         self._auth(self.owner_user)
 
         response = self.api_client.post(
@@ -249,8 +252,8 @@ class MobileApiMvpTests(TestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("requiere una zona", str(response.json()).lower())
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["zone"], self.zone.pk)
 
     def test_check_availability_returns_available_true_or_false_with_spanish_reason(self):
         self._auth(self.owner_user)
@@ -568,10 +571,10 @@ class MobileApiMvpTests(TestCase):
                 "service": self.service.pk,
             },
         )
-        self.assertEqual(missing_zone.status_code, 400)
-        self.assertIn("requiere una zona", str(missing_zone.json()).lower())
+        self.assertEqual(missing_zone.status_code, 200)
+        self.assertIn("slots", missing_zone.json())
 
-        forbidden_employee = self.api_client.get(
+        team_employee = self.api_client.get(
             reverse("mobile_api:availability_slots"),
             {
                 "date": "2026-04-27",
@@ -580,5 +583,48 @@ class MobileApiMvpTests(TestCase):
                 "zone": self.zone.pk,
             },
         )
-        self.assertEqual(forbidden_employee.status_code, 400)
-        self.assertIn("sin acceso", str(forbidden_employee.json()).lower())
+        self.assertEqual(team_employee.status_code, 200)
+        self.assertIn("slots", team_employee.json())
+
+    def test_booking_serializer_includes_payment_info(self):
+        booking = self._create_booking(employee=self.employee, zone=self.zone)
+        Payment.objects.create(
+            booking=booking,
+            amount=Decimal("15.00"),
+            currency="eur",
+            order_number="stripe-mobile-paid",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            paid_at=timezone.now(),
+        )
+        self._auth(self.owner_user)
+
+        response = self.api_client.get(reverse("mobile_api:booking_detail", args=[booking.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["payment_status"], Payment.Statuses.PAID)
+        self.assertEqual(payload["paid_amount"], "15.00")
+        self.assertIsNotNone(payload["latest_payment_id"])
+        self.assertTrue(payload["can_pay"])
+
+    @override_settings(STRIPE_SECRET_KEY="sk_test_mock", STRIPE_CURRENCY="eur", BOOKING_DEPOSIT_AMOUNT_EUR="12.00")
+    @patch("payments.stripe_service.stripe.checkout.Session.create")
+    def test_stripe_checkout_endpoint_returns_checkout_url(self, mocked_create):
+        mocked_create.return_value = SimpleNamespace(
+            id="cs_mobile",
+            url="https://checkout.stripe.test/mobile",
+            payment_intent="pi_mobile",
+        )
+        booking = self._create_booking(employee=self.employee, zone=self.zone)
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(reverse("mobile_api:booking_stripe_checkout", args=[booking.pk]))
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["checkout_url"], "https://checkout.stripe.test/mobile")
+        payment = Payment.objects.get(pk=payload["payment_id"])
+        self.assertEqual(payment.amount, Decimal("12.00"))
+        self.assertEqual(payment.stripe_checkout_session_id, "cs_mobile")

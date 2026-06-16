@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 from core import views as core_views
+from bookings import views as booking_views
 from gallery import views as gallery_views
 
 
@@ -19,6 +20,7 @@ urlpatterns = [
     path("reservar/", core_views.public_booking, name="public_booking"),
     path("reservar/slots/", core_views.public_booking_slots, name="public_booking_slots"),
     path("reservar/lista-espera/", core_views.public_waitlist, name="public_waitlist"),
+    path("bookings/<int:pk>/pay/", booking_views.booking_pay, name="booking_pay"),
     path("set-language/", core_views.set_public_language, name="set_public_language"),
     path("robots.txt", core_views.robots_txt, name="robots_txt"),
     path("sitemap.xml", core_views.sitemap_xml, name="sitemap_xml"),

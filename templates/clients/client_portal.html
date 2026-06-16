@@ -71,8 +71,8 @@
               {% if booking.online_payment_can_pay %}
                 <form method="post" action="{% url 'clients:booking_payment' booking.id %}" class="portal-pay-form">
                   {% csrf_token %}
-                  <span>Prepago 10% · {{ booking.prepayment_due_amount }} €</span>
-                  <button class="btn btn-small" type="submit">Pagar prepago</button>
+                  <span>Pago online · {{ booking.online_payment_due_amount }} €</span>
+                  <button class="btn btn-small" type="submit">Pagar reserva</button>
                 </form>
               {% endif %}
               {% if booking.prepayment %}

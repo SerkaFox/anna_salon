@@ -97,6 +97,27 @@ class Booking(models.Model):
     def __str__(self):
         return f"{self.client} · {self.service} · {self.start_at:%d/%m/%Y %H:%M}"
 
+    @property
+    def latest_online_payment(self):
+        payments = list(getattr(self, "_prefetched_objects_cache", {}).get("online_payments", self.online_payments.all()))
+        return payments[0] if payments else None
+
+    @property
+    def paid_amount(self):
+        return sum(
+            (payment.amount for payment in self.online_payments.all() if payment.status == payment.Statuses.PAID),
+            0,
+        )
+
+    @property
+    def payment_status(self):
+        latest_payment = self.latest_online_payment
+        return latest_payment.status if latest_payment else ""
+
+    @property
+    def is_paid(self):
+        return self.paid_amount > 0
+
 
 class BookingPhoto(models.Model):
     class PhotoTypes(models.TextChoices):

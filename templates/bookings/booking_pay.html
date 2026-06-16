@@ -1,0 +1,24 @@
+{% extends "core/public_base.html" %}
+
+{% block title %}Pagar reserva | BRIMOON Studio{% endblock %}
+{% block meta_description %}Pago online seguro para una reserva de BRIMOON Studio.{% endblock %}
+
+{% block page_hero %}
+  <section class="content-hero">
+    <div class="lux-container">
+      <span class="lux-kicker">Pago online</span>
+      <h1>Pagar reserva</h1>
+      <p>{{ booking.service }} · {{ booking.start_at|date:"d/m/Y H:i" }} · {{ booking.employee }}</p>
+      <p>Estado de pago: {{ payment_status_label }}</p>
+      {% if payment_info.is_paid %}
+        <p>Importe pagado: {{ payment_info.paid_total }} €</p>
+        <div class="lux-actions"><a class="btn-lux btn-lux-primary" href="{% url 'clients:portal' %}">Volver a mi cuenta</a></div>
+      {% else %}
+        <form method="post">
+          {% csrf_token %}
+          <button class="btn-lux btn-lux-primary btn-lux-large" type="submit">Pagar reserva</button>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}
