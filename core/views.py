@@ -3,7 +3,8 @@ import secrets
 from datetime import datetime, timedelta
 
 from django.conf import settings
-from django.contrib.auth import login
+from django.contrib.auth import authenticate, login
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
@@ -16,13 +17,13 @@ from django.views.decorators.http import require_POST
 from accounts.models import User
 from bookings.forms import BookingForm
 from bookings.models import Booking, BookingWaitlistEntry
-from bookings.services import calculate_booking_prepayment_amount, create_booking_prepayment
+from bookings.services import calculate_booking_prepayment_amount
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
 from clients.models import Client
 from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
 from accounts.permissions import get_client_profile
 from employees.models import Employee
-from payments.models import Payment as OnlinePayment
+from payments.stripe_service import create_checkout_session, create_pending_stripe_payment
 from gallery.selectors import get_public_instagram_posts
 from salon.models import Zone
 from services_app.models import Service
@@ -370,15 +371,6 @@ def _generate_client_username(name):
     return f"{base}{secrets.token_hex(3)}"
 
 
-def _generate_public_payment_order_number(booking_id):
-    prefix = f"{booking_id % 10000:04d}"
-    for _attempt in range(10):
-        order_number = f"{prefix}{secrets.token_hex(4).upper()}"
-        if not OnlinePayment.objects.filter(order_number=order_number).exists():
-            return order_number
-    raise PublicBookingError({"__all__": ["No se pudo generar el pago de la reserva."]})
-
-
 def _public_wants_json(request):
     return request.headers.get("x-requested-with") == "XMLHttpRequest" or "application/json" in request.headers.get("accept", "")
 
@@ -421,7 +413,7 @@ def _slot_matches(selected_start, slots):
     return None
 
 
-def _create_public_booking(values):
+def _create_public_booking(values, request):
     name = values["name"].strip()
     parts = name.split(None, 1)
     first_name = parts[0]
@@ -458,30 +450,23 @@ def _create_public_booking(values):
                 "end_at": timezone.localtime(values["end_at"]).strftime("%Y-%m-%dT%H:%M"),
                 "status": Booking.Statuses.CONFIRMED,
                 "source": Booking.Sources.WEBSITE,
-                "notes": "Reserva creada desde la web publica. Pago temporal confirmado.",
+                "notes": "Reserva creada desde la web publica.",
             },
             allowed_clients=Client.objects.filter(pk=client.pk),
         )
         if not form.is_valid():
             raise PublicBookingError({field: [str(item) for item in errors] for field, errors in form.errors.items()})
         booking = form.save()
-        amount = calculate_booking_prepayment_amount(booking)
-        if amount:
-            payment = OnlinePayment.objects.create(
-                booking=booking,
-                amount=amount,
-                currency=getattr(settings, "REDSYS_CURRENCY", "978"),
-                order_number=_generate_public_payment_order_number(booking.pk),
-                method=OnlinePayment.Methods.CARD,
-                status=OnlinePayment.Statuses.PAID,
-                redsys_response_code="MOCK",
-                redsys_authorisation_code="TEMP",
-                raw_request={"provider": "mock_public_checkout"},
-                raw_response={"paid": True, "mode": "temporary_mock"},
-                paid_at=timezone.now(),
-            )
-            create_booking_prepayment(booking, payment)
-    return user, booking
+
+    payment = None
+    amount = calculate_booking_prepayment_amount(booking)
+    if amount:
+        try:
+            payment = create_pending_stripe_payment(booking, amount=amount, reason="public_booking_deposit")
+            create_checkout_session(payment, request)
+        except (ValueError, ValidationError) as exc:
+            raise PublicBookingError({"__all__": [str(exc)]}) from exc
+    return user, booking, payment
 
 
 
@@ -584,20 +569,36 @@ def public_booking(request):
     post = request.POST
     if post.get("action") == "existing_account":
         pending = pending_booking_from_post(post)
-        if request.user.is_authenticated:
-            client = get_client_profile(request.user)
-            if not client:
-                redirect_url = reverse("dashboard:home")
+        if not request.user.is_authenticated:
+            login_name = (post.get("name") or "").strip()
+            login_password = post.get("password") or ""
+            authenticated_user = None
+            if login_name and login_password:
+                authenticated_user = authenticate(request, username=login_name, password=login_password)
+                if authenticated_user is None:
+                    candidate = User.objects.filter(email__iexact=login_name).exclude(email="").first()
+                    if candidate:
+                        authenticated_user = authenticate(request, username=candidate.username, password=login_password)
+            if authenticated_user is not None and authenticated_user.is_client_role:
+                login(request, authenticated_user, backend="django.contrib.auth.backends.ModelBackend")
             else:
-                booking, errors = create_booking_for_client_from_pending(client, pending)
-                if errors:
-                    return _public_booking_error_response(request, post.dict(), errors)
-                redirect_url = reverse("clients:portal")
-            if _public_wants_json(request):
-                return JsonResponse({"ok": True, "redirect": redirect_url})
-            return redirect(redirect_url)
-        request.session[PUBLIC_PENDING_BOOKING_SESSION_KEY] = pending
-        redirect_url = f"{reverse('accounts:login')}?next={reverse('clients:portal')}"
+                # Couldn't log in directly with the typed credentials (e.g. the client
+                # doesn't remember their generated username) — fall back to the regular
+                # login page, keeping the booking choice in the session.
+                request.session[PUBLIC_PENDING_BOOKING_SESSION_KEY] = pending
+                redirect_url = f"{reverse('accounts:login')}?next={reverse('clients:portal')}"
+                if _public_wants_json(request):
+                    return JsonResponse({"ok": True, "redirect": redirect_url})
+                return redirect(redirect_url)
+
+        client = get_client_profile(request.user)
+        if not client:
+            redirect_url = reverse("dashboard:home")
+        else:
+            booking, errors = create_booking_for_client_from_pending(client, pending)
+            if errors:
+                return _public_booking_error_response(request, post.dict(), errors)
+            redirect_url = reverse("clients:portal")
         if _public_wants_json(request):
             return JsonResponse({"ok": True, "redirect": redirect_url})
         return redirect(redirect_url)
@@ -623,8 +624,6 @@ def public_booking(request):
         errors["password"] = [t["public_booking_error_password_required"]]
     elif len(values["password"]) < 6:
         errors["password"] = [t["public_booking_error_password_min"]]
-    if post.get("mock_payment_confirmed") != "1":
-        errors["__all__"] = [t["public_booking_error_payment_required"]]
 
     service = employee = zone = start_at = None
     try:
@@ -685,7 +684,7 @@ def public_booking(request):
         return _public_booking_error_response(request, values, errors)
 
     try:
-        user, booking = _create_public_booking(
+        user, booking, payment = _create_public_booking(
             {
                 "name": values["name"],
                 "password": values["password"],
@@ -696,7 +695,8 @@ def public_booking(request):
                 "zone": zone,
                 "start_at": start_at,
                 "end_at": end_at,
-            }
+            },
+            request,
         )
     except PublicBookingError as exc:
         return _public_booking_error_response(request, values, exc.errors)
@@ -705,7 +705,7 @@ def public_booking(request):
     language = detect_public_language(request)
     request.session[PUBLIC_LANGUAGE_SESSION_KEY] = language
     request.session[CLIENT_LANGUAGE_SESSION_KEY] = language
-    redirect_url = reverse("clients:portal")
+    redirect_url = payment.checkout_url if payment else reverse("clients:portal")
     if _public_wants_json(request):
         return JsonResponse({"ok": True, "redirect": redirect_url, "username": user.username})
     return redirect(redirect_url)

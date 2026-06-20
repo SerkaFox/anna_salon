@@ -92,4 +92,14 @@
     </div>
   </form>
 </section>
+
+<section class="panel-card" style="margin-top: 18px;">
+  <div class="section-heading">
+    <div>
+      <h2>{% ct "delete_account" %}</h2>
+      <p>{% ct "delete_account_intro" %}</p>
+    </div>
+  </div>
+  <a class="btn btn-danger" href="{% url 'clients:delete_own_account' %}">{% ct "delete_account" %}</a>
+</section>
 {% endblock %}

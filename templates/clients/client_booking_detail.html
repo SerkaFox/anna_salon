@@ -34,7 +34,7 @@
     {% endif %}
   </article>
 
-  <article class="panel-card">
+  <article class="panel-card" id="cambiar-cita">
     <h2>Cambiar cita</h2>
     {% if can_reschedule %}
       <form method="post" action="{% url 'clients:booking_reschedule' booking.id %}" class="entity-form">
@@ -73,7 +73,7 @@
 </section>
 
 <section class="content-grid">
-  <article class="panel-card">
+  <article class="panel-card" id="cambiar-servicio">
     <h2>Añadir o cambiar servicio</h2>
     <p class="muted-text">Si el nuevo importe es mayor, se abrirá Stripe Checkout para pagar la diferencia. Si es menor, el salón revisará la diferencia manualmente.</p>
     <form method="post" action="{% url 'clients:booking_change_service' booking.id %}" class="entity-form">

@@ -5,6 +5,7 @@ import secrets
 from django import forms
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, Q
@@ -998,3 +999,35 @@ def use_referral_reward(request, pk):
         messages.error(request, "No hay premios disponibles.")
 
     return redirect("clients:detail", pk=client.pk)
+
+
+@login_required
+def client_delete_own_account(request):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+
+    if request.method == "POST":
+        password = request.POST.get("password") or ""
+        if not request.user.check_password(password):
+            messages.error(request, "Contrasena incorrecta.")
+            return render(request, "clients/client_delete_account.html", {"active_section": "profile"})
+
+        user = request.user
+        client_name = client.full_name
+        client.is_active = False
+        client.save(update_fields=["is_active", "updated_at"])
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        log_event(
+            actor=user,
+            section="client",
+            action="self_delete",
+            instance=client,
+            message=f"Cuenta dada de baja por el propio cliente: {client_name}.",
+        )
+        logout(request)
+        messages.success(request, "Tu cuenta ha sido eliminada. Gracias por confiar en BRIMOON Studio.")
+        return redirect("home")
+
+    return render(request, "clients/client_delete_account.html", {"active_section": "profile"})

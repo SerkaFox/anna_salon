@@ -243,6 +243,23 @@
   padding: 20px;
 }
 
+.booking-list-card {
+  padding: 18px;
+  display: grid;
+  gap: 6px;
+  background: linear-gradient(180deg, rgba(223, 255, 235, 0.12), rgba(63, 109, 82, 0.08));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.portal-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0;
+}
+
 .stat-label {
   display: block;
   color: var(--muted);

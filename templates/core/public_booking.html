@@ -81,7 +81,6 @@
       <input type="hidden" name="start_at" value="{{ booking_values.start_at }}" data-start-input>
       <input type="hidden" name="employee" value="{{ booking_values.employee }}" data-employee-input>
       <input type="hidden" name="zone" value="{{ booking_values.zone }}" data-zone-input>
-      <input type="hidden" name="mock_payment_confirmed" value="" data-mock-payment-input>
 
       <div class="booking-details-section" data-details-section>
       <div class="booking-account-helper">
@@ -125,26 +124,10 @@
         <button class="btn-lux btn-lux-primary btn-lux-large" type="submit" data-submit-button disabled>{{ t.public_booking_submit }}</button>
         <button class="btn-lux btn-lux-outline btn-lux-large" type="button" data-existing-account disabled>{{ t.public_booking_existing }}</button>
       </div>
+      <p class="field-help" data-submit-hint></p>
       <p class="field-help">{{ t.public_booking_existing_hint }}</p>
       </div>
     </form>
-
-    <div class="booking-payment-modal" data-payment-modal hidden>
-      <div class="booking-payment-modal__backdrop" data-payment-cancel></div>
-      <section class="booking-payment-modal__card" role="dialog" aria-modal="true" aria-labelledby="booking-payment-title">
-        <span class="lux-kicker">BRIMOON Pay</span>
-        <h2 id="booking-payment-title">{{ t.public_booking_mock_title }}</h2>
-        <p>{{ t.public_booking_mock_text }}</p>
-        <div class="booking-payment-summary">
-          <span data-payment-service></span>
-          <strong data-payment-time></strong>
-        </div>
-        <div class="booking-payment-actions">
-          <button class="btn-lux btn-lux-primary btn-lux-large" type="button" data-payment-confirm>{{ t.public_booking_mock_pay }}</button>
-          <button class="btn-lux btn-lux-outline btn-lux-large" type="button" data-payment-cancel>{{ t.public_booking_mock_cancel }}</button>
-        </div>
-      </section>
-    </div>
 
     <aside class="public-booking-aside">
       <span class="lux-kicker">BRIMOON</span>
@@ -208,11 +191,7 @@
     const selectedSummaryText = form.querySelector('[data-selected-summary-text]');
     const editSlotButton = form.querySelector('[data-edit-slot]');
     const detailsSection = form.querySelector('[data-details-section]');
-    const mockPaymentInput = form.querySelector('[data-mock-payment-input]');
-    const paymentModal = document.querySelector('[data-payment-modal]');
-    const paymentConfirmButton = document.querySelector('[data-payment-confirm]');
-    const paymentService = document.querySelector('[data-payment-service]');
-    const paymentTime = document.querySelector('[data-payment-time]');
+    const submitHint = form.querySelector('[data-submit-hint]');
     const waitlistForm = document.querySelector('[data-waitlist-form]');
     const waitlistEmployeesNode = document.getElementById('waitlist-employees-data');
     const waitlistEmployees = waitlistEmployeesNode ? JSON.parse(waitlistEmployeesNode.textContent || '[]') : [];
@@ -278,16 +257,27 @@
       }
     }
 
+    function updateSubmitHint() {
+      if (!submitHint) return;
+      if (!serviceSelect.value || !dateInput.value) {
+        submitHint.textContent = messages.choose;
+      } else if (!startInput.value) {
+        submitHint.textContent = messages.timeRequired;
+      } else {
+        submitHint.textContent = '';
+      }
+    }
+
     function resetSlot() {
       startInput.value = '';
       employeeInput.value = '';
       zoneInput.value = '';
-      if (mockPaymentInput) mockPaymentInput.value = '';
       submitButton.disabled = true;
       if (existingAccountButton) existingAccountButton.disabled = true;
       form.classList.remove('is-time-selected');
       selectedSummary.hidden = true;
       selectedSummaryText.textContent = '';
+      updateSubmitHint();
     }
 
     function slotHour(slot) {
@@ -336,6 +326,7 @@
       selectedSummaryText.textContent = selectedText;
       selectedSummary.hidden = false;
       form.classList.add('is-time-selected');
+      updateSubmitHint();
       window.setTimeout(function () { detailsSection.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
     }
 
@@ -547,45 +538,10 @@
         });
     }
 
-    function openPaymentModal() {
-      if (!paymentModal) {
-        if (mockPaymentInput) mockPaymentInput.value = '1';
-        submitBooking();
-        return;
-      }
-      const selectedService = serviceSelect.options[serviceSelect.selectedIndex];
-      if (paymentService) paymentService.textContent = selectedService ? selectedService.textContent : '';
-      if (paymentTime) paymentTime.textContent = selectedSummaryText.textContent || status.textContent || '';
-      paymentModal.hidden = false;
-      document.body.classList.add('is-payment-modal-open');
-      if (paymentConfirmButton) paymentConfirmButton.focus();
-    }
-
-    function closePaymentModal() {
-      if (!paymentModal) return;
-      paymentModal.hidden = true;
-      document.body.classList.remove('is-payment-modal-open');
-    }
-
     form.addEventListener('submit', function (event) {
       event.preventDefault();
       if (!validateBeforeSubmit()) return;
-      if (!mockPaymentInput || mockPaymentInput.value !== '1') {
-        openPaymentModal();
-        return;
-      }
       submitBooking();
-    });
-
-    if (paymentConfirmButton) {
-      paymentConfirmButton.addEventListener('click', function () {
-        if (mockPaymentInput) mockPaymentInput.value = '1';
-        closePaymentModal();
-        submitBooking();
-      });
-    }
-    document.querySelectorAll('[data-payment-cancel]').forEach(function (button) {
-      button.addEventListener('click', closePaymentModal);
     });
 
     if (existingAccountButton) {

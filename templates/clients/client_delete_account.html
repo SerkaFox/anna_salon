@@ -1,0 +1,22 @@
+{% extends "client_portal_base.html" %}
+{% load client_i18n %}
+
+{% block title %}{% ct "delete_account" %} | BRIMOON Studio{% endblock %}
+{% block portal_title %}{% ct "delete_account" %}{% endblock %}
+{% block portal_subtitle %}{% ct "delete_account_intro" %}{% endblock %}
+
+{% block portal_content %}
+<section class="panel-card">
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+    <div class="field">
+      <label for="delete-account-password">{% ct "delete_account_password_label" %}</label>
+      <input id="delete-account-password" class="input" type="password" name="password" autocomplete="current-password" required>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-danger">{% ct "delete_account_submit" %}</button>
+      <a href="{% url 'accounts:profile' %}" class="btn btn-light">{% ct "delete_account_cancel" %}</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

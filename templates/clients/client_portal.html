@@ -60,7 +60,11 @@
             <article class="booking-list-card">
               <strong>{{ booking.start_at|date:"d/m/Y H:i" }}</strong>
               <p>{{ booking.service }} · {{ booking.employee }}</p>
-              <p><a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}">Ver reserva</a></p>
+              <div class="portal-card-actions">
+                <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}">Ver reserva</a>
+                <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}#cambiar-cita">Cambiar fecha</a>
+                <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}#cambiar-servicio">Cambiar servicio</a>
+              </div>
               <div class="portal-booking-meta">
                 <span class="dashboard-badge">{{ booking.get_status_display }}</span>
                 {% if booking.online_payment_is_paid %}

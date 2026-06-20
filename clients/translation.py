@@ -45,6 +45,42 @@ CLIENT_TRANSLATIONS["en"].update({"selected_time": "Selected time", "change_time
 CLIENT_TRANSLATIONS["de"].update({"selected_time": "Gewählte Zeit", "change_time": "Zeit ändern", "refresh_availability": "Aktualisieren"})
 CLIENT_TRANSLATIONS["fr"].update({"selected_time": "Horaire choisi", "change_time": "Changer l'heure", "refresh_availability": "Actualiser"})
 
+CLIENT_TRANSLATIONS["es"].update({
+    "delete_account": "Eliminar cuenta",
+    "delete_account_intro": "Esta accion desactiva tu acceso y tus datos de cliente. No podras volver a iniciar sesion ni reservar online con esta cuenta. Si te has mudado de ciudad o ya no quieres usar BRIMOON Studio, puedes confirmar aqui.",
+    "delete_account_password_label": "Confirma tu contrasena",
+    "delete_account_submit": "Eliminar mi cuenta",
+    "delete_account_cancel": "Cancelar",
+})
+CLIENT_TRANSLATIONS["ru"].update({
+    "delete_account": "Удалить аккаунт",
+    "delete_account_intro": "Это действие отключит ваш доступ и данные клиента. Вы не сможете снова войти или записаться онлайн с этого аккаунта. Если вы переехали в другой город или больше не хотите пользоваться BRIMOON Studio, подтвердите здесь.",
+    "delete_account_password_label": "Подтвердите пароль",
+    "delete_account_submit": "Удалить мой аккаунт",
+    "delete_account_cancel": "Отмена",
+})
+CLIENT_TRANSLATIONS["en"].update({
+    "delete_account": "Delete account",
+    "delete_account_intro": "This will deactivate your access and client data. You will not be able to sign in or book online with this account again. If you moved away or no longer want to use BRIMOON Studio, confirm here.",
+    "delete_account_password_label": "Confirm your password",
+    "delete_account_submit": "Delete my account",
+    "delete_account_cancel": "Cancel",
+})
+CLIENT_TRANSLATIONS["de"].update({
+    "delete_account": "Konto löschen",
+    "delete_account_intro": "Dadurch werden Ihr Zugang und Ihre Kundendaten deaktiviert. Sie können sich mit diesem Konto nicht mehr anmelden oder online buchen. Wenn Sie umgezogen sind oder BRIMOON Studio nicht mehr nutzen möchten, bestätigen Sie hier.",
+    "delete_account_password_label": "Passwort bestätigen",
+    "delete_account_submit": "Mein Konto löschen",
+    "delete_account_cancel": "Abbrechen",
+})
+CLIENT_TRANSLATIONS["fr"].update({
+    "delete_account": "Supprimer le compte",
+    "delete_account_intro": "Cette action désactive votre accès et vos données client. Vous ne pourrez plus vous connecter ni réserver en ligne avec ce compte. Si vous avez déménagé ou ne souhaitez plus utiliser BRIMOON Studio, confirmez ici.",
+    "delete_account_password_label": "Confirmez votre mot de passe",
+    "delete_account_submit": "Supprimer mon compte",
+    "delete_account_cancel": "Annuler",
+})
+
 
 def normalize_client_language(language):
     code = (language or "").split("-", 1)[0].lower()
