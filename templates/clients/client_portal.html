@@ -90,9 +90,14 @@
               {% if booking.online_payment_can_pay %}
                 <form method="post" action="{% url 'clients:booking_payment' booking.id %}" class="portal-pay-form">
                   {% csrf_token %}
-                  <span>Señal 10% · {{ booking.deposit_payment_amount }} €</span>
-                  <button class="btn btn-small" name="payment_mode" value="deposit" type="submit">Reservar con señal</button>
-                  <button class="btn btn-light btn-small" name="payment_mode" value="full" type="submit">Pagar todo · {{ booking.full_payment_amount }} €</button>
+                  {% if booking.online_payment_paid_total > 0 %}
+                    <span>Pendiente · {{ booking.amount_due }} €</span>
+                    <button class="btn btn-small" name="payment_mode" value="full" type="submit">Pagar el resto</button>
+                  {% else %}
+                    <span>Señal 10% · {{ booking.deposit_payment_amount }} €</span>
+                    <button class="btn btn-small" name="payment_mode" value="deposit" type="submit">Reservar con señal</button>
+                    <button class="btn btn-light btn-small" name="payment_mode" value="full" type="submit">Pagar todo · {{ booking.amount_due }} €</button>
+                  {% endif %}
                 </form>
               {% endif %}
               {% if booking.prepayment %}

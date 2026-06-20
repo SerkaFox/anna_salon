@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, time
+from decimal import Decimal
 
 from django.db.models import Q
 from django.utils import timezone
@@ -441,6 +442,7 @@ def get_bookings_for_day(date_obj):
     return (
         Booking.objects
         .select_related("client", "employee", "service", "zone")
+        .prefetch_related("online_payments", "prepayment")
         .filter(start_at__lte=day_end, end_at__gte=day_start)
         .exclude(status=Booking.Statuses.CANCELLED)
         .order_by("start_at")
@@ -478,9 +480,36 @@ def service_calendar_color(service_id):
     return SERVICE_COLOR_PALETTE[(service_id - 1) % len(SERVICE_COLOR_PALETTE)]
 
     
+def booking_payment_summary(booking):
+    total_amount = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+    paid_amount = booking.paid_amount
+    due_amount = max(total_amount - paid_amount, Decimal("0.00"))
+    prepayment = getattr(booking, "prepayment", None)
+
+    if total_amount <= Decimal("0.00"):
+        label, status_class = "", ""
+    elif due_amount <= Decimal("0.00"):
+        label, status_class = "Pagado completo", "is-paid"
+    elif prepayment and paid_amount > Decimal("0.00"):
+        label, status_class = f"Señal pagada · quedan {due_amount} €", "is-partial"
+    elif paid_amount > Decimal("0.00"):
+        label, status_class = f"Pagado {paid_amount} € · quedan {due_amount} €", "is-partial"
+    else:
+        label, status_class = f"Sin pago · {due_amount} € pendiente", "is-unpaid"
+
+    return {
+        "total_amount": total_amount,
+        "paid_amount": paid_amount,
+        "due_amount": due_amount,
+        "label": label,
+        "status_class": status_class,
+    }
+
+
 def booking_layout_data(booking):
     start_minutes = minutes_from_work_start(booking.start_at)
     duration_minutes = int((booking.end_at - booking.start_at).total_seconds() // 60)
+    payment_summary = booking_payment_summary(booking)
 
     return {
         "id": booking.id,
@@ -504,4 +533,6 @@ def booking_layout_data(booking):
         "end_at": timezone.localtime(booking.end_at),
         "top": max(start_minutes, 0),
         "height": max(duration_minutes, 30),
+        "payment_label": payment_summary["label"],
+        "payment_status_class": payment_summary["status_class"],
     }

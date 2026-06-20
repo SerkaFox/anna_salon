@@ -27,9 +27,14 @@
     {% if amount_due > 0 and booking.status != "cancelled" %}
       <form method="post" action="{% url 'clients:booking_payment' booking.id %}" class="portal-pay-form">
         {% csrf_token %}
-        <span>Elige cómo quieres pagar la reserva.</span>
-        <button class="btn" name="payment_mode" value="deposit" type="submit">Señal 10% · {{ deposit_amount }} €</button>
-        <button class="btn btn-light" name="payment_mode" value="full" type="submit">Pago completo · {{ full_amount }} €</button>
+        {% if paid_amount > 0 %}
+          <span>Pendiente de pago.</span>
+          <button class="btn" name="payment_mode" value="full" type="submit">Pagar el resto · {{ amount_due }} €</button>
+        {% else %}
+          <span>Elige cómo quieres pagar la reserva.</span>
+          <button class="btn" name="payment_mode" value="deposit" type="submit">Señal 10% · {{ deposit_amount }} €</button>
+          <button class="btn btn-light" name="payment_mode" value="full" type="submit">Pago completo · {{ full_amount }} €</button>
+        {% endif %}
       </form>
     {% endif %}
   </article>

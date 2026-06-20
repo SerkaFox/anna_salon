@@ -258,6 +258,9 @@
                           <span>{{ card.zone }}</span>
                         {% endif %}
                       </div>
+                      {% if card.payment_label %}
+                        <span class="booking-card__payment {{ card.payment_status_class }}">{{ card.payment_label }}</span>
+                      {% endif %}
                     </a>
                   {% empty %}
                     <div class="calendar-empty">Sin reservas</div>
@@ -416,6 +419,9 @@
                         <span>Sin zona</span>
                       {% endif %}
                     </div>
+                    {% if card.payment_label %}
+                      <span class="booking-card__payment {{ card.payment_status_class }}">{{ card.payment_label }}</span>
+                    {% endif %}
                   </a>
                 {% endfor %}
 

@@ -336,8 +336,12 @@ def client_booking_payment(request, pk):
         messages.success(request, "Esta reserva ya esta pagada.")
         return redirect("clients:portal")
 
+    payment_mode = request.POST.get("payment_mode", "deposit")
+    if payment_mode == "deposit" and payment_info["paid_total"] > Decimal("0.00"):
+        messages.error(request, "Ya hay un pago registrado para esta reserva. Paga el resto pendiente.")
+        return redirect("clients:portal")
+
     try:
-        payment_mode = request.POST.get("payment_mode", "deposit")
         amount = get_booking_full_amount(booking) if payment_mode == "full" else get_booking_deposit_amount(booking)
         amount = min(amount, payment_info["remaining_amount"])
         payment = create_pending_stripe_payment(
