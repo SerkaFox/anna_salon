@@ -442,7 +442,7 @@ def get_bookings_for_day(date_obj):
     return (
         Booking.objects
         .select_related("client", "employee", "service", "zone")
-        .prefetch_related("online_payments", "prepayment")
+        .prefetch_related("online_payments", "prepayment", "payments")
         .filter(start_at__lte=day_end, end_at__gte=day_start)
         .exclude(status=Booking.Statuses.CANCELLED)
         .order_by("start_at")
@@ -482,18 +482,33 @@ def service_calendar_color(service_id):
     
 def booking_payment_summary(booking):
     total_amount = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
-    paid_amount = booking.paid_amount
+
+    online_payments = [payment for payment in booking.online_payments.all() if payment.status == payment.Statuses.PAID]
+    online_paid = sum((payment.amount for payment in online_payments), Decimal("0.00"))
+
+    manual_payments = list(booking.payments.all())
+    manual_paid = sum((payment.signed_amount for payment in manual_payments), Decimal("0.00"))
+
+    paid_amount = max(online_paid + manual_paid, Decimal("0.00"))
     due_amount = max(total_amount - paid_amount, Decimal("0.00"))
     prepayment = getattr(booking, "prepayment", None)
+
+    methods = set()
+    if online_payments:
+        methods.add("tarjeta online")
+    for payment in manual_payments:
+        if payment.entry_type == payment.EntryTypes.PAYMENT:
+            methods.add(payment.get_method_display().lower())
+    method_suffix = f" ({', '.join(sorted(methods))})" if methods and paid_amount > Decimal("0.00") else ""
 
     if total_amount <= Decimal("0.00"):
         label, status_class = "", ""
     elif due_amount <= Decimal("0.00"):
-        label, status_class = "Pagado completo", "is-paid"
-    elif prepayment and paid_amount > Decimal("0.00"):
-        label, status_class = f"Señal pagada · quedan {due_amount} €", "is-partial"
+        label, status_class = f"Pagado completo{method_suffix}", "is-paid"
+    elif prepayment and paid_amount > Decimal("0.00") and paid_amount == online_paid:
+        label, status_class = f"Señal pagada{method_suffix} · quedan {due_amount} €", "is-partial"
     elif paid_amount > Decimal("0.00"):
-        label, status_class = f"Pagado {paid_amount} € · quedan {due_amount} €", "is-partial"
+        label, status_class = f"Pagado {paid_amount} €{method_suffix} · quedan {due_amount} €", "is-partial"
     else:
         label, status_class = f"Sin pago · {due_amount} € pendiente", "is-unpaid"
 
