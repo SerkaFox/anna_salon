@@ -1,8 +1,9 @@
-from datetime import time
+from datetime import timedelta, time
 from decimal import Decimal
 
 from django.test import Client as DjangoClient, TestCase
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from accounts.models import User
@@ -60,7 +61,10 @@ class PublicBookingTests(TestCase):
             start_time=time(9, 0),
             end_time=time(18, 0),
         )
-        self.date = "2026-05-25"
+        next_day = timezone.localdate() + timedelta(days=2)
+        while next_day.weekday() != 0:
+            next_day += timedelta(days=1)
+        self.date = next_day.isoformat()
 
     def test_public_booking_page_loads(self):
         response = self.browser.get(reverse("public_booking"))
@@ -81,7 +85,7 @@ class PublicBookingTests(TestCase):
         self.assertGreater(len(payload["slots"]), 0)
         self.assertEqual(payload["slots"][0]["employees"][0]["id"], self.employee.pk)
 
-    def test_public_booking_creates_user_client_and_pending_booking(self):
+    def test_public_booking_creates_user_client_and_confirmed_booking(self):
         slot_response = self.browser.get(
             reverse("public_booking_slots"),
             {"service": self.service.pk, "date": self.date},
@@ -98,12 +102,13 @@ class PublicBookingTests(TestCase):
                 "start_at": slot["start_at"],
                 "name": "Nueva Clienta",
                 "password": "secret123",
+                "mock_payment_confirmed": "1",
             },
         )
 
         self.assertRedirects(response, reverse("clients:portal"))
         booking = Booking.objects.get(client__first_name="Nueva")
-        self.assertEqual(booking.status, Booking.Statuses.PENDING)
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
         self.assertEqual(booking.source, Booking.Sources.WEBSITE)
         self.assertEqual(booking.service, self.service)
         user = User.objects.get(client_profile__first_name="Nueva")
@@ -137,6 +142,7 @@ class PublicBookingTests(TestCase):
                 "start_at": slot["start_at"],
                 "name": "Otra Clienta",
                 "password": "secret123",
+                "mock_payment_confirmed": "1",
             },
         )
 

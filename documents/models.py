@@ -82,7 +82,11 @@ class FiscalDocument(models.Model):
         return self.balance_due <= Decimal("0.00")
 
     def refresh_amounts_from_booking(self):
-        total = self.booking.client_price_snapshot or Decimal("0.00")
+        lines = list(self.lines.all()) if self.pk else []
+        if lines:
+            total = sum((line.total_amount for line in lines), Decimal("0.00"))
+        else:
+            total = self.booking.client_price_snapshot or Decimal("0.00")
         tax_rate = self.tax_rate or Decimal("0.00")
 
         if tax_rate:
@@ -129,6 +133,40 @@ class FiscalDocument(models.Model):
                 last_sequence = 0
 
         return f"{base}{last_sequence + 1:04d}"
+
+
+class FiscalDocumentLine(models.Model):
+    fiscal_document = models.ForeignKey(
+        FiscalDocument,
+        on_delete=models.CASCADE,
+        related_name="lines",
+        verbose_name="Documento",
+    )
+    service = models.ForeignKey(
+        "services_app.Service",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fiscal_document_lines",
+        verbose_name="Servicio",
+    )
+    description = models.CharField("Concepto", max_length=255)
+    quantity = models.DecimalField("Cantidad", max_digits=8, decimal_places=2, default=Decimal("1.00"))
+    unit_amount = models.DecimalField("Precio unitario", max_digits=10, decimal_places=2)
+    sort_order = models.PositiveIntegerField("Orden", default=0)
+    created_at = models.DateTimeField("Creado", auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        verbose_name = "Línea de documento"
+        verbose_name_plural = "Líneas de documento"
+
+    def __str__(self):
+        return self.description
+
+    @property
+    def total_amount(self):
+        return (self.quantity * self.unit_amount).quantize(Decimal("0.01"))
 
 
 class Payment(models.Model):

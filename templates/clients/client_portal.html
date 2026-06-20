@@ -72,8 +72,9 @@
               {% if booking.online_payment_can_pay %}
                 <form method="post" action="{% url 'clients:booking_payment' booking.id %}" class="portal-pay-form">
                   {% csrf_token %}
-                  <span>Pago online · {{ booking.online_payment_due_amount }} €</span>
-                  <button class="btn btn-small" type="submit">Pagar reserva</button>
+                  <span>Señal 10% · {{ booking.deposit_payment_amount }} €</span>
+                  <button class="btn btn-small" name="payment_mode" value="deposit" type="submit">Reservar con señal</button>
+                  <button class="btn btn-light btn-small" name="payment_mode" value="full" type="submit">Pagar todo · {{ booking.full_payment_amount }} €</button>
                 </form>
               {% endif %}
               {% if booking.prepayment %}
@@ -500,7 +501,7 @@ document.addEventListener("DOMContentLoaded", function () {
     renderDateStrip();
     setHint(i18n.searchingAvailability, false);
     const attempts = [];
-    for (let index = 0; index < 45; index += 1) attempts.push(addDays(dateInput.min || dateInput.value, index));
+    for (let index = 0; index < 45; index += 1) attempts.push(addDays(dateInput.value || dateInput.min, index));
     attempts.reduce((chain, candidateDate) => {
       return chain.then((found) => {
         if (found || activeDateRequest !== requestId) return found;

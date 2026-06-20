@@ -32,9 +32,16 @@ from bookings.models import Booking
 from bookings.models import BookingPhoto
 from bookings.services import calculate_booking_prepayment_amount, create_booking_prepayment, refund_booking_prepayment, refresh_booking_prepayments
 from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
+from documents.models import FiscalDocument, FiscalDocumentLine
 from employees.models import Employee
 from payments.models import Payment as OnlinePayment
-from payments.stripe_service import create_checkout_session, create_pending_stripe_payment, get_booking_checkout_amount
+from payments.stripe_service import (
+    create_checkout_session,
+    create_pending_stripe_payment,
+    get_booking_checkout_amount,
+    get_booking_deposit_amount,
+    get_booking_full_amount,
+)
 from .forms import ClientForm
 from .models import Client, ClientRewardRule
 from salon.models import Zone
@@ -94,6 +101,8 @@ def _attach_online_payment_info(bookings):
         booking.online_payment_remaining_amount = info["remaining_amount"]
         booking.prepayment_due_amount = calculate_booking_prepayment_amount(booking)
         booking.online_payment_due_amount = get_booking_checkout_amount(booking)
+        booking.deposit_payment_amount = get_booking_deposit_amount(booking)
+        booking.full_payment_amount = get_booking_full_amount(booking)
         booking.amount_due = booking_amount_due(booking)
         booking.refundable_until = booking_refundable_until(booking)
         booking.can_cancel = can_client_cancel(booking)
@@ -351,7 +360,14 @@ def client_booking_payment(request, pk):
         return redirect("clients:portal")
 
     try:
-        payment = create_pending_stripe_payment(booking)
+        payment_mode = request.POST.get("payment_mode", "deposit")
+        amount = get_booking_full_amount(booking) if payment_mode == "full" else get_booking_deposit_amount(booking)
+        amount = min(amount, payment_info["remaining_amount"])
+        payment = create_pending_stripe_payment(
+            booking,
+            amount=amount,
+            reason="booking_full_payment" if payment_mode == "full" else "booking_deposit_payment",
+        )
         create_checkout_session(payment, request)
     except (ValueError, ValidationError) as exc:
         messages.error(request, str(exc))
@@ -377,12 +393,19 @@ def _client_booking_queryset(client):
 
 def _client_booking_detail_context(booking, extra=None):
     _attach_online_payment_info([booking])
+    fiscal_document = booking.fiscal_documents.filter(status__in=[
+        FiscalDocument.Statuses.DRAFT,
+        FiscalDocument.Statuses.ISSUED,
+    ]).order_by("-document_type", "-id").first()
     services = Service.objects.filter(is_active=True, employees=booking.employee).order_by("name").distinct()
     context = {
         "booking": booking,
+        "fiscal_document": fiscal_document,
         "services": services,
         "paid_amount": booking_paid_amount(booking),
         "amount_due": booking_amount_due(booking),
+        "deposit_amount": min(get_booking_deposit_amount(booking), booking_amount_due(booking)),
+        "full_amount": booking_amount_due(booking),
         "refundable_until": booking_refundable_until(booking),
         "can_cancel": can_client_cancel(booking),
         "can_reschedule": can_client_reschedule(booking),
@@ -392,6 +415,21 @@ def _client_booking_detail_context(booking, extra=None):
     if extra:
         context.update(extra)
     return context
+
+
+def _ensure_client_document_line(document):
+    if document.lines.exists():
+        return
+    booking = document.booking
+    FiscalDocumentLine.objects.create(
+        fiscal_document=document,
+        service=booking.service,
+        description=str(booking.service),
+        quantity=Decimal("1.00"),
+        unit_amount=booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00"),
+        sort_order=0,
+    )
+    document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
 
 
 @login_required
@@ -485,6 +523,34 @@ def client_booking_change_service(request, pk):
     else:
         messages.success(request, "Servicio actualizado correctamente.")
     return redirect("clients:booking_detail", pk=booking.pk)
+
+
+@login_required
+@require_POST
+def client_booking_document(request, pk):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+    booking = get_object_or_404(_client_booking_queryset(client), pk=pk)
+    document_type = request.POST.get("document_type") or FiscalDocument.DocumentTypes.RECEIPT
+    if document_type == FiscalDocument.DocumentTypes.INVOICE:
+        if not client.fiscal_id or not client.fiscal_address:
+            messages.error(request, "Para una factura completa añade NIE/NIF y dirección fiscal en tu perfil.")
+            return redirect("clients:booking_detail", pk=booking.pk)
+    if document_type not in {FiscalDocument.DocumentTypes.RECEIPT, FiscalDocument.DocumentTypes.INVOICE}:
+        document_type = FiscalDocument.DocumentTypes.RECEIPT
+    document, _created = FiscalDocument.objects.get_or_create(
+        booking=booking,
+        document_type=document_type,
+        status__in=[FiscalDocument.Statuses.DRAFT, FiscalDocument.Statuses.ISSUED],
+        defaults={
+            "status": FiscalDocument.Statuses.ISSUED,
+            "issue_date": timezone.localdate(),
+        },
+    )
+    _ensure_client_document_line(document)
+    messages.success(request, "Documento preparado. Puedes imprimirlo o guardarlo como PDF.")
+    return redirect("documents:print", pk=document.pk)
 
 
 @login_required

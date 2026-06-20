@@ -1,10 +1,16 @@
 from django.contrib import admin
 
-from .models import CashClosure, FiscalDocument, Payment
+from .models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment
+
+
+class FiscalDocumentLineInline(admin.TabularInline):
+    model = FiscalDocumentLine
+    extra = 0
 
 
 @admin.register(FiscalDocument)
 class FiscalDocumentAdmin(admin.ModelAdmin):
+    inlines = [FiscalDocumentLineInline]
     list_display = (
         "number",
         "document_type",
@@ -32,6 +38,12 @@ class FiscalDocumentAdmin(admin.ModelAdmin):
         return obj.booking.service
 
     service_name.short_description = "Servicio"
+
+
+@admin.register(FiscalDocumentLine)
+class FiscalDocumentLineAdmin(admin.ModelAdmin):
+    list_display = ("fiscal_document", "description", "quantity", "unit_amount", "total_amount")
+    search_fields = ("description", "fiscal_document__number")
 
 
 @admin.register(Payment)

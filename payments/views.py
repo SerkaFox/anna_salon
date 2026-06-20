@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from django.shortcuts import render
+from django.contrib import messages
+from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -72,6 +73,20 @@ def redsys_error(request):
 
 
 def stripe_success(request):
+    session_id = request.GET.get("session_id", "")
+    payment = None
+    if session_id:
+        payment = (
+            Payment.objects.select_related("booking", "booking__client")
+            .filter(stripe_checkout_session_id=session_id, provider=Payment.Providers.STRIPE)
+            .first()
+        )
+    if payment:
+        messages.success(request, "Pago recibido. En unos segundos Stripe confirmará el estado final de la reserva.")
+        client = getattr(request.user, "client_profile", None) if request.user.is_authenticated else None
+        if client and payment.booking.client_id == client.pk:
+            return redirect("clients:booking_detail", pk=payment.booking_id)
+        return redirect("clients:portal")
     return render(request, "payments/stripe_result.html", {"status": "success"})
 
 

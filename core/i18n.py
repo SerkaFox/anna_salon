@@ -240,6 +240,52 @@ PUBLIC_TRANSLATIONS["fr"].update({
     "public_waitlist_contact_required": "Indiquez telephone ou email pour que nous puissions vous prevenir.",
 })
 
+PUBLIC_TRANSLATIONS["es"].update({
+    "public_booking_account_existing_title": "Si ya tienes cuenta,",
+    "public_booking_account_existing_text": "escribe tu login y contraseña y pulsa “Ya tengo cuenta”. Conservaremos el servicio, la fecha y la hora elegidos.",
+    "public_booking_account_new_title": "Si eres nueva,",
+    "public_booking_account_new_text": "escribe tu nombre y una contraseña; crearemos tu cuenta automáticamente.",
+    "public_booking_name_login": "Nombre o login",
+    "public_booking_existing_hint": "Los mismos campos sirven para iniciar sesión o crear una cuenta nueva.",
+    "public_waitlist_inline_cta": "Podemos apuntarte a la lista de espera para este día si alguien cancela.",
+})
+PUBLIC_TRANSLATIONS["ru"].update({
+    "public_booking_account_existing_title": "Если аккаунт уже есть,",
+    "public_booking_account_existing_text": "введите логин и пароль и нажмите «У меня уже есть аккаунт». Мы сохраним выбранные услугу, дату и время.",
+    "public_booking_account_new_title": "Если аккаунта нет,",
+    "public_booking_account_new_text": "введите имя и пароль; мы создадим аккаунт автоматически.",
+    "public_booking_name_login": "Имя или логин",
+    "public_booking_existing_hint": "Эти же поля используются и для входа, и для создания нового аккаунта.",
+    "public_waitlist_inline_cta": "Мы можем добавить вас в лист ожидания на этот день, если кто-то отменит запись.",
+})
+PUBLIC_TRANSLATIONS["en"].update({
+    "public_booking_account_existing_title": "If you already have an account,",
+    "public_booking_account_existing_text": "enter your login and password and press “I already have an account”. We will keep the selected service, date and time.",
+    "public_booking_account_new_title": "If you are new,",
+    "public_booking_account_new_text": "enter your name and a password; we will create your account automatically.",
+    "public_booking_name_login": "Name or login",
+    "public_booking_existing_hint": "The same fields work for sign-in or new account creation.",
+    "public_waitlist_inline_cta": "We can add you to the waitlist for this day if someone cancels.",
+})
+PUBLIC_TRANSLATIONS["de"].update({
+    "public_booking_account_existing_title": "Wenn Sie bereits ein Konto haben,",
+    "public_booking_account_existing_text": "geben Sie Login und Passwort ein und klicken Sie auf „Ich habe schon ein Konto“. Service, Datum und Uhrzeit bleiben erhalten.",
+    "public_booking_account_new_title": "Wenn Sie neu sind,",
+    "public_booking_account_new_text": "geben Sie Namen und Passwort ein; wir erstellen Ihr Konto automatisch.",
+    "public_booking_name_login": "Name oder Login",
+    "public_booking_existing_hint": "Dieselben Felder dienen zum Anmelden oder zum Erstellen eines neuen Kontos.",
+    "public_waitlist_inline_cta": "Wir können Sie für diesen Tag auf die Warteliste setzen, falls jemand absagt.",
+})
+PUBLIC_TRANSLATIONS["fr"].update({
+    "public_booking_account_existing_title": "Si vous avez déjà un compte,",
+    "public_booking_account_existing_text": "saisissez votre identifiant et votre mot de passe puis appuyez sur « J'ai déjà un compte ». Le service, la date et l'heure restent sélectionnés.",
+    "public_booking_account_new_title": "Si vous êtes nouvelle,",
+    "public_booking_account_new_text": "saisissez votre nom et un mot de passe ; nous créerons votre compte automatiquement.",
+    "public_booking_name_login": "Nom ou identifiant",
+    "public_booking_existing_hint": "Les mêmes champs servent à se connecter ou à créer un nouveau compte.",
+    "public_waitlist_inline_cta": "Nous pouvons vous ajouter à la liste d'attente pour ce jour si quelqu'un annule.",
+})
+
 
 def normalize_public_language(language):
     code = (language or "").split(",", 1)[0].split(";", 1)[0].split("-", 1)[0].lower()

@@ -159,6 +159,11 @@
       <div class="box">
         <h2>Cliente</h2>
         <p><strong>{{ document.booking.client }}</strong></p>
+        {% if document.booking.client.fiscal_id %}<p class="muted">NIE/NIF: {{ document.booking.client.fiscal_id }}</p>{% endif %}
+        {% if document.booking.client.fiscal_address %}<p class="muted">{{ document.booking.client.fiscal_address }}</p>{% endif %}
+        {% if document.booking.client.fiscal_city or document.booking.client.fiscal_postcode %}
+          <p class="muted">{{ document.booking.client.fiscal_postcode }} {{ document.booking.client.fiscal_city }}</p>
+        {% endif %}
         <p class="muted">{{ document.booking.client.phone|default:"Teléfono no indicado" }}</p>
         <p class="muted">{{ document.booking.client.email|default:"Email no indicado" }}</p>
       </div>
@@ -177,18 +182,27 @@
         <thead>
           <tr>
             <th>Concepto</th>
+            <th>Cantidad</th>
             <th>Precio</th>
-            <th>Descuento</th>
             <th>Total</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td>{{ document.booking.service }}</td>
-            <td>{{ document.booking.original_client_price_snapshot }} €</td>
-            <td>{{ document.booking.discount_amount_snapshot }} €</td>
-            <td>{{ document.total_amount }} €</td>
-          </tr>
+          {% for line in document.lines.all %}
+            <tr>
+              <td>{{ line.description }}</td>
+              <td>{{ line.quantity }}</td>
+              <td>{{ line.unit_amount }} €</td>
+              <td>{{ line.total_amount }} €</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td>{{ document.booking.service }}</td>
+              <td>1</td>
+              <td>{{ document.booking.original_client_price_snapshot }} €</td>
+              <td>{{ document.total_amount }} €</td>
+            </tr>
+          {% endfor %}
         </tbody>
       </table>
     </section>

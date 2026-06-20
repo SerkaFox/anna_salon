@@ -980,6 +980,40 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   box-shadow: 0 24px 70px rgba(0,0,0,0.38);
   backdrop-filter: blur(18px);
 }
+
+.waitlist-card.is-highlighted {
+  animation: waitlistPulse 1.8s ease;
+  border-color: rgba(240, 208, 145, 0.78);
+  box-shadow: 0 22px 70px rgba(214, 167, 92, 0.22);
+}
+
+.booking-account-helper {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(214, 167, 92, 0.26);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.booking-account-helper p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.booking-account-helper p + p {
+  margin-top: 8px;
+}
+
+.booking-account-helper strong {
+  color: var(--gold-light);
+}
+
+@keyframes waitlistPulse {
+  0% { transform: translateY(0); }
+  35% { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
+}
 .waitlist-card h3 {
   margin: 0;
   color: var(--gold-light);

@@ -84,9 +84,13 @@
       <input type="hidden" name="mock_payment_confirmed" value="" data-mock-payment-input>
 
       <div class="booking-details-section" data-details-section>
+      <div class="booking-account-helper">
+        <p><strong>{{ t.public_booking_account_existing_title }}</strong> {{ t.public_booking_account_existing_text }}</p>
+        <p><strong>{{ t.public_booking_account_new_title }}</strong> {{ t.public_booking_account_new_text }}</p>
+      </div>
       <div class="booking-form-grid booking-details-grid">
         <label class="lux-field lux-field-card">
-          <span>{{ t.public_booking_name }}</span>
+          <span>{{ t.public_booking_name_login }}</span>
           <input class="lux-input" type="text" name="name" autocomplete="name" value="{{ booking_values.name }}" required>
           <small class="field-help field-help-placeholder" aria-hidden="true">&nbsp;</small>
           <small class="form-error" data-error-for="name">{% if booking_errors.name %}{{ booking_errors.name.0 }}{% endif %}</small>
@@ -121,6 +125,7 @@
         <button class="btn-lux btn-lux-primary btn-lux-large" type="submit" data-submit-button disabled>{{ t.public_booking_submit }}</button>
         <button class="btn-lux btn-lux-outline btn-lux-large" type="button" data-existing-account disabled>{{ t.public_booking_existing }}</button>
       </div>
+      <p class="field-help">{{ t.public_booking_existing_hint }}</p>
       </div>
     </form>
 
@@ -226,6 +231,7 @@
       timeRequired: '{{ t.public_booking_error_time|escapejs }}',
       submitting: '{{ t.public_booking_submitting|escapejs }}'
     };
+    const waitlistCtaText = '{{ t.public_waitlist_inline_cta|escapejs }}';
 
     function parseIsoDate(value) {
       const parts = (value || '').split('-').map(Number);
@@ -338,7 +344,12 @@
       resetSlot();
       const visibleSlots = filteredSlots(slots);
       if (!visibleSlots.length) {
-        status.textContent = messages.empty;
+        status.textContent = messages.empty + ' ' + waitlistCtaText;
+        if (waitlistForm) {
+          waitlistForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          waitlistForm.classList.add('is-highlighted');
+          window.setTimeout(function () { waitlistForm.classList.remove('is-highlighted'); }, 1800);
+        }
         syncWaitlistForm();
         return;
       }
@@ -434,7 +445,7 @@
       resetSlot();
       renderDateStrip();
       status.textContent = messages.loading;
-      let date = dateInput.min || dateInput.value;
+      let date = dateInput.value || dateInput.min;
       const attempts = [];
       for (let index = 0; index < 45; index += 1) attempts.push(addDays(date, index));
       attempts.reduce(function (chain, candidateDate) {

@@ -33,6 +33,24 @@ def get_booking_checkout_amount(booking):
     return Decimal(amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def get_booking_deposit_amount(booking):
+    fixed_amount = _decimal_setting(getattr(settings, "BOOKING_DEPOSIT_AMOUNT_EUR", ""))
+    if fixed_amount is not None:
+        return fixed_amount
+    total = Decimal(booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00"))
+    try:
+        percent = Decimal(str(getattr(settings, "BOOKING_DEPOSIT_PERCENT", "10")))
+    except (InvalidOperation, ValueError):
+        percent = Decimal("10")
+    amount = total * percent / Decimal("100")
+    return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def get_booking_full_amount(booking):
+    amount = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+    return Decimal(amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def create_pending_stripe_payment(booking, amount=None, *, status=None, reason="booking_payment"):
     amount = amount if amount is not None else get_booking_checkout_amount(booking)
     amount = Decimal(amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)

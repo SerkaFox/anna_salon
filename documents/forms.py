@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import Payment
+from .models import FiscalDocumentLine, Payment
 
 
 class PaymentForm(forms.ModelForm):
@@ -22,3 +22,41 @@ class PaymentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["paid_at"].input_formats = ("%Y-%m-%dT%H:%M",)
+
+
+class FiscalDocumentLineForm(forms.ModelForm):
+    manual_amount = forms.DecimalField(
+        label="Importe manual",
+        required=False,
+        min_value=0,
+        decimal_places=2,
+        max_digits=10,
+        widget=forms.NumberInput(attrs={"class": "input", "step": "0.01", "min": "0"}),
+    )
+
+    class Meta:
+        model = FiscalDocumentLine
+        fields = ["service", "description", "quantity", "unit_amount", "manual_amount"]
+        widgets = {
+            "service": forms.Select(attrs={"class": "input"}),
+            "description": forms.TextInput(attrs={"class": "input", "placeholder": "Servicio, suplemento o concepto manual"}),
+            "quantity": forms.NumberInput(attrs={"class": "input", "step": "0.01", "min": "0.01"}),
+            "unit_amount": forms.NumberInput(attrs={"class": "input", "step": "0.01", "min": "0"}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        service = cleaned.get("service")
+        description = (cleaned.get("description") or "").strip()
+        manual_amount = cleaned.get("manual_amount")
+        unit_amount = cleaned.get("unit_amount")
+        if service:
+            cleaned["description"] = description or service.name
+            cleaned["unit_amount"] = unit_amount if unit_amount not in (None, "") else service.price
+        elif manual_amount is not None:
+            cleaned["unit_amount"] = manual_amount
+        if not cleaned.get("description"):
+            self.add_error("description", "Indica un concepto.")
+        if cleaned.get("unit_amount") is None:
+            self.add_error("unit_amount", "Indica un importe.")
+        return cleaned

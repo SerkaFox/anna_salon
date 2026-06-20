@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -10,12 +11,27 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from accounts.permissions import admin_required
+from accounts.permissions import admin_required, can_access_booking
 from auditlog.services import log_event
 from bookings.models import Booking
 
-from .forms import PaymentForm
-from .models import CashClosure, FiscalDocument, Payment
+from .forms import FiscalDocumentLineForm, PaymentForm
+from .models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment
+
+
+def ensure_document_default_line(document):
+    if document.lines.exists():
+        return
+    booking = document.booking
+    FiscalDocumentLine.objects.create(
+        fiscal_document=document,
+        service=booking.service,
+        description=str(booking.service),
+        quantity=Decimal("1.00"),
+        unit_amount=booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00"),
+        sort_order=0,
+    )
+    document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
 
 
 def _is_cashbox_closed(target_date):
@@ -50,6 +66,7 @@ def _get_or_create_payment_document(booking):
         status=FiscalDocument.Statuses.ISSUED,
         issue_date=timezone.localdate(),
     )
+    ensure_document_default_line(document)
     return document, True
 
 
@@ -173,6 +190,7 @@ def document_create_from_booking(request, booking_pk, document_type):
             "issue_date": timezone.localdate(),
         },
     )
+    ensure_document_default_line(document)
 
     if not created:
         messages.info(request, f"Ya existe: {document}.")
@@ -212,6 +230,7 @@ def document_detail(request, pk):
         {
             "active_section": "documents",
             "document": document,
+            "line_form": FiscalDocumentLineForm(),
             "payment_form": PaymentForm(initial={"paid_at": initial_paid_at, "amount": initial_amount}),
             "editing_payment": None,
             "can_register_payment": can_register_payment,
@@ -221,7 +240,6 @@ def document_detail(request, pk):
 
 
 @login_required
-@admin_required
 def document_print(request, pk):
     document = get_object_or_404(
         FiscalDocument.objects.select_related(
@@ -233,7 +251,42 @@ def document_print(request, pk):
         ),
         pk=pk,
     )
+    if not can_access_booking(request.user, document.booking):
+        raise PermissionDenied
     return render(request, "documents/document_print.html", {"document": document})
+
+
+@login_required
+@require_POST
+@admin_required
+def document_line_create(request, document_pk):
+    document = get_object_or_404(
+        FiscalDocument.objects.select_related("booking", "booking__client"),
+        pk=document_pk,
+    )
+    form = FiscalDocumentLineForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "No se pudo añadir la línea. Revisa concepto e importe.")
+        return redirect("documents:detail", pk=document.pk)
+    line = form.save(commit=False)
+    line.fiscal_document = document
+    line.sort_order = document.lines.count() + 1
+    line.save()
+    document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
+    messages.success(request, "Línea añadida al documento.")
+    return redirect("documents:detail", pk=document.pk)
+
+
+@login_required
+@require_POST
+@admin_required
+def document_line_delete(request, pk):
+    line = get_object_or_404(FiscalDocumentLine.objects.select_related("fiscal_document"), pk=pk)
+    document = line.fiscal_document
+    line.delete()
+    document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
+    messages.success(request, "Línea eliminada del documento.")
+    return redirect("documents:detail", pk=document.pk)
 
 
 @login_required
@@ -611,6 +664,7 @@ def payment_edit(request, pk):
         {
             "active_section": "documents",
             "document": document,
+            "line_form": FiscalDocumentLineForm(),
             "payment_form": form,
             "editing_payment": payment,
             "can_register_payment": True,

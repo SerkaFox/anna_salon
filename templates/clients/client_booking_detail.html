@@ -27,8 +27,9 @@
     {% if amount_due > 0 and booking.status != "cancelled" %}
       <form method="post" action="{% url 'clients:booking_payment' booking.id %}" class="portal-pay-form">
         {% csrf_token %}
-        <span>Pago pendiente · {{ amount_due }} €</span>
-        <button class="btn" type="submit">Pagar reserva</button>
+        <span>Elige cómo quieres pagar la reserva.</span>
+        <button class="btn" name="payment_mode" value="deposit" type="submit">Señal 10% · {{ deposit_amount }} €</button>
+        <button class="btn btn-light" name="payment_mode" value="full" type="submit">Pago completo · {{ full_amount }} €</button>
       </form>
     {% endif %}
   </article>
@@ -105,6 +106,21 @@
       <p class="muted-text">Esta reserva ya no se puede cancelar desde tu cuenta.</p>
     {% endif %}
   </article>
+</section>
+
+<section class="panel-card">
+  <h2>Factura o recibo</h2>
+  <p class="muted-text">Puedes abrir el documento de la reserva e imprimirlo o guardarlo como PDF. Para una factura completa, añade NIE/NIF y dirección fiscal en tu perfil.</p>
+  {% if fiscal_document %}
+    <p><strong>{{ fiscal_document.get_document_type_display }} {{ fiscal_document.number }}</strong> · {{ fiscal_document.total_amount }} €</p>
+    <a class="btn btn-light" href="{% url 'documents:print' fiscal_document.id %}" target="_blank" rel="noopener">Abrir factura / PDF</a>
+  {% else %}
+    <form method="post" action="{% url 'clients:booking_document' booking.id %}">
+      {% csrf_token %}
+      <button class="btn btn-light" name="document_type" value="receipt" type="submit">Recibo simple</button>
+      <button class="btn" name="document_type" value="invoice" type="submit">Factura completa</button>
+    </form>
+  {% endif %}
 </section>
 
 <p><a class="btn btn-light" href="{% url 'clients:portal' %}">Volver a mi cuenta</a></p>

@@ -47,31 +47,67 @@
 </section>
 
 <section class="panel-card">
-  <h2>Servicio facturado</h2>
+  <h2>Líneas facturadas</h2>
   <div class="table-wrap">
     <table class="data-table">
       <thead>
         <tr>
-          <th>Fecha</th>
-          <th>Servicio</th>
-          <th>Empleado</th>
-          <th>Precio original</th>
-          <th>Descuento</th>
-          <th>Total cliente</th>
+          <th>Concepto</th>
+          <th>Cantidad</th>
+          <th>Precio unitario</th>
+          <th>Total</th>
+          <th class="actions-cell">Acciones</th>
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td>{{ document.booking.start_at|date:"d/m/Y H:i" }}</td>
-          <td>{{ document.booking.service }}</td>
-          <td>{{ document.booking.employee }}</td>
-          <td>{{ document.booking.original_client_price_snapshot }} €</td>
-          <td>{{ document.booking.discount_amount_snapshot }} €</td>
-          <td><strong>{{ document.total_amount }} €</strong></td>
-        </tr>
+        {% for line in document.lines.all %}
+          <tr>
+            <td>{{ line.description }}</td>
+            <td>{{ line.quantity }}</td>
+            <td>{{ line.unit_amount }} €</td>
+            <td><strong>{{ line.total_amount }} €</strong></td>
+            <td class="actions-cell">
+              <form method="post" action="{% url 'documents:line_delete' line.id %}">
+                {% csrf_token %}
+                <button class="btn btn-light btn-small" type="submit">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5">{{ document.booking.service }}</td>
+          </tr>
+        {% endfor %}
       </tbody>
     </table>
   </div>
+  <form method="post" action="{% url 'documents:line_create' document.id %}" class="entity-form" style="margin-top: 18px;">
+    {% csrf_token %}
+    <h3>Añadir servicio o importe manual</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ line_form.service.id_for_label }}">Servicio</label>
+        {{ line_form.service }}
+      </div>
+      <div class="field">
+        <label for="{{ line_form.description.id_for_label }}">Concepto</label>
+        {{ line_form.description }}
+      </div>
+      <div class="field">
+        <label for="{{ line_form.quantity.id_for_label }}">Cantidad</label>
+        {{ line_form.quantity }}
+      </div>
+      <div class="field">
+        <label for="{{ line_form.unit_amount.id_for_label }}">Precio unitario</label>
+        {{ line_form.unit_amount }}
+      </div>
+      <div class="field">
+        <label for="{{ line_form.manual_amount.id_for_label }}">Importe manual</label>
+        {{ line_form.manual_amount }}
+      </div>
+    </div>
+    <button class="btn btn-light" type="submit">Añadir línea</button>
+  </form>
 </section>
 
 <section class="stats-grid">
