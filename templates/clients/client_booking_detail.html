@@ -14,6 +14,13 @@
       </div>
       <span class="dashboard-badge">{{ booking.get_status_display }}</span>
     </div>
+    {% if booking.status != "cancelled" %}
+      {% if paid_amount > 0 %}
+        <p class="muted-text">✅ <strong>Reserva confirmada.</strong> Tu fecha está reservada.</p>
+      {% else %}
+        <p class="muted-text">⏳ <strong>Reserva pendiente de pago.</strong> Se confirma definitivamente al pagar al menos la señal (10%). Te recomendamos pagarla cuanto antes para asegurar tu fecha.</p>
+      {% endif %}
+    {% endif %}
     <div class="detail-grid">
       <span>Servicio</span><strong>{{ booking.service }}</strong>
       <span>Especialista</span><strong>{{ booking.employee }}</strong>
@@ -39,79 +46,89 @@
     {% endif %}
   </article>
 
-  <article class="panel-card" id="cambiar-cita">
-    <h2>Cambiar o cancelar cita</h2>
-    {% if can_reschedule %}
-      <form method="post" action="{% url 'clients:booking_reschedule' booking.id %}" class="entity-form">
-        {% csrf_token %}
-        <div class="form-grid">
-          <div class="field">
-            <label for="reschedule-start">Nueva fecha y hora</label>
-            <input class="input" id="reschedule-start" name="start_at" type="datetime-local" required>
-          </div>
-          <div class="field">
-            <label for="reschedule-employee">Especialista</label>
-            <select class="input" id="reschedule-employee" name="employee">
-              {% for employee in employees %}
-                <option value="{{ employee.id }}" {% if employee.id == booking.employee_id %}selected{% endif %}>{{ employee.full_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          {% if zones %}
+  {% if booking.status == "cancelled" %}
+    <article class="panel-card">
+      <h2>Reserva cancelada</h2>
+      <p class="muted-text">Esta reserva está cancelada y no se puede modificar. Si quieres la misma cita en otra fecha, pide una nueva reserva.</p>
+      <a class="btn btn-light" href="{% url 'clients:portal' %}#nueva-reserva">Repetir reserva en otra fecha</a>
+    </article>
+  {% else %}
+    <article class="panel-card" id="cambiar-cita">
+      <h2>Cambiar o cancelar cita</h2>
+      {% if can_reschedule %}
+        <form method="post" action="{% url 'clients:booking_reschedule' booking.id %}" class="entity-form">
+          {% csrf_token %}
+          <div class="form-grid">
             <div class="field">
-              <label for="reschedule-zone">Zona</label>
-              <select class="input" id="reschedule-zone" name="zone">
-                <option value="">Automática</option>
-                {% for zone in zones %}
-                  <option value="{{ zone.id }}" {% if booking.zone_id == zone.id %}selected{% endif %}>{{ zone.name }}</option>
+              <label for="reschedule-start">Nueva fecha y hora</label>
+              <input class="input" id="reschedule-start" name="start_at" type="datetime-local" required>
+            </div>
+            <div class="field">
+              <label for="reschedule-employee">Especialista</label>
+              <select class="input" id="reschedule-employee" name="employee">
+                {% for employee in employees %}
+                  <option value="{{ employee.id }}" {% if employee.id == booking.employee_id %}selected{% endif %}>{{ employee.full_name }}</option>
                 {% endfor %}
               </select>
             </div>
-          {% endif %}
-        </div>
-        <button class="btn btn-light" type="submit">Cambiar fecha/hora</button>
-      </form>
-    {% else %}
-      <p class="muted-text">No se puede cambiar la fecha con menos de 24 horas de antelación. Contacta con el salón.</p>
-    {% endif %}
-
-    <div style="margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line);">
-      {% if can_cancel %}
-        {% if can_reschedule %}
-          <p class="muted-text">Si cancelas ahora, se devolverá la señal automáticamente cuando el pago Stripe sea reembolsable.</p>
-        {% else %}
-          <p class="muted-text">Puedes cancelar, pero no se devolverá la señal porque faltan menos de 24 horas.</p>
-        {% endif %}
-        <form method="post" action="{% url 'clients:booking_cancel' booking.id %}">
-          {% csrf_token %}
-          <button class="btn btn-danger" type="submit">Cancelar reserva</button>
+            {% if zones %}
+              <div class="field">
+                <label for="reschedule-zone">Zona</label>
+                <select class="input" id="reschedule-zone" name="zone">
+                  <option value="">Automática</option>
+                  {% for zone in zones %}
+                    <option value="{{ zone.id }}" {% if booking.zone_id == zone.id %}selected{% endif %}>{{ zone.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            {% endif %}
+          </div>
+          <button class="btn btn-light" type="submit">Cambiar fecha/hora</button>
         </form>
       {% else %}
-        <p class="muted-text">Esta reserva ya no se puede cancelar desde tu cuenta.</p>
+        <p class="muted-text">No se puede cambiar la fecha con menos de 24 horas de antelación. Contacta con el salón.</p>
       {% endif %}
-    </div>
-  </article>
+
+      <div style="margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line);">
+        {% if can_cancel %}
+          {% if can_reschedule %}
+            <p class="muted-text">Quedan más de 24 horas para la cita: si cancelas ahora, se te devolverá el dinero pagado.</p>
+          {% else %}
+            <p class="muted-text">Faltan menos de 24 horas para la cita: si cancelas ahora, <strong>no se devolverá el dinero pagado.</strong></p>
+          {% endif %}
+          <form method="post" action="{% url 'clients:booking_cancel' booking.id %}" data-cancel-form data-refundable="{% if can_reschedule %}1{% else %}0{% endif %}">
+            {% csrf_token %}
+            <button class="btn btn-danger" type="submit">Cancelar reserva</button>
+          </form>
+        {% else %}
+          <p class="muted-text">Esta reserva ya no se puede cancelar desde tu cuenta.</p>
+        {% endif %}
+      </div>
+    </article>
+  {% endif %}
 </section>
 
 <section class="content-grid">
-  <article class="panel-card" id="cambiar-servicio">
-    <h2>Cambiar servicio de esta cita</h2>
-    <p class="muted-text">Esto sustituye el servicio de esta cita y recalcula el importe. Si el nuevo importe es mayor, el saldo pendiente queda disponible para pagarlo cuando quieras desde tu cuenta. Si es menor, el salón revisará la diferencia manualmente.</p>
-    <form method="post" action="{% url 'clients:booking_change_service' booking.id %}" class="entity-form">
-      {% csrf_token %}
-      <div class="field">
-        <label for="booking-service">Servicio</label>
-        <select class="input" id="booking-service" name="service" required>
-          {% for service in services %}
-            <option value="{{ service.id }}" {% if service.id == booking.service_id %}selected{% endif %}>{{ service.name }} · {{ service.price }} €</option>
-          {% endfor %}
-        </select>
-      </div>
-      <button class="btn btn-light" type="submit">Actualizar servicio</button>
-    </form>
-    <p class="muted-text" style="margin-top: 14px;">¿Quieres añadir un servicio distinto sin perder esta cita (por ejemplo, color después de la manicura)? Pide una nueva cita para ese servicio.</p>
-    <a class="btn btn-light" href="{% url 'clients:portal' %}#nueva-reserva">Añadir servicio (nueva cita)</a>
-  </article>
+  {% if booking.status != "cancelled" %}
+    <article class="panel-card" id="cambiar-servicio">
+      <h2>Cambiar servicio de esta cita</h2>
+      <p class="muted-text">Esto sustituye el servicio de esta cita y recalcula el importe. Si el nuevo importe es mayor, el saldo pendiente queda disponible para pagarlo cuando quieras desde tu cuenta. Si es menor, el salón revisará la diferencia manualmente.</p>
+      <form method="post" action="{% url 'clients:booking_change_service' booking.id %}" class="entity-form">
+        {% csrf_token %}
+        <div class="field">
+          <label for="booking-service">Servicio</label>
+          <select class="input" id="booking-service" name="service" required>
+            {% for service in services %}
+              <option value="{{ service.id }}" {% if service.id == booking.service_id %}selected{% endif %}>{{ service.name }} · {{ service.price }} €</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn btn-light" type="submit">Actualizar servicio</button>
+      </form>
+      <p class="muted-text" style="margin-top: 14px;">¿Quieres añadir un servicio distinto sin perder esta cita (por ejemplo, color después de la manicura)? Pide una nueva cita para ese servicio.</p>
+      <a class="btn btn-light" href="{% url 'clients:portal' %}#nueva-reserva">Añadir servicio (nueva cita)</a>
+    </article>
+  {% endif %}
 
   <article class="panel-card">
     <h2>Factura o recibo</h2>
@@ -120,11 +137,12 @@
       <p><strong>{{ fiscal_document.get_document_type_display }} {{ fiscal_document.number }}</strong> · {{ fiscal_document.total_amount }} €</p>
       <a class="btn btn-light" href="{% url 'documents:print' fiscal_document.id %}" target="_blank" rel="noopener">Abrir factura / PDF</a>
     {% elif paid_amount > 0 %}
-      <p class="muted-text">El recibo o factura se emite por lo que llevas pagado ({{ paid_amount }} €). Para una factura completa, añade NIE/NIF y dirección fiscal en tu perfil.</p>
-      <form method="post" action="{% url 'clients:booking_document' booking.id %}">
+      <p class="muted-text">El recibo o factura se emite por lo que llevas pagado ({{ paid_amount }} €).</p>
+      <form method="post" action="{% url 'clients:booking_document' booking.id %}" data-document-form data-has-fiscal="{% if booking.client.fiscal_id and booking.client.fiscal_address %}1{% else %}0{% endif %}">
         {% csrf_token %}
-        <button class="btn btn-light" name="document_type" value="receipt" type="submit">Recibo simple</button>
-        <button class="btn" name="document_type" value="invoice" type="submit">Factura completa</button>
+        <input type="hidden" name="document_type" value="receipt" data-document-type-input>
+        <button class="btn btn-light" type="submit">Recibo simple</button>
+        <button class="btn" type="button" data-invoice-trigger>Factura completa</button>
       </form>
     {% else %}
       <p class="muted-text">Todavía no hay ningún pago registrado para esta reserva. El recibo/factura estará disponible en cuanto pagues.</p>
@@ -132,5 +150,63 @@
   </article>
 </section>
 
+{% if not fiscal_document and paid_amount > 0 %}
+  <div class="fiscal-modal" data-fiscal-modal hidden>
+    <div class="fiscal-modal__backdrop" data-fiscal-modal-cancel></div>
+    <div class="panel-card fiscal-modal__card">
+      <h2>Datos para la factura completa</h2>
+      <p class="muted-text">Necesitamos estos datos para emitir tu factura completa. Solo hace falta rellenarlos una vez; se guardan en tu perfil.</p>
+      <form method="post" action="{% url 'clients:booking_document' booking.id %}" class="entity-form">
+        {% csrf_token %}
+        <input type="hidden" name="document_type" value="invoice">
+        <div class="field">
+          <label for="modal-fiscal-id">NIE / NIF / CIF</label>
+          <input class="input" id="modal-fiscal-id" name="fiscal_id" value="{{ booking.client.fiscal_id }}" required>
+        </div>
+        <div class="field">
+          <label for="modal-fiscal-address">Dirección fiscal</label>
+          <input class="input" id="modal-fiscal-address" name="fiscal_address" value="{{ booking.client.fiscal_address }}" required>
+        </div>
+        <div class="field">
+          <label for="modal-fiscal-city">Ciudad</label>
+          <input class="input" id="modal-fiscal-city" name="fiscal_city" value="{{ booking.client.fiscal_city }}">
+        </div>
+        <div class="field">
+          <label for="modal-fiscal-postcode">Código postal</label>
+          <input class="input" id="modal-fiscal-postcode" name="fiscal_postcode" value="{{ booking.client.fiscal_postcode }}">
+        </div>
+        <div class="form-actions">
+          <button class="btn" type="submit">Guardar y generar factura</button>
+          <button class="btn btn-light" type="button" data-fiscal-modal-cancel>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endif %}
+
 <p><a class="btn btn-light" href="{% url 'clients:portal' %}">Volver a mi cuenta</a></p>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const invoiceTrigger = document.querySelector("[data-invoice-trigger]");
+  const documentForm = document.querySelector("[data-document-form]");
+  const fiscalModal = document.querySelector("[data-fiscal-modal]");
+  if (invoiceTrigger && documentForm) {
+    invoiceTrigger.addEventListener("click", function () {
+      if (documentForm.dataset.hasFiscal === "1" || !fiscalModal) {
+        const input = documentForm.querySelector("[data-document-type-input]");
+        if (input) input.value = "invoice";
+        documentForm.submit();
+        return;
+      }
+      fiscalModal.hidden = false;
+    });
+  }
+  if (fiscalModal) {
+    fiscalModal.querySelectorAll("[data-fiscal-modal-cancel]").forEach(function (el) {
+      el.addEventListener("click", function () { fiscalModal.hidden = true; });
+    });
+  }
+});
+</script>
 {% endblock %}

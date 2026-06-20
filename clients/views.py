@@ -563,12 +563,22 @@ def client_booking_document(request, pk):
         messages.error(request, "Todavía no hay ningún pago registrado para esta reserva.")
         return redirect("clients:booking_detail", pk=booking.pk)
     document_type = request.POST.get("document_type") or FiscalDocument.DocumentTypes.RECEIPT
+    if document_type not in {FiscalDocument.DocumentTypes.RECEIPT, FiscalDocument.DocumentTypes.INVOICE}:
+        document_type = FiscalDocument.DocumentTypes.RECEIPT
     if document_type == FiscalDocument.DocumentTypes.INVOICE:
+        fiscal_id = (request.POST.get("fiscal_id") or "").strip()
+        fiscal_address = (request.POST.get("fiscal_address") or "").strip()
+        fiscal_city = (request.POST.get("fiscal_city") or "").strip()
+        fiscal_postcode = (request.POST.get("fiscal_postcode") or "").strip()
+        if fiscal_id or fiscal_address:
+            client.fiscal_id = fiscal_id or client.fiscal_id
+            client.fiscal_address = fiscal_address or client.fiscal_address
+            client.fiscal_city = fiscal_city or client.fiscal_city
+            client.fiscal_postcode = fiscal_postcode or client.fiscal_postcode
+            client.save(update_fields=["fiscal_id", "fiscal_address", "fiscal_city", "fiscal_postcode", "updated_at"])
         if not client.fiscal_id or not client.fiscal_address:
             messages.error(request, "Para una factura completa añade NIE/NIF y dirección fiscal en tu perfil.")
             return redirect("clients:booking_detail", pk=booking.pk)
-    if document_type not in {FiscalDocument.DocumentTypes.RECEIPT, FiscalDocument.DocumentTypes.INVOICE}:
-        document_type = FiscalDocument.DocumentTypes.RECEIPT
     document, _created = FiscalDocument.objects.get_or_create(
         booking=booking,
         document_type=document_type,

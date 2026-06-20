@@ -70,7 +70,7 @@
               <div class="portal-card-actions">
                 <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}">Ver reserva</a>
                 {% if booking.can_cancel %}
-                  <form method="post" action="{% url 'clients:booking_cancel' booking.id %}">
+                  <form method="post" action="{% url 'clients:booking_cancel' booking.id %}" data-cancel-form data-refundable="{% if booking.can_reschedule %}1{% else %}0{% endif %}">
                     {% csrf_token %}
                     <button class="btn btn-danger btn-small" type="submit">Cancelar reserva</button>
                   </form>
@@ -81,10 +81,12 @@
               </div>
               <div class="portal-booking-meta">
                 <span class="dashboard-badge">{{ booking.get_status_display }}</span>
-                {% if booking.online_payment_is_paid %}
-                  <span class="dashboard-badge portal-payment-badge is-paid">Pagado online</span>
-                {% elif booking.online_payment_status == "pending" %}
-                  <span class="dashboard-badge portal-payment-badge is-pending">Pago pendiente</span>
+                {% if booking.status != "cancelled" %}
+                  {% if booking.online_payment_paid_total > 0 %}
+                    <span class="dashboard-badge portal-payment-badge is-paid">Confirmada</span>
+                  {% else %}
+                    <span class="dashboard-badge portal-payment-badge is-pending">Pendiente de pago</span>
+                  {% endif %}
                 {% endif %}
               </div>
               {% if booking.online_payment_can_pay %}

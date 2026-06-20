@@ -12,8 +12,7 @@
       <span>{% ct "portal_client" %}</span>
     </div>
   </div>
-  <a class="btn btn-light btn-small" href="{% url 'home' %}">{% ct "site_home" %}</a>
-  <a class="btn btn-light btn-small" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
+  <button class="mobile-menu-btn" type="button" id="clientMenuToggle" aria-label="Abrir menú" aria-controls="clientPanelActions" aria-expanded="false">☰</button>
 </div>
 
 <main class="main-panel client-lux-panel">
@@ -22,7 +21,7 @@
       <h1>{% block portal_title %}{% endblock %}</h1>
       <p>{% block portal_subtitle %}{% endblock %}</p>
     </div>
-    <div class="panel-actions">
+    <div class="panel-actions" id="clientPanelActions">
       {% client_lang as current_client_lang %}
       {% client_languages as available_client_languages %}
       <form method="post" action="{% url 'clients:set_language' %}" class="language-switcher">
@@ -52,4 +51,29 @@
 
   {% block portal_content %}{% endblock %}
 </main>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const menuToggle = document.getElementById("clientMenuToggle");
+  const panelActions = document.getElementById("clientPanelActions");
+  if (menuToggle && panelActions) {
+    menuToggle.addEventListener("click", function () {
+      const isOpen = document.body.classList.toggle("client-menu-open");
+      menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+  }
+
+  document.querySelectorAll("[data-cancel-form]").forEach(function (cancelForm) {
+    cancelForm.addEventListener("submit", function (event) {
+      const refundable = cancelForm.dataset.refundable === "1";
+      const message = refundable
+        ? "¿Seguro que quieres cancelar esta reserva? Se te devolverá el dinero pagado."
+        : "¿Seguro que quieres cancelar esta reserva? Faltan menos de 24 horas: el dinero pagado NO se devolverá.";
+      if (!window.confirm(message)) {
+        event.preventDefault();
+      }
+    });
+  });
+});
+</script>
 {% endblock %}

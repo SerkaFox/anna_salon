@@ -265,6 +265,34 @@
   margin: 0;
 }
 
+.fiscal-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.fiscal-modal[hidden] {
+  display: none;
+}
+
+.fiscal-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 8, 13, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.fiscal-modal__card {
+  position: relative;
+  width: min(100%, 480px);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+
 .stat-label {
   display: block;
   color: var(--muted);
@@ -654,6 +682,14 @@
   .panel-actions .btn-danger {
     width: 100%;
     min-width: 0;
+  }
+
+  .client-lux-body .panel-actions {
+    display: none;
+  }
+
+  body.client-lux-body.client-menu-open .panel-actions {
+    display: flex;
   }
 
   .search-bar {

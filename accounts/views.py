@@ -79,24 +79,13 @@ def profile_view(request):
             )
             messages.success(request, "Contrasena actualizada.")
             return redirect("accounts:profile")
-    elif is_client_portal and request.method == "POST" and request.POST.get("action") == "save_fiscal":
-        form = UserProfileForm(instance=request.user)
-        fiscal_form = ClientFiscalForm(request.POST, instance=client)
-        if fiscal_form.is_valid():
-            fiscal_form.save()
-            log_event(
-                actor=request.user,
-                section="client",
-                action="fiscal_update",
-                instance=client,
-                message=f"Datos fiscales actualizados por {request.user.username}.",
-            )
-            messages.success(request, "Datos fiscales actualizados.")
-            return redirect("accounts:profile")
     elif request.method == "POST":
         form = UserProfileForm(request.POST, instance=request.user)
-        if form.is_valid():
+        fiscal_form = ClientFiscalForm(request.POST, instance=client) if client else None
+        if form.is_valid() and (fiscal_form is None or fiscal_form.is_valid()):
             form.save()
+            if fiscal_form is not None:
+                fiscal_form.save()
             log_event(
                 actor=request.user,
                 section="account",
