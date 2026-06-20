@@ -69,8 +69,15 @@
               <p>{{ booking.service }} · {{ booking.employee }}</p>
               <div class="portal-card-actions">
                 <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}">Ver reserva</a>
-                <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}#cambiar-cita">Cambiar fecha</a>
-                <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}#cambiar-servicio">Cambiar servicio</a>
+                {% if booking.can_cancel %}
+                  <form method="post" action="{% url 'clients:booking_cancel' booking.id %}">
+                    {% csrf_token %}
+                    <button class="btn btn-danger btn-small" type="submit">Cancelar reserva</button>
+                  </form>
+                {% endif %}
+                {% if booking.latest_fiscal_document %}
+                  <a class="btn btn-light btn-small" href="{% url 'documents:print' booking.latest_fiscal_document.id %}" target="_blank" rel="noopener">Descargar factura</a>
+                {% endif %}
               </div>
               <div class="portal-booking-meta">
                 <span class="dashboard-badge">{{ booking.get_status_display }}</span>

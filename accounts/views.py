@@ -11,6 +11,7 @@ from core.i18n import PUBLIC_LANGUAGES, detect_public_language, public_texts
 
 from accounts.permissions import admin_required, get_client_profile
 from auditlog.services import log_event
+from clients.forms import ClientFiscalForm
 from employees.models import Employee
 
 from .forms import (
@@ -58,8 +59,10 @@ def user_logout(request):
 
 @login_required
 def profile_view(request):
-    is_client_portal = bool(get_client_profile(request.user))
+    client = get_client_profile(request.user)
+    is_client_portal = bool(client)
     password_form = StyledPasswordChangeForm(request.user)
+    fiscal_form = ClientFiscalForm(instance=client) if client else None
 
     if is_client_portal and request.method == "POST" and request.POST.get("action") == "change_password":
         form = UserProfileForm(instance=request.user)
@@ -75,6 +78,20 @@ def profile_view(request):
                 message=f"Contrasena cambiada para {user.username}.",
             )
             messages.success(request, "Contrasena actualizada.")
+            return redirect("accounts:profile")
+    elif is_client_portal and request.method == "POST" and request.POST.get("action") == "save_fiscal":
+        form = UserProfileForm(instance=request.user)
+        fiscal_form = ClientFiscalForm(request.POST, instance=client)
+        if fiscal_form.is_valid():
+            fiscal_form.save()
+            log_event(
+                actor=request.user,
+                section="client",
+                action="fiscal_update",
+                instance=client,
+                message=f"Datos fiscales actualizados por {request.user.username}.",
+            )
+            messages.success(request, "Datos fiscales actualizados.")
             return redirect("accounts:profile")
     elif request.method == "POST":
         form = UserProfileForm(request.POST, instance=request.user)
@@ -99,6 +116,7 @@ def profile_view(request):
             "active_section": "profile",
             "form": form,
             "password_form": password_form,
+            "fiscal_form": fiscal_form,
             "linked_employee": Employee.objects.filter(user=request.user).first(),
         },
     )

@@ -81,6 +81,52 @@ CLIENT_TRANSLATIONS["fr"].update({
     "delete_account_cancel": "Annuler",
 })
 
+CLIENT_TRANSLATIONS["es"].update({
+    "fiscal_data": "Datos fiscales",
+    "fiscal_data_help": "Necesarios para emitir una factura completa (no solo un recibo simple).",
+    "fiscal_id": "NIE / NIF / CIF",
+    "fiscal_address": "Dirección fiscal",
+    "fiscal_city": "Ciudad",
+    "fiscal_postcode": "Código postal",
+    "save_fiscal_data": "Guardar datos fiscales",
+})
+CLIENT_TRANSLATIONS["ru"].update({
+    "fiscal_data": "Налоговые данные",
+    "fiscal_data_help": "Нужны для оформления полной счёт-фактуры (не только простой квитанции).",
+    "fiscal_id": "NIE / NIF / CIF",
+    "fiscal_address": "Юридический адрес",
+    "fiscal_city": "Город",
+    "fiscal_postcode": "Почтовый индекс",
+    "save_fiscal_data": "Сохранить налоговые данные",
+})
+CLIENT_TRANSLATIONS["en"].update({
+    "fiscal_data": "Billing details",
+    "fiscal_data_help": "Needed to issue a full invoice (not just a simple receipt).",
+    "fiscal_id": "NIE / NIF / CIF",
+    "fiscal_address": "Billing address",
+    "fiscal_city": "City",
+    "fiscal_postcode": "Postcode",
+    "save_fiscal_data": "Save billing details",
+})
+CLIENT_TRANSLATIONS["de"].update({
+    "fiscal_data": "Rechnungsdaten",
+    "fiscal_data_help": "Erforderlich, um eine vollständige Rechnung auszustellen (nicht nur eine einfache Quittung).",
+    "fiscal_id": "NIE / NIF / CIF",
+    "fiscal_address": "Rechnungsadresse",
+    "fiscal_city": "Stadt",
+    "fiscal_postcode": "Postleitzahl",
+    "save_fiscal_data": "Rechnungsdaten speichern",
+})
+CLIENT_TRANSLATIONS["fr"].update({
+    "fiscal_data": "Données de facturation",
+    "fiscal_data_help": "Nécessaires pour émettre une facture complète (pas seulement un reçu simple).",
+    "fiscal_id": "NIE / NIF / CIF",
+    "fiscal_address": "Adresse de facturation",
+    "fiscal_city": "Ville",
+    "fiscal_postcode": "Code postal",
+    "save_fiscal_data": "Enregistrer les données de facturation",
+})
+
 
 def normalize_client_language(language):
     code = (language or "").split("-", 1)[0].lower()

@@ -35,7 +35,7 @@
   </article>
 
   <article class="panel-card" id="cambiar-cita">
-    <h2>Cambiar cita</h2>
+    <h2>Cambiar o cancelar cita</h2>
     {% if can_reschedule %}
       <form method="post" action="{% url 'clients:booking_reschedule' booking.id %}" class="entity-form">
         {% csrf_token %}
@@ -64,11 +64,27 @@
             </div>
           {% endif %}
         </div>
-        <button class="btn btn-light" type="submit">Cambiar cita</button>
+        <button class="btn btn-light" type="submit">Cambiar fecha/hora</button>
       </form>
     {% else %}
-      <p class="muted-text">No se puede cambiar la cita con menos de 24 horas de antelación. Contacta con el salón.</p>
+      <p class="muted-text">No se puede cambiar la fecha con menos de 24 horas de antelación. Contacta con el salón.</p>
     {% endif %}
+
+    <div style="margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line);">
+      {% if can_cancel %}
+        {% if can_reschedule %}
+          <p class="muted-text">Si cancelas ahora, se devolverá la señal automáticamente cuando el pago Stripe sea reembolsable.</p>
+        {% else %}
+          <p class="muted-text">Puedes cancelar, pero no se devolverá la señal porque faltan menos de 24 horas.</p>
+        {% endif %}
+        <form method="post" action="{% url 'clients:booking_cancel' booking.id %}">
+          {% csrf_token %}
+          <button class="btn btn-danger" type="submit">Cancelar reserva</button>
+        </form>
+      {% else %}
+        <p class="muted-text">Esta reserva ya no se puede cancelar desde tu cuenta.</p>
+      {% endif %}
+    </div>
   </article>
 </section>
 
@@ -93,36 +109,22 @@
   </article>
 
   <article class="panel-card">
-    <h2>Cancelar reserva</h2>
-    {% if can_cancel %}
-      {% if can_reschedule %}
-        <p class="muted-text">Si cancelas ahora, se devolverá la señal automáticamente cuando el pago Stripe sea reembolsable.</p>
-      {% else %}
-        <p class="muted-text">Puedes cancelar, pero no se devolverá la señal porque faltan menos de 24 horas.</p>
-      {% endif %}
-      <form method="post" action="{% url 'clients:booking_cancel' booking.id %}">
+    <h2>Factura o recibo</h2>
+    {% if fiscal_document %}
+      <p class="muted-text">Puedes abrir el documento de la reserva e imprimirlo o guardarlo como PDF.</p>
+      <p><strong>{{ fiscal_document.get_document_type_display }} {{ fiscal_document.number }}</strong> · {{ fiscal_document.total_amount }} €</p>
+      <a class="btn btn-light" href="{% url 'documents:print' fiscal_document.id %}" target="_blank" rel="noopener">Abrir factura / PDF</a>
+    {% elif paid_amount > 0 %}
+      <p class="muted-text">El recibo o factura se emite por lo que llevas pagado ({{ paid_amount }} €). Para una factura completa, añade NIE/NIF y dirección fiscal en tu perfil.</p>
+      <form method="post" action="{% url 'clients:booking_document' booking.id %}">
         {% csrf_token %}
-        <button class="btn btn-danger" type="submit">Cancelar reserva</button>
+        <button class="btn btn-light" name="document_type" value="receipt" type="submit">Recibo simple</button>
+        <button class="btn" name="document_type" value="invoice" type="submit">Factura completa</button>
       </form>
     {% else %}
-      <p class="muted-text">Esta reserva ya no se puede cancelar desde tu cuenta.</p>
+      <p class="muted-text">Todavía no hay ningún pago registrado para esta reserva. El recibo/factura estará disponible en cuanto pagues.</p>
     {% endif %}
   </article>
-</section>
-
-<section class="panel-card">
-  <h2>Factura o recibo</h2>
-  <p class="muted-text">Puedes abrir el documento de la reserva e imprimirlo o guardarlo como PDF. Para una factura completa, añade NIE/NIF y dirección fiscal en tu perfil.</p>
-  {% if fiscal_document %}
-    <p><strong>{{ fiscal_document.get_document_type_display }} {{ fiscal_document.number }}</strong> · {{ fiscal_document.total_amount }} €</p>
-    <a class="btn btn-light" href="{% url 'documents:print' fiscal_document.id %}" target="_blank" rel="noopener">Abrir factura / PDF</a>
-  {% else %}
-    <form method="post" action="{% url 'clients:booking_document' booking.id %}">
-      {% csrf_token %}
-      <button class="btn btn-light" name="document_type" value="receipt" type="submit">Recibo simple</button>
-      <button class="btn" name="document_type" value="invoice" type="submit">Factura completa</button>
-    </form>
-  {% endif %}
 </section>
 
 <p><a class="btn btn-light" href="{% url 'clients:portal' %}">Volver a mi cuenta</a></p>

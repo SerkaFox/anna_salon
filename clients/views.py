@@ -98,6 +98,14 @@ def _attach_online_payment_info(bookings):
         booking.refundable_until = booking_refundable_until(booking)
         booking.can_cancel = can_client_cancel(booking)
         booking.can_reschedule = can_client_reschedule(booking)
+        booking.latest_fiscal_document = next(
+            (
+                document
+                for document in booking.fiscal_documents.all()
+                if document.status in {FiscalDocument.Statuses.DRAFT, FiscalDocument.Statuses.ISSUED}
+            ),
+            None,
+        )
         booking.online_payment_is_paid = info["is_paid"]
         booking.online_payment_can_pay = (
             info["remaining_amount"] > Decimal("0.00")
@@ -430,12 +438,17 @@ def _ensure_client_document_line(document):
     if document.lines.exists():
         return
     booking = document.booking
+    paid_amount = booking_paid_amount(booking)
+    total_price = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+    description = str(booking.service)
+    if paid_amount < total_price:
+        description = f"{description} (pago a cuenta)"
     FiscalDocumentLine.objects.create(
         fiscal_document=document,
         service=booking.service,
-        description=str(booking.service),
+        description=description,
         quantity=Decimal("1.00"),
-        unit_amount=booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00"),
+        unit_amount=paid_amount,
         sort_order=0,
     )
     document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
@@ -542,6 +555,9 @@ def client_booking_document(request, pk):
     if not client:
         raise PermissionDenied
     booking = get_object_or_404(_client_booking_queryset(client), pk=pk)
+    if booking_paid_amount(booking) <= Decimal("0.00"):
+        messages.error(request, "Todavía no hay ningún pago registrado para esta reserva.")
+        return redirect("clients:booking_detail", pk=booking.pk)
     document_type = request.POST.get("document_type") or FiscalDocument.DocumentTypes.RECEIPT
     if document_type == FiscalDocument.DocumentTypes.INVOICE:
         if not client.fiscal_id or not client.fiscal_address:
@@ -889,7 +905,7 @@ def _client_portal_context(request, client, booking_form=None):
     bookings = (
         Booking.objects
         .select_related("employee", "service", "zone")
-        .prefetch_related("photos")
+        .prefetch_related("photos", "fiscal_documents")
         .filter(client=client)
         .order_by("-start_at")
     )

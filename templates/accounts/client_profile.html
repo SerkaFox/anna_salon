@@ -93,6 +93,53 @@
   </form>
 </section>
 
+{% if fiscal_form %}
+<section class="panel-card" style="margin-top: 18px;">
+  <div class="section-heading">
+    <div>
+      <h2>{% ct "fiscal_data" %}</h2>
+      <p>{% ct "fiscal_data_help" %}</p>
+    </div>
+  </div>
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="save_fiscal">
+    {% if fiscal_form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in fiscal_form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ fiscal_form.fiscal_id.id_for_label }}">{% ct "fiscal_id" %}</label>
+        {{ fiscal_form.fiscal_id }}
+        {% for error in fiscal_form.fiscal_id.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ fiscal_form.fiscal_address.id_for_label }}">{% ct "fiscal_address" %}</label>
+        {{ fiscal_form.fiscal_address }}
+        {% for error in fiscal_form.fiscal_address.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ fiscal_form.fiscal_city.id_for_label }}">{% ct "fiscal_city" %}</label>
+        {{ fiscal_form.fiscal_city }}
+        {% for error in fiscal_form.fiscal_city.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ fiscal_form.fiscal_postcode.id_for_label }}">{% ct "fiscal_postcode" %}</label>
+        {{ fiscal_form.fiscal_postcode }}
+        {% for error in fiscal_form.fiscal_postcode.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn">{% ct "save_fiscal_data" %}</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
 <section class="panel-card" style="margin-top: 18px;">
   <div class="section-heading">
     <div>

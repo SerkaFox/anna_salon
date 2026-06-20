@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from accounts.permissions import admin_required, can_access_booking
+from accounts.permissions import admin_required, can_access_booking, get_client_profile, is_admin_user
 from auditlog.services import log_event
 from bookings.models import Booking
 
@@ -253,7 +253,15 @@ def document_print(request, pk):
     )
     if not can_access_booking(request.user, document.booking):
         raise PermissionDenied
-    return render(request, "documents/document_print.html", {"document": document})
+
+    if is_admin_user(request.user):
+        back_url = reverse("documents:detail", args=[document.pk])
+    elif get_client_profile(request.user):
+        back_url = reverse("clients:booking_detail", args=[document.booking_id])
+    else:
+        back_url = reverse("dashboard:home")
+
+    return render(request, "documents/document_print.html", {"document": document, "back_url": back_url})
 
 
 @login_required

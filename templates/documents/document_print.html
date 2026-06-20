@@ -139,7 +139,7 @@
 <body>
   <div class="actions">
     <button class="btn" type="button" onclick="window.print()">Imprimir</button>
-    <a class="btn" href="{% url 'documents:detail' document.id %}">Volver</a>
+    <a class="btn" href="{{ back_url }}">Volver</a>
   </div>
 
   <main class="sheet">

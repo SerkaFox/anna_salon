@@ -130,3 +130,15 @@ class ClientForm(forms.ModelForm):
             "is_active": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 
+
+class ClientFiscalForm(forms.ModelForm):
+    class Meta:
+        model = Client
+        fields = ["fiscal_id", "fiscal_address", "fiscal_city", "fiscal_postcode"]
+        widgets = {
+            "fiscal_id": forms.TextInput(attrs={"class": "input", "placeholder": "NIE, NIF o CIF"}),
+            "fiscal_address": forms.TextInput(attrs={"class": "input"}),
+            "fiscal_city": forms.TextInput(attrs={"class": "input"}),
+            "fiscal_postcode": forms.TextInput(attrs={"class": "input"}),
+        }
+

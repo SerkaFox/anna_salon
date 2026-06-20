@@ -256,8 +256,13 @@
 .portal-card-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin: 6px 0;
+}
+
+.portal-card-actions form {
+  margin: 0;
 }
 
 .stat-label {
