@@ -96,7 +96,7 @@ def create_checkout_session(payment, request):
             }
         ],
         success_url=f"{success_url}?session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=cancel_url,
+        cancel_url=f"{cancel_url}?session_id={{CHECKOUT_SESSION_ID}}",
         customer_email=customer_email or None,
         client_reference_id=str(booking.pk),
         metadata={
@@ -125,6 +125,74 @@ def create_checkout_session(payment, request):
             "updated_at",
         ]
     )
+    return session
+
+
+def create_combined_checkout_session(payments, request):
+    if not getattr(settings, "STRIPE_SECRET_KEY", ""):
+        raise ValidationError("Stripe no está configurado.")
+    if not payments:
+        raise ValidationError("No hay importes pendientes para pagar.")
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    success_url = request.build_absolute_uri(reverse("payments:stripe_success"))
+    cancel_url = request.build_absolute_uri(reverse("payments:stripe_cancel"))
+
+    line_items = []
+    customer_email = ""
+    for payment in payments:
+        booking = payment.booking
+        amount_cents = int((payment.amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        description = f"{booking.service.name} · {timezone.localtime(booking.start_at):%d/%m/%Y %H:%M}"
+        line_items.append(
+            {
+                "price_data": {
+                    "currency": payment.currency,
+                    "product_data": {
+                        "name": f"Reserva BRIMOON Studio #{booking.pk}",
+                        "description": description[:500],
+                    },
+                    "unit_amount": amount_cents,
+                },
+                "quantity": 1,
+            }
+        )
+        if not customer_email:
+            customer_email = booking.client.email or getattr(getattr(booking.client, "user", None), "email", "") or ""
+
+    session = stripe.checkout.Session.create(
+        mode="payment",
+        payment_method_types=["card"],
+        line_items=line_items,
+        success_url=f"{success_url}?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{cancel_url}?session_id={{CHECKOUT_SESSION_ID}}",
+        customer_email=customer_email or None,
+        metadata={
+            "payment_ids": ",".join(str(payment.pk) for payment in payments),
+            "provider": Payment.Providers.STRIPE,
+        },
+    )
+    for payment in payments:
+        amount_cents = int((payment.amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        payment.stripe_checkout_session_id = session.id
+        payment.stripe_customer_email = customer_email
+        payment.checkout_url = session.url
+        payment.raw_request = {
+            "provider": Payment.Providers.STRIPE,
+            "checkout_session_id": session.id,
+            "combined": True,
+            "amount_cents": amount_cents,
+            "currency": payment.currency,
+        }
+        payment.save(
+            update_fields=[
+                "stripe_checkout_session_id",
+                "stripe_customer_email",
+                "checkout_url",
+                "raw_request",
+                "updated_at",
+            ]
+        )
     return session
 
 
@@ -182,16 +250,22 @@ def _metadata_get(obj, key):
     return metadata.get(key, "") if isinstance(metadata, dict) else getattr(metadata, key, "")
 
 
-def _find_payment_from_session(session):
-    payment_id = _metadata_get(session, "payment_id")
+def _find_payments_from_session(session):
     queryset = Payment.objects.select_for_update().select_related("booking")
+    payment_ids_raw = _metadata_get(session, "payment_ids")
+    if payment_ids_raw:
+        ids = [pid.strip() for pid in payment_ids_raw.split(",") if pid.strip()]
+        payments = list(queryset.filter(pk__in=ids, provider=Payment.Providers.STRIPE))
+        if payments:
+            return payments
+    payment_id = _metadata_get(session, "payment_id")
     if payment_id:
         try:
-            return queryset.get(pk=payment_id, provider=Payment.Providers.STRIPE)
+            return [queryset.get(pk=payment_id, provider=Payment.Providers.STRIPE)]
         except (Payment.DoesNotExist, ValueError):
             pass
     session_id = _object_get(session, "id", "")
-    return queryset.get(stripe_checkout_session_id=session_id, provider=Payment.Providers.STRIPE)
+    return list(queryset.filter(stripe_checkout_session_id=session_id, provider=Payment.Providers.STRIPE))
 
 
 def _find_payment_from_intent(intent):
@@ -239,19 +313,20 @@ def _mark_paid(payment, event, *, session=None, intent=None):
 def handle_checkout_session_completed(event):
     session = _event_object(event)
     with transaction.atomic():
-        payment = _find_payment_from_session(session)
-        return _mark_paid(payment, event, session=session)
+        payments = _find_payments_from_session(session)
+        return [_mark_paid(payment, event, session=session) for payment in payments]
 
 
 def handle_checkout_session_expired(event):
     session = _event_object(event)
     with transaction.atomic():
-        payment = _find_payment_from_session(session)
-        if payment.status != Payment.Statuses.PAID:
-            payment.status = Payment.Statuses.EXPIRED
-            payment.raw_event = safe_stripe_event_payload(event)
-            payment.save(update_fields=["status", "raw_event", "updated_at"])
-        return payment
+        payments = _find_payments_from_session(session)
+        for payment in payments:
+            if payment.status != Payment.Statuses.PAID:
+                payment.status = Payment.Statuses.EXPIRED
+                payment.raw_event = safe_stripe_event_payload(event)
+                payment.save(update_fields=["status", "raw_event", "updated_at"])
+        return payments
 
 
 def handle_payment_intent_succeeded(event):

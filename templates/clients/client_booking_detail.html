@@ -74,8 +74,8 @@
 
 <section class="content-grid">
   <article class="panel-card" id="cambiar-servicio">
-    <h2>Añadir o cambiar servicio</h2>
-    <p class="muted-text">Si el nuevo importe es mayor, se abrirá Stripe Checkout para pagar la diferencia. Si es menor, el salón revisará la diferencia manualmente.</p>
+    <h2>Cambiar servicio de esta cita</h2>
+    <p class="muted-text">Esto sustituye el servicio de esta cita y recalcula el importe. Si el nuevo importe es mayor, el saldo pendiente queda disponible para pagarlo cuando quieras desde tu cuenta. Si es menor, el salón revisará la diferencia manualmente.</p>
     <form method="post" action="{% url 'clients:booking_change_service' booking.id %}" class="entity-form">
       {% csrf_token %}
       <div class="field">
@@ -88,6 +88,8 @@
       </div>
       <button class="btn btn-light" type="submit">Actualizar servicio</button>
     </form>
+    <p class="muted-text" style="margin-top: 14px;">¿Quieres añadir un servicio distinto sin perder esta cita (por ejemplo, color después de la manicura)? Pide una nueva cita para ese servicio.</p>
+    <a class="btn btn-light" href="{% url 'clients:portal' %}#nueva-reserva">Añadir servicio (nueva cita)</a>
   </article>
 
   <article class="panel-card">

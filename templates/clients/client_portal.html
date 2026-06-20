@@ -54,6 +54,13 @@
 
     <article class="panel-card">
       <h2>{% ct "upcoming_bookings" %}</h2>
+      {% if total_amount_due > 0 %}
+        <form method="post" action="{% url 'clients:booking_pay_all' %}" class="portal-pay-form">
+          {% csrf_token %}
+          <span>Total pendiente: {{ total_amount_due }} €</span>
+          <button class="btn btn-small" type="submit">Pagar todo junto</button>
+        </form>
+      {% endif %}
       {% if upcoming_bookings %}
         <div class="dashboard-stack">
           {% for booking in upcoming_bookings %}
@@ -132,7 +139,7 @@
     {% endif %}
   </section>
 
-  <section class="panel-card">
+  <section class="panel-card" id="nueva-reserva">
     <h2>{% ct "new_booking_request" %}</h2>
     <p class="muted-text">{% ct "booking_help" %}</p>
     <form method="post" class="entity-form client-booking-form" data-portal-booking-form>

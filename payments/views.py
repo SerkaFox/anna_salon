@@ -74,23 +74,39 @@ def redsys_error(request):
 
 def stripe_success(request):
     session_id = request.GET.get("session_id", "")
-    payment = None
+    payments = []
     if session_id:
-        payment = (
+        payments = list(
             Payment.objects.select_related("booking", "booking__client")
             .filter(stripe_checkout_session_id=session_id, provider=Payment.Providers.STRIPE)
-            .first()
         )
-    if payment:
-        messages.success(request, "Pago recibido. En unos segundos Stripe confirmará el estado final de la reserva.")
+    if payments:
+        if len(payments) > 1:
+            messages.success(request, f"Pago recibido para {len(payments)} reservas. En unos segundos Stripe confirmará el estado final.")
+        else:
+            messages.success(request, "Pago recibido. En unos segundos Stripe confirmará el estado final de la reserva.")
         client = getattr(request.user, "client_profile", None) if request.user.is_authenticated else None
-        if client and payment.booking.client_id == client.pk:
-            return redirect("clients:booking_detail", pk=payment.booking_id)
+        if client and len(payments) == 1 and payments[0].booking.client_id == client.pk:
+            return redirect("clients:booking_detail", pk=payments[0].booking_id)
         return redirect("clients:portal")
     return render(request, "payments/stripe_result.html", {"status": "success"})
 
 
 def stripe_cancel(request):
+    session_id = request.GET.get("session_id", "")
+    payments = []
+    if session_id:
+        payments = list(
+            Payment.objects.select_related("booking", "booking__client")
+            .filter(stripe_checkout_session_id=session_id, provider=Payment.Providers.STRIPE)
+        )
+    if payments:
+        messages.info(request, "Pago cancelado. No se ha realizado ningún cargo.")
+        client = getattr(request.user, "client_profile", None) if request.user.is_authenticated else None
+        if client and len(payments) == 1 and payments[0].booking.client_id == client.pk:
+            return redirect("clients:booking_detail", pk=payments[0].booking_id)
+        if client:
+            return redirect("clients:portal")
     return render(request, "payments/stripe_result.html", {"status": "cancel"})
 
 

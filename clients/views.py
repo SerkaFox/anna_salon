@@ -1,6 +1,5 @@
 from datetime import datetime
 from decimal import Decimal
-import secrets
 
 from django import forms
 from django.conf import settings
@@ -38,6 +37,7 @@ from employees.models import Employee
 from payments.models import Payment as OnlinePayment
 from payments.stripe_service import (
     create_checkout_session,
+    create_combined_checkout_session,
     create_pending_stripe_payment,
     get_booking_checkout_amount,
     get_booking_deposit_amount,
@@ -65,15 +65,6 @@ def build_referral_tree(root_client):
     }
 
 
-def _build_client_redsys_order_number(booking_id):
-    prefix = f"{booking_id % 10000:04d}"
-    for _attempt in range(10):
-        order_number = f"{prefix}{secrets.token_hex(4).upper()}"
-        if not OnlinePayment.objects.filter(order_number=order_number).exists():
-            return order_number
-    raise ValueError("No se pudo generar un numero de pedido unico.")
-
-
 def _booking_online_payment_info(booking):
     payments = list(getattr(booking, "_prefetched_objects_cache", {}).get("online_payments", booking.online_payments.all()))
     paid_total = sum((payment.amount for payment in payments if payment.status == OnlinePayment.Statuses.PAID), Decimal("0.00"))
@@ -95,7 +86,6 @@ def _booking_online_payment_info(booking):
 def _attach_online_payment_info(bookings):
     for booking in bookings:
         info = _booking_online_payment_info(booking)
-        prepayment = getattr(booking, "prepayment", None)
         booking.online_payment_status = info["status"]
         booking.online_payment_paid_total = info["paid_total"]
         booking.online_payment_pending_total = info["pending_total"]
@@ -110,8 +100,7 @@ def _attach_online_payment_info(bookings):
         booking.can_reschedule = can_client_reschedule(booking)
         booking.online_payment_is_paid = info["is_paid"]
         booking.online_payment_can_pay = (
-            not prepayment
-            and info["total_amount"] > Decimal("0.00")
+            info["remaining_amount"] > Decimal("0.00")
             and booking.status not in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW}
         )
     return bookings
@@ -120,24 +109,6 @@ def _attach_online_payment_info(bookings):
 def _is_future_portal_slot(slot):
     current_time = timezone.localtime(timezone.now()).replace(second=0, microsecond=0)
     return timezone.localtime(slot["start_at"]).replace(second=0, microsecond=0) > current_time
-
-
-def _create_temporary_paid_payment(booking, amount):
-    payment = OnlinePayment.objects.create(
-        booking=booking,
-        amount=amount,
-        currency=getattr(settings, "REDSYS_CURRENCY", "978"),
-        order_number=_build_client_redsys_order_number(booking.pk),
-        method=OnlinePayment.Methods.CARD,
-        status=OnlinePayment.Statuses.PAID,
-        redsys_response_code="MOCK",
-        redsys_authorisation_code="TEMP",
-        raw_request={"provider": "mock_client_portal"},
-        raw_response={"paid": True, "mode": "temporary_mock"},
-        paid_at=timezone.now(),
-    )
-    create_booking_prepayment(booking, payment)
-    return payment
 
 
 @login_required
@@ -356,9 +327,6 @@ def client_booking_payment(request, pk):
     if payment_info["remaining_amount"] <= Decimal("0.00"):
         messages.success(request, "Esta reserva ya esta pagada.")
         return redirect("clients:portal")
-    if getattr(booking, "prepayment", None):
-        messages.success(request, "Esta reserva ya tiene prepago.")
-        return redirect("clients:portal")
 
     try:
         payment_mode = request.POST.get("payment_mode", "deposit")
@@ -381,6 +349,46 @@ def client_booking_payment(request, pk):
         message=f"Stripe Checkout creado desde portal cliente para reserva #{booking.pk}.",
     )
     return redirect(payment.checkout_url)
+
+
+@login_required
+@require_POST
+def client_booking_pay_all(request):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+
+    bookings = (
+        Booking.objects
+        .select_related("client", "employee", "service")
+        .prefetch_related("online_payments", "online_payments__refunds")
+        .filter(client=client)
+        .exclude(status__in=[Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW])
+    )
+    payments = []
+    for booking in bookings:
+        amount_due = booking_amount_due(booking)
+        if amount_due <= Decimal("0.00"):
+            continue
+        payments.append(create_pending_stripe_payment(booking, amount=amount_due, reason="booking_pay_all"))
+
+    if not payments:
+        messages.success(request, "No tienes importes pendientes de pago.")
+        return redirect("clients:portal")
+
+    try:
+        session = create_combined_checkout_session(payments, request)
+    except (ValueError, ValidationError) as exc:
+        messages.error(request, str(exc))
+        return redirect("clients:portal")
+
+    log_event(
+        actor=request.user,
+        section="payment",
+        action="stripe_checkout_create_all",
+        message=f"Stripe Checkout combinado creado para {len(payments)} reservas de {client.full_name}.",
+    )
+    return redirect(session.url)
 
 
 def _client_booking_queryset(client):
@@ -511,16 +519,17 @@ def client_booking_change_service(request, pk):
     booking = get_object_or_404(_client_booking_queryset(client), pk=pk)
     service = get_object_or_404(Service, pk=request.POST.get("service"), is_active=True)
     try:
-        result = change_booking_service(booking, service=service, request=request)
+        result = change_booking_service(booking, service=service)
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
         return redirect("clients:booking_detail", pk=booking.pk)
-    payment = result["payment"]
-    if payment:
-        messages.info(request, "El cambio aumenta el importe. Completa el pago extra para confirmar la diferencia.")
-        return redirect(payment.checkout_url)
     if result["manual_refund_required"]:
         messages.warning(request, "El cambio reduce el importe. El salón revisará la diferencia manualmente.")
+    elif result["extra_due"] > Decimal("0.00"):
+        messages.success(
+            request,
+            f"Servicio actualizado. Nuevo importe: {result['new_total']} €. Pendiente de pago: {result['extra_due']} €. Puedes pagarlo cuando quieras desde tu cuenta.",
+        )
     else:
         messages.success(request, "Servicio actualizado correctamente.")
     return redirect("clients:booking_detail", pk=booking.pk)
@@ -898,6 +907,10 @@ def _client_portal_context(request, client, booking_form=None):
     _attach_online_payment_info(history)
     refresh_booking_prepayments(upcoming_bookings)
     refresh_booking_prepayments(history)
+    total_amount_due = sum(
+        (booking.amount_due for booking in upcoming_bookings if booking.online_payment_can_pay),
+        Decimal("0.00"),
+    )
     rewards = client_reward_progress(client)
     photo_history = (
         BookingPhoto.objects
@@ -945,6 +958,7 @@ def _client_portal_context(request, client, booking_form=None):
             "available_rewards": sum(reward["available"] for reward in rewards),
         },
         "upcoming_bookings": upcoming_bookings,
+        "total_amount_due": total_amount_due,
         "bookings": history,
         "photo_history": photo_history,
         "rewards": rewards,

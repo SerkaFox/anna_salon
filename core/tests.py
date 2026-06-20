@@ -102,7 +102,6 @@ class PublicBookingTests(TestCase):
                 "start_at": slot["start_at"],
                 "name": "Nueva Clienta",
                 "password": "secret123",
-                "mock_payment_confirmed": "1",
             },
         )
 
@@ -142,7 +141,6 @@ class PublicBookingTests(TestCase):
                 "start_at": slot["start_at"],
                 "name": "Otra Clienta",
                 "password": "secret123",
-                "mock_payment_confirmed": "1",
             },
         )
 
