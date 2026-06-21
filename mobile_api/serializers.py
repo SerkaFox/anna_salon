@@ -11,7 +11,13 @@ from bookings.models import Booking
 from bookings.utils import combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
 from clients.models import Client, ClientRewardRule
 from clients.rewards import client_reward_progress
-from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
+from employees.models import (
+    Employee,
+    EmployeeRecurringTimeBlock,
+    EmployeeScheduleOverride,
+    EmployeeTimeBlock,
+    EmployeeWeeklyShift,
+)
 from payments.models import Payment as OnlinePayment
 from salon.models import Zone
 from services_app.models import Service
@@ -359,6 +365,166 @@ class EmployeeWriteSerializer(serializers.ModelSerializer):
         if employee.user_id != user.pk:
             employee.user = user
             employee.save(update_fields=["user"])
+
+
+class EmployeeWeeklyShiftSerializer(serializers.ModelSerializer):
+    weekday_label = serializers.CharField(source="get_weekday_display", read_only=True)
+
+    class Meta:
+        model = EmployeeWeeklyShift
+        fields = [
+            "id",
+            "weekday",
+            "weekday_label",
+            "is_day_off",
+            "start_time",
+            "end_time",
+            "break_start",
+            "break_end",
+            "break_label",
+            "note",
+        ]
+        read_only_fields = ["id", "weekday_label"]
+
+    def validate(self, attrs):
+        is_day_off = attrs.get("is_day_off", self.instance.is_day_off if self.instance else False)
+        start_time = attrs.get("start_time", self.instance.start_time if self.instance else None)
+        end_time = attrs.get("end_time", self.instance.end_time if self.instance else None)
+        break_start = attrs.get("break_start", self.instance.break_start if self.instance else None)
+        break_end = attrs.get("break_end", self.instance.break_end if self.instance else None)
+
+        if is_day_off:
+            return attrs
+        if not start_time or not end_time:
+            raise serializers.ValidationError({"start_time": ["Indica inicio y fin del turno."]})
+        if end_time <= start_time:
+            raise serializers.ValidationError({"end_time": ["La hora de fin debe ser posterior al inicio."]})
+        if bool(break_start) != bool(break_end):
+            raise serializers.ValidationError({"break_start": ["Indica inicio y fin de la pausa."]})
+        if break_start and break_end:
+            if break_end <= break_start:
+                raise serializers.ValidationError({"break_end": ["La pausa debe terminar despues de empezar."]})
+            if break_start < start_time or break_end > end_time:
+                raise serializers.ValidationError({"break_start": ["La pausa debe estar dentro del turno."]})
+        return attrs
+
+
+class EmployeeScheduleOverrideSerializer(serializers.ModelSerializer):
+    delete = serializers.BooleanField(write_only=True, required=False, default=False)
+
+    class Meta:
+        model = EmployeeScheduleOverride
+        fields = [
+            "id",
+            "date",
+            "is_day_off",
+            "start_time",
+            "end_time",
+            "break_start",
+            "break_end",
+            "break_label",
+            "label",
+            "delete",
+        ]
+        read_only_fields = ["id"]
+
+    def validate(self, attrs):
+        if attrs.get("delete"):
+            return attrs
+        is_day_off = attrs.get("is_day_off", self.instance.is_day_off if self.instance else False)
+        start_time = attrs.get("start_time", self.instance.start_time if self.instance else None)
+        end_time = attrs.get("end_time", self.instance.end_time if self.instance else None)
+        break_start = attrs.get("break_start", self.instance.break_start if self.instance else None)
+        break_end = attrs.get("break_end", self.instance.break_end if self.instance else None)
+
+        if is_day_off:
+            return attrs
+        if not start_time or not end_time:
+            raise serializers.ValidationError({"start_time": ["Indica inicio y fin del turno especial."]})
+        if end_time <= start_time:
+            raise serializers.ValidationError({"end_time": ["La hora de fin debe ser posterior al inicio."]})
+        if bool(break_start) != bool(break_end):
+            raise serializers.ValidationError({"break_start": ["Indica inicio y fin de la pausa."]})
+        if break_start and break_end:
+            if break_end <= break_start:
+                raise serializers.ValidationError({"break_end": ["La pausa debe terminar despues de empezar."]})
+            if break_start < start_time or break_end > end_time:
+                raise serializers.ValidationError({"break_start": ["La pausa debe estar dentro del turno."]})
+        return attrs
+
+
+class EmployeeScheduleSerializer(serializers.Serializer):
+    weekly_shifts = EmployeeWeeklyShiftSerializer(many=True, required=False)
+    overrides = EmployeeScheduleOverrideSerializer(many=True, required=False)
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        if not request.user.can_manage_staff:
+            raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar horarios."]})
+        return attrs
+
+    def update(self, instance, validated_data):
+        weekly_shifts = validated_data.get("weekly_shifts")
+        if weekly_shifts is not None:
+            by_weekday = {item["weekday"]: item for item in weekly_shifts}
+            for weekday in range(7):
+                shift, _created = EmployeeWeeklyShift.objects.get_or_create(
+                    employee=instance,
+                    weekday=weekday,
+                )
+                if weekday not in by_weekday:
+                    continue
+                data = by_weekday[weekday]
+                for field in (
+                    "is_day_off",
+                    "start_time",
+                    "end_time",
+                    "break_start",
+                    "break_end",
+                    "break_label",
+                    "note",
+                ):
+                    if field in data:
+                        setattr(shift, field, data[field])
+                if shift.is_day_off:
+                    shift.start_time = None
+                    shift.end_time = None
+                    shift.break_start = None
+                    shift.break_end = None
+                shift.save()
+
+        overrides = validated_data.get("overrides")
+        if overrides is not None:
+            for data in overrides:
+                date_value = data["date"]
+                override = EmployeeScheduleOverride.objects.filter(
+                    employee=instance,
+                    date=date_value,
+                ).first()
+                if data.get("delete"):
+                    if override:
+                        override.delete()
+                    continue
+                if override is None:
+                    override = EmployeeScheduleOverride(employee=instance, date=date_value)
+                for field in (
+                    "is_day_off",
+                    "start_time",
+                    "end_time",
+                    "break_start",
+                    "break_end",
+                    "break_label",
+                    "label",
+                ):
+                    if field in data:
+                        setattr(override, field, data[field])
+                if override.is_day_off:
+                    override.start_time = None
+                    override.end_time = None
+                    override.break_start = None
+                    override.break_end = None
+                override.save()
+        return instance
 
 
 class ServiceSerializer(serializers.ModelSerializer):

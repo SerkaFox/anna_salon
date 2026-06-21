@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal, InvalidOperation
 import secrets
 
@@ -30,7 +30,13 @@ from bookings.utils import (
 from clients.models import Client
 from clients.models import ClientRewardRule
 from clients.rewards import client_reward_progress
-from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock
+from employees.models import (
+    Employee,
+    EmployeeRecurringTimeBlock,
+    EmployeeScheduleOverride,
+    EmployeeTimeBlock,
+    EmployeeWeeklyShift,
+)
 from salon.models import Zone
 from services_app.models import Service
 from payments.models import Payment as OnlinePayment
@@ -50,6 +56,9 @@ from .serializers import (
     ClientRewardRuleWriteSerializer,
     EmployeeWriteSerializer,
     EmployeeSerializer,
+    EmployeeScheduleSerializer,
+    EmployeeScheduleOverrideSerializer,
+    EmployeeWeeklyShiftSerializer,
     ServiceSerializer,
     ServiceWriteSerializer,
     TimeBlockSerializer,
@@ -662,6 +671,64 @@ class EmployeeDetailView(MobileApiMixin, APIView):
             message=message,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def _ensure_employee_weekly_shifts(employee):
+    for weekday in range(7):
+        EmployeeWeeklyShift.objects.get_or_create(
+            employee=employee,
+            weekday=weekday,
+            defaults={
+                "is_day_off": weekday == 6,
+                "start_time": None if weekday == 6 else time(9, 0),
+                "end_time": None if weekday == 6 else time(18, 0),
+            },
+        )
+
+
+class EmployeeScheduleView(MobileApiMixin, APIView):
+    def get_object(self, request, pk):
+        employee = generics.get_object_or_404(Employee.objects.prefetch_related("weekly_shifts", "schedule_overrides"), pk=pk)
+        if not can_access_employee(request.user, employee):
+            raise PermissionDenied("Sin acceso a este empleado.")
+        return employee
+
+    def get(self, request, pk):
+        employee = self.get_object(request, pk)
+        _ensure_employee_weekly_shifts(employee)
+        return Response(
+            {
+                "employee": employee.pk,
+                "weekly_shifts": EmployeeWeeklyShiftSerializer(
+                    employee.weekly_shifts.all().order_by("weekday"),
+                    many=True,
+                ).data,
+                "overrides": EmployeeScheduleOverrideSerializer(
+                    employee.schedule_overrides.all().order_by("date")[:60],
+                    many=True,
+                ).data,
+            }
+        )
+
+    def patch(self, request, pk):
+        employee = self.get_object(request, pk)
+        _ensure_employee_weekly_shifts(employee)
+        serializer = EmployeeScheduleSerializer(
+            instance=employee,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        employee = serializer.save()
+        log_event(
+            actor=request.user,
+            section="employee",
+            action="schedule_update",
+            instance=employee,
+            message=f"Horario actualizado desde API movil: {employee.full_name}.",
+        )
+        return self.get(request, pk)
 
 
 class ServiceListView(MobileApiMixin, generics.ListCreateAPIView):

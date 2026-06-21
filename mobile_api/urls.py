@@ -15,6 +15,7 @@ urlpatterns = [
     path("client-reward-rules/<int:pk>/", views.ClientRewardRuleDetailView.as_view(), name="client_reward_rule_detail"),
     path("employees/", views.EmployeeListView.as_view(), name="employees"),
     path("employees/<int:pk>/", views.EmployeeDetailView.as_view(), name="employee_detail"),
+    path("employees/<int:pk>/schedule/", views.EmployeeScheduleView.as_view(), name="employee_schedule"),
     path("services/", views.ServiceListView.as_view(), name="services"),
     path("services/<int:pk>/", views.ServiceDetailView.as_view(), name="service_detail"),
     path("zones/", views.ZoneListView.as_view(), name="zones"),

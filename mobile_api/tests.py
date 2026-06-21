@@ -11,7 +11,13 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from bookings.models import Booking
 from clients.models import Client
-from employees.models import Employee, EmployeeRecurringTimeBlock, EmployeeTimeBlock, EmployeeWeeklyShift
+from employees.models import (
+    Employee,
+    EmployeeRecurringTimeBlock,
+    EmployeeScheduleOverride,
+    EmployeeTimeBlock,
+    EmployeeWeeklyShift,
+)
 from payments.models import Payment, PaymentRefund
 from salon.models import Zone
 from services_app.models import Service
@@ -347,6 +353,91 @@ class MobileApiMvpTests(TestCase):
         )
         self.assertEqual(forbidden_create.status_code, 400)
         self.assertIn("sin acceso", str(forbidden_create.json()).lower())
+
+    def test_owner_can_read_and_update_employee_schedule(self):
+        self._auth(self.owner_user)
+        url = reverse("mobile_api:employee_schedule", args=[self.other_employee.pk])
+
+        response = self.api_client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["weekly_shifts"]), 7)
+
+        response = self.api_client.patch(
+            url,
+            {
+                "weekly_shifts": [
+                    {
+                        "weekday": 0,
+                        "is_day_off": False,
+                        "start_time": "13:00",
+                        "end_time": "17:00",
+                        "break_start": None,
+                        "break_end": None,
+                        "break_label": "",
+                        "note": "Tarde",
+                    },
+                    {
+                        "weekday": 5,
+                        "is_day_off": True,
+                        "start_time": None,
+                        "end_time": None,
+                        "break_start": None,
+                        "break_end": None,
+                        "break_label": "",
+                        "note": "",
+                    },
+                ],
+                "overrides": [
+                    {
+                        "date": "2026-05-05",
+                        "is_day_off": False,
+                        "start_time": "10:00",
+                        "end_time": "14:00",
+                        "break_start": None,
+                        "break_end": None,
+                        "break_label": "",
+                        "label": "Especial",
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        monday = EmployeeWeeklyShift.objects.get(employee=self.other_employee, weekday=0)
+        saturday = EmployeeWeeklyShift.objects.get(employee=self.other_employee, weekday=5)
+        self.assertEqual(monday.start_time, time(13, 0))
+        self.assertEqual(monday.end_time, time(17, 0))
+        self.assertEqual(monday.note, "Tarde")
+        self.assertTrue(saturday.is_day_off)
+        self.assertIsNone(saturday.start_time)
+
+        override = EmployeeScheduleOverride.objects.get(
+            employee=self.other_employee,
+            date="2026-05-05",
+        )
+        self.assertEqual(override.start_time, time(10, 0))
+        self.assertEqual(override.end_time, time(14, 0))
+        self.assertEqual(override.label, "Especial")
+
+    def test_employee_cannot_update_schedule(self):
+        self._auth(self.employee_user)
+        response = self.api_client.patch(
+            reverse("mobile_api:employee_schedule", args=[self.employee.pk]),
+            {
+                "weekly_shifts": [
+                    {
+                        "weekday": 0,
+                        "is_day_off": False,
+                        "start_time": "13:00",
+                        "end_time": "17:00",
+                    }
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("sin permiso", str(response.json()).lower())
 
     def test_time_block_rejects_overlap_with_block_and_booking_unless_forced(self):
         EmployeeTimeBlock.objects.create(
