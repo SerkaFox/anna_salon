@@ -30,6 +30,7 @@ from bookings.utils import (
 from clients.models import Client
 from clients.models import ClientRewardRule
 from clients.rewards import client_reward_progress
+from documents.models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment as ManualPayment
 from employees.models import (
     Employee,
     EmployeeRecurringTimeBlock,
@@ -50,6 +51,8 @@ from .serializers import (
     BookingSerializer,
     BookingStatusSerializer,
     BookingWriteSerializer,
+    CashClosureSerializer,
+    CashClosureWriteSerializer,
     ClientWriteSerializer,
     ClientSerializer,
     ClientRewardRuleSerializer,
@@ -59,6 +62,11 @@ from .serializers import (
     EmployeeScheduleSerializer,
     EmployeeScheduleOverrideSerializer,
     EmployeeWeeklyShiftSerializer,
+    FiscalDocumentLineSerializer,
+    FiscalDocumentLineWriteSerializer,
+    FiscalDocumentSerializer,
+    ManualPaymentSerializer,
+    ManualPaymentWriteSerializer,
     ServiceSerializer,
     ServiceWriteSerializer,
     TimeBlockSerializer,
@@ -108,6 +116,43 @@ def _normalize_id_aliases(data):
         if alias in normalized and field not in normalized:
             normalized[field] = normalized[alias]
     return normalized
+
+
+def _mobile_admin_required(user):
+    if not getattr(user, "can_manage_staff", False):
+        raise PermissionDenied("Sin permiso para gestionar caja.")
+
+
+def _parse_mobile_date(value):
+    if value:
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise serializers.ValidationError({"date": ["Fecha inválida."]}) from exc
+    return timezone.localdate()
+
+
+def _ensure_document_default_line(document):
+    if document.lines.exists():
+        return
+    booking = document.booking
+    FiscalDocumentLine.objects.create(
+        fiscal_document=document,
+        service=booking.service,
+        description=str(booking.service),
+        quantity=Decimal("1.00"),
+        unit_amount=booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00"),
+        sort_order=0,
+    )
+    document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
+
+
+def _is_cashbox_closed(target_date):
+    return CashClosure.objects.filter(closure_date=target_date).exists()
+
+
+def _pending_documents(queryset):
+    return [document for document in queryset if document.balance_due > Decimal("0.00")]
 
 
 class _MeUpdateSerializer(serializers.Serializer):
@@ -1075,6 +1120,287 @@ class BookingEditServicesView(MobileApiMixin, APIView):
             payload["payment_id"] = result["payment"].pk
             payload["checkout_url"] = result["payment"].checkout_url
         return Response(payload)
+
+
+class CashboxSummaryView(MobileApiMixin, APIView):
+    def get(self, request):
+        _mobile_admin_required(request.user)
+        selected_date = _parse_mobile_date(request.query_params.get("date"))
+        method_value = (request.query_params.get("method") or "").strip()
+        entry_type_value = (request.query_params.get("entry_type") or "").strip()
+
+        payments = ManualPayment.objects.select_related(
+            "booking",
+            "booking__client",
+            "booking__service",
+            "fiscal_document",
+        ).filter(paid_at__date=selected_date)
+        if method_value:
+            payments = payments.filter(method=method_value)
+        if entry_type_value:
+            payments = payments.filter(entry_type=entry_type_value)
+        payments = list(payments)
+
+        totals_by_method = {
+            method: str(sum((payment.signed_amount for payment in payments if payment.method == method), Decimal("0.00")))
+            for method, _label in ManualPayment.Methods.choices
+        }
+        payments_total = sum((payment.signed_amount for payment in payments), Decimal("0.00"))
+
+        pending_documents = FiscalDocument.objects.select_related(
+            "booking",
+            "booking__client",
+            "booking__service",
+        ).prefetch_related("payments", "lines")
+        pending_documents = _pending_documents(pending_documents)
+        pending_total = sum((document.balance_due for document in pending_documents), Decimal("0.00"))
+        closure = CashClosure.objects.filter(closure_date=selected_date).select_related("closed_by").first()
+
+        return Response(
+            {
+                "date": selected_date.isoformat(),
+                "payments_total": str(payments_total),
+                "payments_count": len(payments),
+                "totals_by_method": totals_by_method,
+                "pending_total": str(pending_total),
+                "payments": ManualPaymentSerializer(payments, many=True).data,
+                "pending_documents": FiscalDocumentSerializer(pending_documents[:50], many=True).data,
+                "closure": CashClosureSerializer(closure).data if closure else None,
+                "payment_method_choices": [
+                    {"value": value, "label": label}
+                    for value, label in ManualPayment.Methods.choices
+                ],
+                "entry_type_choices": [
+                    {"value": value, "label": label}
+                    for value, label in ManualPayment.EntryTypes.choices
+                ],
+            }
+        )
+
+
+class BookingCashDocumentView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        _mobile_admin_required(request.user)
+        booking = generics.get_object_or_404(
+            Booking.objects.select_related("client", "employee", "service").prefetch_related("fiscal_documents", "fiscal_documents__lines", "fiscal_documents__payments"),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        document_type = (request.data.get("document_type") or FiscalDocument.DocumentTypes.RECEIPT).strip()
+        if document_type not in FiscalDocument.DocumentTypes.values:
+            raise serializers.ValidationError({"document_type": ["Tipo de documento no válido."]})
+        document, _created = FiscalDocument.objects.get_or_create(
+            booking=booking,
+            document_type=document_type,
+            status__in=[FiscalDocument.Statuses.DRAFT, FiscalDocument.Statuses.ISSUED],
+            defaults={
+                "status": FiscalDocument.Statuses.ISSUED,
+                "issue_date": timezone.localdate(),
+            },
+        )
+        _ensure_document_default_line(document)
+        return Response(FiscalDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+class CashDocumentDetailView(MobileApiMixin, APIView):
+    def get_object(self, request, pk):
+        _mobile_admin_required(request.user)
+        document = generics.get_object_or_404(
+            FiscalDocument.objects.select_related(
+                "booking",
+                "booking__client",
+                "booking__employee",
+                "booking__service",
+                "booking__zone",
+            ).prefetch_related("payments", "lines"),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, document.booking):
+            raise PermissionDenied("Sin acceso a este documento.")
+        return document
+
+    def get(self, request, pk):
+        document = self.get_object(request, pk)
+        return Response(FiscalDocumentSerializer(document).data)
+
+
+class CashDocumentLineCreateView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        _mobile_admin_required(request.user)
+        document = generics.get_object_or_404(
+            FiscalDocument.objects.select_related("booking", "booking__client").prefetch_related("lines", "payments"),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, document.booking):
+            raise PermissionDenied("Sin acceso a este documento.")
+        serializer = FiscalDocumentLineWriteSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        line = FiscalDocumentLine.objects.create(
+            fiscal_document=document,
+            service=serializer.validated_data.get("service"),
+            description=serializer.validated_data["description"],
+            quantity=serializer.validated_data["quantity"],
+            unit_amount=serializer.validated_data["unit_amount"],
+            sort_order=document.lines.count() + 1,
+        )
+        document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
+        log_event(
+            actor=request.user,
+            section="document",
+            action="line_create",
+            instance=line,
+            message=f"Línea añadida desde API móvil a {document.number}.",
+        )
+        document.refresh_from_db()
+        return Response(FiscalDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+class CashDocumentPaymentCreateView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        _mobile_admin_required(request.user)
+        document = generics.get_object_or_404(
+            FiscalDocument.objects.select_related("booking", "booking__client").prefetch_related("payments"),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, document.booking):
+            raise PermissionDenied("Sin acceso a este documento.")
+        serializer = ManualPaymentWriteSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        paid_at = serializer.validated_data.get("paid_at") or timezone.now()
+        if _is_cashbox_closed(timezone.localtime(paid_at).date()):
+            raise serializers.ValidationError({"paid_at": ["La caja de esa fecha ya está cerrada."]})
+
+        entry_type = serializer.validated_data["entry_type"]
+        amount = serializer.validated_data["amount"]
+        if entry_type == ManualPayment.EntryTypes.PAYMENT and document.balance_due <= Decimal("0.00"):
+            raise serializers.ValidationError({"amount": ["El documento ya está totalmente cobrado."]})
+        if (
+            entry_type == ManualPayment.EntryTypes.PAYMENT
+            and amount > document.balance_due
+            and document.balance_due > Decimal("0.00")
+        ):
+            raise serializers.ValidationError({"amount": ["El pago supera el saldo pendiente del documento."]})
+        if entry_type == ManualPayment.EntryTypes.REFUND and amount > document.payments_total:
+            raise serializers.ValidationError({"amount": ["La devolución supera lo ya cobrado en el documento."]})
+
+        payment = ManualPayment.objects.create(
+            fiscal_document=document,
+            booking=document.booking,
+            paid_at=paid_at,
+            entry_type=entry_type,
+            amount=amount,
+            method=serializer.validated_data["method"],
+            reference=serializer.validated_data.get("reference", ""),
+            notes=serializer.validated_data.get("notes", ""),
+        )
+        log_event(
+            actor=request.user,
+            section="payment",
+            action="create",
+            instance=payment,
+            message=f"{payment.get_entry_type_display()} registrada desde API móvil en {document.number}.",
+            metadata={"amount": str(payment.amount), "method": payment.method},
+        )
+        document.refresh_from_db()
+        return Response(FiscalDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+class BookingQuickPaymentView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        _mobile_admin_required(request.user)
+        booking = generics.get_object_or_404(
+            Booking.objects.select_related("client", "employee", "service").prefetch_related("fiscal_documents__payments", "fiscal_documents__lines"),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        method = (request.data.get("method") or "").strip()
+        if method not in ManualPayment.Methods.values:
+            raise serializers.ValidationError({"method": ["Método de pago no válido."]})
+        payment_date = timezone.localdate()
+        if _is_cashbox_closed(payment_date):
+            raise serializers.ValidationError({"date": ["La caja de hoy ya está cerrada."]})
+
+        active_documents = [
+            document
+            for document in booking.fiscal_documents.all()
+            if document.status in {FiscalDocument.Statuses.DRAFT, FiscalDocument.Statuses.ISSUED}
+        ]
+        document = None
+        for document_type in (FiscalDocument.DocumentTypes.INVOICE, FiscalDocument.DocumentTypes.RECEIPT):
+            document = next((item for item in active_documents if item.document_type == document_type), None)
+            if document:
+                break
+        created = False
+        if document is None:
+            document = FiscalDocument.objects.create(
+                booking=booking,
+                document_type=FiscalDocument.DocumentTypes.RECEIPT,
+                status=FiscalDocument.Statuses.ISSUED,
+                issue_date=timezone.localdate(),
+            )
+            _ensure_document_default_line(document)
+            created = True
+        if document.balance_due <= Decimal("0.00"):
+            raise serializers.ValidationError({"payment": [f"{document.number} ya está totalmente cobrado."]})
+
+        payment = ManualPayment.objects.create(
+            fiscal_document=document,
+            booking=booking,
+            entry_type=ManualPayment.EntryTypes.PAYMENT,
+            paid_at=timezone.now(),
+            amount=document.balance_due,
+            method=method,
+        )
+        log_event(
+            actor=request.user,
+            section="payment",
+            action="quick_payment",
+            instance=payment,
+            message=f"Cobro rápido desde API móvil en {document.number}.",
+            metadata={"amount": str(payment.amount), "method": payment.method, "created_document": created},
+        )
+        document.refresh_from_db()
+        return Response(FiscalDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+class CashboxCloseView(MobileApiMixin, APIView):
+    def post(self, request):
+        _mobile_admin_required(request.user)
+        serializer = CashClosureWriteSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        closure_date = serializer.validated_data.get("date") or timezone.localdate()
+        notes = serializer.validated_data.get("notes", "")
+
+        payments = list(ManualPayment.objects.filter(paid_at__date=closure_date))
+        totals_by_method = {
+            method: sum((payment.signed_amount for payment in payments if payment.method == method), Decimal("0.00"))
+            for method, _label in ManualPayment.Methods.choices
+        }
+        total_amount = sum((payment.signed_amount for payment in payments), Decimal("0.00"))
+        closure, created = CashClosure.objects.update_or_create(
+            closure_date=closure_date,
+            defaults={
+                "total_amount": total_amount,
+                "cash_amount": totals_by_method[ManualPayment.Methods.CASH],
+                "card_amount": totals_by_method[ManualPayment.Methods.CARD],
+                "bizum_amount": totals_by_method[ManualPayment.Methods.BIZUM],
+                "transfer_amount": totals_by_method[ManualPayment.Methods.TRANSFER],
+                "payments_count": len(payments),
+                "notes": notes,
+                "closed_by": request.user,
+            },
+        )
+        log_event(
+            actor=request.user,
+            section="cashbox",
+            action="close" if created else "update_close",
+            instance=closure,
+            message=f"Cierre de caja desde API móvil para {closure_date:%d/%m/%Y}.",
+            metadata={"payments_count": len(payments), "total_amount": str(total_amount)},
+        )
+        return Response(CashClosureSerializer(closure).data, status=status.HTTP_201_CREATED)
 
 
 class BookingAvailabilityCheckView(MobileApiMixin, APIView):

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -11,6 +12,7 @@ from bookings.models import Booking
 from bookings.utils import combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
 from clients.models import Client, ClientRewardRule
 from clients.rewards import client_reward_progress
+from documents.models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment as ManualPayment
 from employees.models import (
     Employee,
     EmployeeRecurringTimeBlock,
@@ -825,6 +827,176 @@ class BookingWriteSerializer(serializers.Serializer):
 
         self._booking_form = form
         return attrs
+
+
+class FiscalDocumentLineSerializer(serializers.ModelSerializer):
+    total_amount = serializers.SerializerMethodField()
+    service_name = serializers.CharField(source="service.name", read_only=True, allow_null=True)
+
+    class Meta:
+        model = FiscalDocumentLine
+        fields = [
+            "id",
+            "service",
+            "service_name",
+            "description",
+            "quantity",
+            "unit_amount",
+            "total_amount",
+            "sort_order",
+        ]
+
+    def get_total_amount(self, obj):
+        return str(obj.total_amount)
+
+
+class ManualPaymentSerializer(serializers.ModelSerializer):
+    method_label = serializers.CharField(source="get_method_display", read_only=True)
+    entry_type_label = serializers.CharField(source="get_entry_type_display", read_only=True)
+    paid_at = serializers.SerializerMethodField()
+    signed_amount = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ManualPayment
+        fields = [
+            "id",
+            "fiscal_document",
+            "booking",
+            "entry_type",
+            "entry_type_label",
+            "paid_at",
+            "amount",
+            "signed_amount",
+            "method",
+            "method_label",
+            "reference",
+            "notes",
+        ]
+
+    def get_paid_at(self, obj):
+        return _format_local_datetime(obj.paid_at)
+
+    def get_signed_amount(self, obj):
+        return str(obj.signed_amount)
+
+
+class FiscalDocumentSerializer(serializers.ModelSerializer):
+    document_type_label = serializers.CharField(source="get_document_type_display", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    client_name = serializers.CharField(source="booking.client.full_name", read_only=True)
+    service_name = serializers.CharField(source="booking.service.name", read_only=True)
+    booking_start_at = serializers.SerializerMethodField()
+    payments_total = serializers.SerializerMethodField()
+    balance_due = serializers.SerializerMethodField()
+    is_paid = serializers.BooleanField(read_only=True)
+    lines = FiscalDocumentLineSerializer(many=True, read_only=True)
+    payments = ManualPaymentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = FiscalDocument
+        fields = [
+            "id",
+            "booking",
+            "document_type",
+            "document_type_label",
+            "status",
+            "status_label",
+            "number",
+            "issue_date",
+            "tax_rate",
+            "subtotal_amount",
+            "tax_amount",
+            "total_amount",
+            "payments_total",
+            "balance_due",
+            "is_paid",
+            "notes",
+            "client_name",
+            "service_name",
+            "booking_start_at",
+            "lines",
+            "payments",
+        ]
+
+    def get_booking_start_at(self, obj):
+        return _format_local_datetime(obj.booking.start_at)
+
+    def get_payments_total(self, obj):
+        return str(obj.payments_total)
+
+    def get_balance_due(self, obj):
+        return str(obj.balance_due)
+
+
+class CashClosureSerializer(serializers.ModelSerializer):
+    closed_by_name = serializers.CharField(source="closed_by.get_full_name", read_only=True, allow_null=True)
+    closed_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CashClosure
+        fields = [
+            "id",
+            "closure_date",
+            "total_amount",
+            "cash_amount",
+            "card_amount",
+            "bizum_amount",
+            "transfer_amount",
+            "payments_count",
+            "notes",
+            "closed_by",
+            "closed_by_name",
+            "closed_at",
+        ]
+
+    def get_closed_at(self, obj):
+        return _format_local_datetime(obj.closed_at)
+
+
+class FiscalDocumentLineWriteSerializer(serializers.Serializer):
+    service = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
+    description = serializers.CharField(required=False, allow_blank=True)
+    quantity = serializers.DecimalField(max_digits=8, decimal_places=2, required=False, min_value=Decimal("0.01"))
+    unit_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=Decimal("0.00"))
+    manual_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=Decimal("0.00"))
+
+    def validate(self, attrs):
+        service = attrs.get("service")
+        description = (attrs.get("description") or "").strip()
+        manual_amount = attrs.get("manual_amount")
+        unit_amount = attrs.get("unit_amount")
+
+        if service:
+            attrs["description"] = description or service.name
+            if unit_amount in (None, ""):
+                attrs["unit_amount"] = service.price
+        elif manual_amount is not None:
+            attrs["unit_amount"] = manual_amount
+
+        if not attrs.get("description"):
+            raise serializers.ValidationError({"description": ["Indica un concepto."]})
+        if attrs.get("unit_amount") is None:
+            raise serializers.ValidationError({"unit_amount": ["Indica un importe."]})
+        if "quantity" not in attrs:
+            attrs["quantity"] = Decimal("1.00")
+        return attrs
+
+
+class ManualPaymentWriteSerializer(serializers.ModelSerializer):
+    paid_at = SalonDateTimeField(required=False)
+
+    class Meta:
+        model = ManualPayment
+        fields = ["paid_at", "entry_type", "amount", "method", "reference", "notes"]
+
+
+class CashClosureWriteSerializer(serializers.Serializer):
+    date = serializers.DateField(required=False)
+    notes = serializers.CharField(required=False, allow_blank=True)
 
     def save(self, **kwargs):
         return self._booking_form.save()
