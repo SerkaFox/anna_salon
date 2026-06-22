@@ -44,4 +44,5 @@ urlpatterns = [
     path("cashbox/documents/<int:pk>/", views.CashDocumentDetailView.as_view(), name="cash_document_detail"),
     path("cashbox/documents/<int:pk>/lines/", views.CashDocumentLineCreateView.as_view(), name="cash_document_line_create"),
     path("cashbox/documents/<int:pk>/payments/", views.CashDocumentPaymentCreateView.as_view(), name="cash_document_payment_create"),
+    path("cashbox/documents/<int:pk>/share/", views.CashDocumentShareView.as_view(), name="cash_document_share"),
 ]

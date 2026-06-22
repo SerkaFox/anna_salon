@@ -1,11 +1,14 @@
 from datetime import datetime, time
 from decimal import Decimal, InvalidOperation
+import re
 import secrets
 
 from django.conf import settings
+from django.core.mail import send_mail
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count
 from django.http import FileResponse, Http404
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import PermissionDenied
@@ -153,6 +156,45 @@ def _is_cashbox_closed(target_date):
 
 def _pending_documents(queryset):
     return [document for document in queryset if document.balance_due > Decimal("0.00")]
+
+
+def _normalize_whatsapp_phone(value):
+    digits = re.sub(r"\D+", "", value or "")
+    return digits or None
+
+
+def _document_share_subject(document):
+    return f"{document.get_document_type_display()} {document.number} | BRIMOON Studio"
+
+
+def _document_share_text(document, request=None):
+    lines = list(document.lines.all())
+    if lines:
+        detail_rows = [
+            f"- {line.description}: {line.quantity} x {line.unit_amount} EUR = {line.total_amount} EUR"
+            for line in lines
+        ]
+    else:
+        service_name = getattr(document.booking.service, "name", "") or "Servicio"
+        detail_rows = [f"- {service_name}: 1 x {document.total_amount} EUR = {document.total_amount} EUR"]
+    detail_text = "\n".join(detail_rows)
+    status_text = (
+        "Pagado completo."
+        if document.is_paid
+        else f"Pendiente: {document.balance_due} EUR."
+    )
+    return (
+        f"Hola {document.booking.client.full_name},\n\n"
+        f"Te enviamos tu {document.get_document_type_display().lower()} {document.number}.\n"
+        f"Fecha: {document.issue_date:%d/%m/%Y}\n"
+        f"Servicio: {document.booking.service.name}\n"
+        f"Reserva: {timezone.localtime(document.booking.start_at):%d/%m/%Y %H:%M}\n\n"
+        f"{detail_text}\n\n"
+        f"Total: {document.total_amount} EUR\n"
+        f"{status_text}"
+        "\n\n"
+        "BRIMOON Studio"
+    )
 
 
 class _MeUpdateSerializer(serializers.Serializer):
@@ -1304,6 +1346,59 @@ class CashDocumentPaymentCreateView(MobileApiMixin, APIView):
         )
         document.refresh_from_db()
         return Response(FiscalDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+class CashDocumentShareView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        _mobile_admin_required(request.user)
+        document = generics.get_object_or_404(
+            FiscalDocument.objects.select_related(
+                "booking",
+                "booking__client",
+                "booking__employee",
+                "booking__service",
+                "booking__zone",
+            ).prefetch_related("lines", "payments"),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, document.booking):
+            raise PermissionDenied("Sin acceso a este documento.")
+
+        channel = (request.data.get("channel") or "").strip()
+        if channel not in {"email", "whatsapp"}:
+            raise serializers.ValidationError({"channel": ["Canal no valido."]})
+        if not document.is_paid:
+            raise serializers.ValidationError({"document": ["El documento aun no esta cobrado completo."]})
+
+        share_text = _document_share_text(document, request=request)
+        if channel == "email":
+            email = (document.booking.client.email or "").strip()
+            if not email:
+                raise serializers.ValidationError({"email": ["El cliente no tiene email."]})
+            from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@brimoon.es")
+            try:
+                send_mail(
+                    _document_share_subject(document),
+                    share_text,
+                    from_email,
+                    [email],
+                    fail_silently=False,
+                )
+            except Exception as exc:
+                raise serializers.ValidationError({"email": [str(exc)]}) from exc
+            return Response({"channel": "email", "sent": True, "email": email})
+
+        phone = _normalize_whatsapp_phone(document.booking.client.phone)
+        if not phone:
+            raise serializers.ValidationError({"phone": ["El cliente no tiene telefono."]})
+        return Response(
+            {
+                "channel": "whatsapp",
+                "sent": False,
+                "phone": phone,
+                "message": share_text,
+            }
+        )
 
 
 class BookingQuickPaymentView(MobileApiMixin, APIView):

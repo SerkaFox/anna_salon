@@ -884,6 +884,8 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
     document_type_label = serializers.CharField(source="get_document_type_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     client_name = serializers.CharField(source="booking.client.full_name", read_only=True)
+    client_phone = serializers.CharField(source="booking.client.phone", read_only=True)
+    client_email = serializers.CharField(source="booking.client.email", read_only=True)
     service_name = serializers.CharField(source="booking.service.name", read_only=True)
     booking_start_at = serializers.SerializerMethodField()
     payments_total = serializers.SerializerMethodField()
@@ -912,6 +914,8 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
             "is_paid",
             "notes",
             "client_name",
+            "client_phone",
+            "client_email",
             "service_name",
             "booking_start_at",
             "lines",
