@@ -69,7 +69,11 @@ class FiscalDocument(models.Model):
 
     @property
     def payments_total(self):
-        total = sum((payment.signed_amount for payment in self.payments.all()), Decimal("0.00"))
+        payments = Payment.objects.filter(fiscal_document=self).only(
+            "entry_type",
+            "amount",
+        )
+        total = sum((payment.signed_amount for payment in payments), Decimal("0.00"))
         return total
 
     @property
@@ -82,7 +86,11 @@ class FiscalDocument(models.Model):
         return self.balance_due <= Decimal("0.00")
 
     def refresh_amounts_from_booking(self):
-        lines = list(self.lines.all()) if self.pk else []
+        lines = (
+            list(FiscalDocumentLine.objects.filter(fiscal_document=self))
+            if self.pk
+            else []
+        )
         if lines:
             total = sum((line.total_amount for line in lines), Decimal("0.00"))
         else:

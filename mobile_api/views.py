@@ -8,7 +8,6 @@ from django.core.mail import send_mail
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count
 from django.http import FileResponse, Http404
-from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import PermissionDenied
@@ -1370,9 +1369,22 @@ class CashDocumentShareView(MobileApiMixin, APIView):
         if not document.is_paid:
             raise serializers.ValidationError({"document": ["El documento aun no esta cobrado completo."]})
 
+        client = document.booking.client
+        email_override = (request.data.get("email") or "").strip()
+        phone_override = (request.data.get("phone") or "").strip()
+        update_fields = []
+        if email_override and email_override != (client.email or ""):
+            client.email = email_override
+            update_fields.append("email")
+        if phone_override and phone_override != (client.phone or ""):
+            client.phone = phone_override
+            update_fields.append("phone")
+        if update_fields:
+            client.save(update_fields=update_fields)
+
         share_text = _document_share_text(document, request=request)
         if channel == "email":
-            email = (document.booking.client.email or "").strip()
+            email = (client.email or "").strip()
             if not email:
                 raise serializers.ValidationError({"email": ["El cliente no tiene email."]})
             from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@brimoon.es")
@@ -1388,7 +1400,7 @@ class CashDocumentShareView(MobileApiMixin, APIView):
                 raise serializers.ValidationError({"email": [str(exc)]}) from exc
             return Response({"channel": "email", "sent": True, "email": email})
 
-        phone = _normalize_whatsapp_phone(document.booking.client.phone)
+        phone = _normalize_whatsapp_phone(client.phone)
         if not phone:
             raise serializers.ValidationError({"phone": ["El cliente no tiene telefono."]})
         return Response(
