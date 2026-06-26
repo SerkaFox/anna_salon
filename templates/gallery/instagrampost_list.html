@@ -57,13 +57,13 @@
               <td>
                 <strong>{{ post.title|default:"Post Instagram" }}</strong>
                 <a class="gallery-panel-preview" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
-                  {% if post.media_url or post.thumbnail_url %}
+                  {% if post.display_media_url or post.display_thumbnail_url %}
                     {% if post.media_type == "VIDEO" or post.media_type == "REEL" %}
                       <video muted loop playsinline preload="metadata">
-                        <source src="{{ post.media_url }}">
+                        <source src="{{ post.display_media_url }}">
                       </video>
                     {% else %}
-                      <img src="{{ post.thumbnail_url|default:post.media_url }}" alt="Preview de galería" loading="lazy">
+                      <img src="{{ post.display_thumbnail_url }}" alt="Preview de galería" loading="lazy">
                     {% endif %}
                   {% else %}
                     <span class="gallery-panel-preview__empty"></span>

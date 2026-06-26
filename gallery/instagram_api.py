@@ -1,10 +1,13 @@
 import json
+import mimetypes
+from os.path import splitext
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.utils.dateparse import parse_datetime
 
 from .models import InstagramPost
@@ -74,7 +77,55 @@ def upsert_instagram_media_item(item):
         instagram_media_id=media_id,
         defaults=defaults,
     )
+    _cache_remote_media(post, item)
     return post, created
+
+
+def _guess_extension(source_url, content_type=""):
+    extension = splitext(source_url or "")[1].lower()
+    if extension:
+        return extension
+    guessed = mimetypes.guess_extension((content_type or "").split(";", 1)[0].strip())
+    return guessed or ".bin"
+
+
+def _download_remote_file(source_url):
+    if not source_url:
+        return None, "", ""
+    with urlopen(source_url, timeout=30) as response:
+        content = response.read()
+        content_type = ""
+        headers = getattr(response, "headers", None)
+        if headers is not None:
+            content_type = headers.get_content_type() if hasattr(headers, "get_content_type") else headers.get("Content-Type", "")
+    return content, content_type, _guess_extension(source_url, content_type)
+
+
+def _cache_remote_media(post, item):
+    changed_fields = []
+    media_id = post.instagram_media_id or "instagram"
+    media_url = item.get("media_url") or ""
+    thumbnail_url = item.get("thumbnail_url") or ""
+
+    if media_url and not post.cached_media:
+        content, content_type, extension = _download_remote_file(media_url)
+        filename = f"{media_id}_media{extension}"
+        post.cached_media.save(filename, ContentFile(content), save=False)
+        changed_fields.append("cached_media")
+
+    if thumbnail_url and not post.cached_thumbnail:
+        content, content_type, extension = _download_remote_file(thumbnail_url)
+        filename = f"{media_id}_thumb{extension}"
+        post.cached_thumbnail.save(filename, ContentFile(content), save=False)
+        changed_fields.append("cached_thumbnail")
+    elif media_url and post.media_type not in {"VIDEO", "REEL"} and not post.cached_thumbnail:
+        content, content_type, extension = _download_remote_file(media_url)
+        filename = f"{media_id}_thumb{extension}"
+        post.cached_thumbnail.save(filename, ContentFile(content), save=False)
+        changed_fields.append("cached_thumbnail")
+
+    if changed_fields:
+        post.save(update_fields=changed_fields + ["updated_at"])
 
 
 def sync_instagram_media(access_token=None, account_id=None):

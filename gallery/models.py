@@ -1,5 +1,6 @@
 from html import escape
 from html.parser import HTMLParser
+from os.path import splitext
 from urllib.parse import urlparse
 
 from django.core.exceptions import ValidationError
@@ -133,6 +134,8 @@ class InstagramPost(models.Model):
     media_type = models.CharField("Tipo de media", max_length=40, blank=True)
     media_url = models.TextField("URL de media", blank=True)
     thumbnail_url = models.TextField("URL de miniatura", blank=True)
+    cached_media = models.FileField("Media en cache", upload_to="instagram_cache/%Y/%m/", blank=True)
+    cached_thumbnail = models.FileField("Miniatura en cache", upload_to="instagram_cache/%Y/%m/", blank=True)
     published_at = models.DateTimeField("Publicado en Instagram", null=True, blank=True)
     synced_from_api = models.BooleanField("Sincronizado por API", default=False)
     active = models.BooleanField("Activo", default=True)
@@ -160,3 +163,24 @@ class InstagramPost(models.Model):
 
     def __str__(self):
         return self.title or self.instagram_url
+
+    @property
+    def display_media_url(self):
+        if self.cached_media:
+            return self.cached_media.url
+        return self.media_url or self.thumbnail_url
+
+    @property
+    def display_thumbnail_url(self):
+        if self.cached_thumbnail:
+            return self.cached_thumbnail.url
+        if self.cached_media and self.media_type not in {"VIDEO", "REEL"}:
+            return self.cached_media.url
+        return self.thumbnail_url or self.media_url
+
+    @property
+    def media_extension_hint(self):
+        source = self.media_url or self.thumbnail_url or self.instagram_url
+        path = urlparse(source).path
+        extension = splitext(path)[1].lower()
+        return extension if extension else ""

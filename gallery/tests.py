@@ -1,6 +1,7 @@
 import json
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -181,6 +182,23 @@ class InstagramGalleryViewTests(TestCase):
         self.assertContains(response, "https://cdn.example.com/native-image.jpg")
         self.assertNotContains(response, "instagram-media")
 
+    def test_synced_image_prefers_cached_media_file(self):
+        post = InstagramPost.objects.create(
+            instagram_media_id="cached-image-media",
+            instagram_url="https://www.instagram.com/p/native-cached-image/",
+            caption="Native cached image",
+            media_type="IMAGE",
+            media_url="https://cdn.example.com/native-cached-image.jpg",
+            synced_from_api=True,
+            active=True,
+        )
+        post.cached_thumbnail.save("cached-thumb.jpg", SimpleUploadedFile("cached-thumb.jpg", b"fake-image", content_type="image/jpeg"))
+
+        response = self.client.get(reverse("public_gallery"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'src="/media/instagram_cache/', html=False)
+
     def test_synced_video_renders_native_video(self):
         InstagramPost.objects.create(
             instagram_media_id="video-media",
@@ -255,8 +273,8 @@ class InstagramGalleryViewTests(TestCase):
         response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Manicura, extensiones y tratamientos.png")
-        self.assertContains(response, "Definición, depilación y lifting de cejas.png")
+        self.assertContains(response, "Manicura%2C%20extensiones%20y%20tratamientos.png")
+        self.assertContains(response, "Definici%C3%B3n%2C%20depilaci%C3%B3n%20y%20lifting%20de%20cejas.png")
 
     def test_panel_requires_login(self):
         response = self.client.get(reverse("gallery:list"))

@@ -5,20 +5,20 @@
       class="portfolio-card__media"
       data-portfolio-open
       data-media-type="{{ post.media_type }}"
-      data-media-url="{{ post.media_url|default:post.thumbnail_url }}"
-      data-thumbnail-url="{{ post.thumbnail_url|default:post.media_url }}"
+      data-media-url="{{ post.display_media_url }}"
+      data-thumbnail-url="{{ post.display_thumbnail_url }}"
       data-caption="{{ post.caption|default:'' }}"
       data-permalink="{{ post.instagram_url }}"
       aria-label="Abrir trabajo de BRIMOON Studio"
     >
       {% if post.media_type == "VIDEO" or post.media_type == "REEL" %}
         <video autoplay muted loop playsinline preload="metadata">
-          <source src="{{ post.media_url }}">
+          <source src="{{ post.display_media_url }}">
         </video>
         <span class="portfolio-card__play" aria-hidden="true">▶</span>
       {% else %}
         <img
-          src="{{ post.thumbnail_url|default:post.media_url }}"
+          src="{{ post.display_thumbnail_url }}"
           alt="{{ post.caption|default:'Trabajo de BRIMOON Studio' }}"
           loading="lazy"
         >
