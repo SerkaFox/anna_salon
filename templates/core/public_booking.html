@@ -79,6 +79,15 @@
           {% endfor %}
         </div>
       </section>
+      <div class="selected-slot-summary service-selection-summary" data-service-summary {% if not booking_values.service %}hidden{% endif %}>
+        <div>
+          <span>{{ t.public_booking_service }}</span>
+          <strong data-service-summary-text>
+            {% for service in booking_service_catalog %}{% if booking_values.service == service.id|stringformat:'s' %}{{ service.name }} · {{ service.price }}{% endif %}{% endfor %}
+          </strong>
+        </div>
+        <button class="btn-lux btn-lux-outline btn-lux-small" type="button" data-edit-service>{{ t.view_detail|default:"Cambiar" }}</button>
+      </div>
       <div class="booking-date-strip" data-date-strip aria-label="{{ t.public_booking_date }}"></div>
 
       <div class="selected-slot-summary" data-selected-summary hidden>
@@ -95,7 +104,10 @@
             <strong>{{ t.public_booking_time }}</strong>
             <p data-slot-status>{{ t.public_booking_select_service_date }}</p>
           </div>
-          <button class="btn-lux btn-lux-ghost btn-lux-small" type="button" data-refresh-slots>{{ t.public_booking_refresh }}</button>
+          <div class="slot-picker__actions" data-slot-actions hidden>
+            <button class="btn-lux btn-lux-outline btn-lux-small" type="button" data-next-slot></button>
+            <button class="btn-lux btn-lux-ghost btn-lux-small" type="button" data-open-waitlist>{{ t.public_waitlist_submit }}</button>
+          </div>
         </div>
         <div class="slot-picker__body" data-slot-body>
           <div class="slot-grid" data-slot-grid></div>
@@ -164,10 +176,25 @@
         <span>{{ t.trust_2_title }}</span>
         <span>{{ t.trust_4_title }}</span>
       </div>
-      <form class="waitlist-card" method="post" action="{% url 'public_waitlist' %}" data-waitlist-form>
-        {% csrf_token %}
+      <div class="waitlist-card waitlist-card--aside">
         <h3>{{ t.public_waitlist_title }}</h3>
         <p>{{ t.public_waitlist_text }}</p>
+        <button class="btn-lux btn-lux-outline btn-lux-large" type="button" data-open-waitlist>{{ t.public_waitlist_submit }}</button>
+      </div>
+    </aside>
+  </div>
+</section>
+{{ waitlist_employees|json_script:"waitlist-employees-data" }}
+
+<dialog class="waitlist-modal" data-waitlist-modal>
+  <div class="waitlist-modal__panel">
+    <button class="waitlist-modal__close" type="button" data-close-waitlist aria-label="Cerrar">×</button>
+    <div class="waitlist-modal__body">
+      <span class="lux-kicker">BRIMOON</span>
+      <h3>{{ t.public_waitlist_title }}</h3>
+      <p>{{ t.public_waitlist_text }}</p>
+      <form class="waitlist-card waitlist-card--modal" method="post" action="{% url 'public_waitlist' %}" data-waitlist-form>
+        {% csrf_token %}
         <input type="hidden" name="service" data-waitlist-service>
         <input type="hidden" name="date" data-waitlist-date>
         <input type="hidden" name="time_range" data-waitlist-range>
@@ -190,10 +217,9 @@
         <div class="booking-alert" data-waitlist-message hidden></div>
         <button class="btn-lux btn-lux-outline btn-lux-large" type="submit">{{ t.public_waitlist_submit }}</button>
       </form>
-    </aside>
+    </div>
   </div>
-</section>
-{{ waitlist_employees|json_script:"waitlist-employees-data" }}
+</dialog>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
@@ -211,7 +237,11 @@
     const employeeInput = form.querySelector('[data-employee-input]');
     const zoneInput = form.querySelector('[data-zone-input]');
     const submitButton = form.querySelector('[data-submit-button]');
-    const refreshButton = form.querySelector('[data-refresh-slots]');
+    const slotActions = form.querySelector('[data-slot-actions]');
+    const nextSlotButton = form.querySelector('[data-next-slot]');
+    const serviceSummary = form.querySelector('[data-service-summary]');
+    const serviceSummaryText = form.querySelector('[data-service-summary-text]');
+    const editServiceButton = form.querySelector('[data-edit-service]');
     const contactToggle = form.querySelector('[data-contact-toggle]');
     const contactFields = form.querySelector('[data-contact-fields]');
     const selectedSummary = form.querySelector('[data-selected-summary]');
@@ -220,10 +250,14 @@
     const detailsSection = form.querySelector('[data-details-section]');
     const submitHint = form.querySelector('[data-submit-hint]');
     const waitlistForm = document.querySelector('[data-waitlist-form]');
+    const waitlistModal = document.querySelector('[data-waitlist-modal]');
+    const waitlistOpenButtons = document.querySelectorAll('[data-open-waitlist]');
+    const waitlistCloseButton = document.querySelector('[data-close-waitlist]');
     const waitlistEmployeesNode = document.getElementById('waitlist-employees-data');
     const waitlistEmployees = waitlistEmployeesNode ? JSON.parse(waitlistEmployeesNode.textContent || '[]') : [];
     let lastSlots = [];
     let activeDateRequest = 0;
+    let nextAvailableSuggestion = null;
     const currentLanguage = '{{ public_language|default:"es"|escapejs }}';
     const messages = {
       choose: '{{ t.public_booking_select_service_date|escapejs }}',
@@ -244,6 +278,19 @@
       serviceCards.forEach(function (card) {
         card.classList.toggle('is-selected', card.dataset.serviceId === selected);
       });
+      if (!serviceSummary || !serviceSummaryText) return;
+      const selectedCard = serviceCards.find(function (card) { return card.dataset.serviceId === selected; });
+      if (!selectedCard) {
+        serviceSummary.hidden = true;
+        form.classList.remove('is-service-selected');
+        serviceSummaryText.textContent = '';
+        return;
+      }
+      const metaTitle = selectedCard.querySelector('.booking-service-card__meta strong');
+      const metaPrice = selectedCard.querySelector('.booking-service-card__facts strong');
+      serviceSummaryText.textContent = (metaTitle ? metaTitle.textContent : '') + ' · ' + (metaPrice ? metaPrice.textContent : '');
+      serviceSummary.hidden = false;
+      form.classList.add('is-service-selected');
     }
 
     function applyServiceFilter(filterKey) {
@@ -251,7 +298,8 @@
         button.classList.toggle('is-active', button.dataset.serviceFilter === filterKey);
       });
       serviceCards.forEach(function (card) {
-        card.hidden = !(filterKey === 'all' || card.dataset.serviceCategory === filterKey);
+        const visible = filterKey === 'all' || card.dataset.serviceCategory === filterKey;
+        card.hidden = !visible;
       });
     }
 
@@ -269,9 +317,32 @@
         syncServiceCards();
         resetSlot();
         loadSlots();
-        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.setTimeout(function () {
+          dateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 120);
       });
     });
+
+    function openWaitlistModal() {
+      syncWaitlistForm();
+      if (waitlistModal && typeof waitlistModal.showModal === 'function') {
+        waitlistModal.showModal();
+      }
+    }
+
+    function closeWaitlistModal() {
+      if (waitlistModal && waitlistModal.open) waitlistModal.close();
+    }
+
+    waitlistOpenButtons.forEach(function (button) {
+      button.addEventListener('click', openWaitlistModal);
+    });
+    if (waitlistCloseButton) waitlistCloseButton.addEventListener('click', closeWaitlistModal);
+    if (waitlistModal) {
+      waitlistModal.addEventListener('click', function (event) {
+        if (event.target === waitlistModal) closeWaitlistModal();
+      });
+    }
 
     function parseIsoDate(value) {
       const parts = (value || '').split('-').map(Number);
@@ -333,10 +404,12 @@
       startInput.value = '';
       employeeInput.value = '';
       zoneInput.value = '';
+      nextAvailableSuggestion = null;
       submitButton.disabled = true;
       form.classList.remove('is-time-selected');
       selectedSummary.hidden = true;
       selectedSummaryText.textContent = '';
+      if (slotActions) slotActions.hidden = true;
       syncServiceCards();
       updateSubmitHint();
     }
@@ -368,6 +441,29 @@
       return Array.from(map.values()).sort(function (a, b) { return a.name.localeCompare(b.name); });
     }
 
+    function describeSuggestion(suggestion) {
+      if (!suggestion) return '';
+      const start = new Date(suggestion.slot.start_at);
+      const formatter = new Intl.DateTimeFormat(currentLanguage, { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return formatter.format(start) + ' · ' + suggestion.slot.employees[0].name;
+    }
+
+    function findNextAvailableSlot(service, startDate) {
+      const attempts = [];
+      for (let index = 1; index < 45; index += 1) attempts.push(addDays(startDate, index));
+      return attempts.reduce(function (chain, candidateDate) {
+        return chain.then(function (found) {
+          if (found) return found;
+          return fetchSlotsForDate(service, candidateDate).then(function (result) {
+            if (!result.ok || !result.data.ok) return null;
+            const slots = result.data.slots || [];
+            if (!slots.length) return null;
+            return { date: candidateDate, slot: slots[0] };
+          }).catch(function () { return null; });
+        });
+      }, Promise.resolve(null));
+    }
+
     function fetchSlotsForDate(service, date) {
       const params = new URLSearchParams({ service: service, date: date });
       return fetch(form.dataset.slotsUrl + '?' + params.toString(), { headers: { 'Accept': 'application/json' } })
@@ -396,14 +492,11 @@
       const visibleSlots = filteredSlots(slots);
       if (!visibleSlots.length) {
         status.textContent = messages.empty + ' ' + waitlistCtaText;
-        if (waitlistForm) {
-          waitlistForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          waitlistForm.classList.add('is-highlighted');
-          window.setTimeout(function () { waitlistForm.classList.remove('is-highlighted'); }, 1800);
-        }
+        if (slotActions) slotActions.hidden = false;
         syncWaitlistForm();
         return;
       }
+      if (slotActions) slotActions.hidden = true;
       status.textContent = messages.chooseMaster;
       groupSlotsByEmployee(visibleSlots).forEach(function (master) {
         const card = document.createElement('div');
@@ -476,6 +569,18 @@
           if (!result.ok || !result.data.ok) throw new Error(result.data.message || messages.error);
           lastSlots = result.data.slots || [];
           renderSlots(lastSlots);
+          if (!(lastSlots || []).length) {
+            return findNextAvailableSlot(service, date).then(function (suggestion) {
+              if (activeDateRequest !== requestId) return;
+              nextAvailableSuggestion = suggestion;
+              if (nextSlotButton && suggestion) {
+                nextSlotButton.textContent = 'Siguiente disponible: ' + describeSuggestion(suggestion);
+                if (slotActions) slotActions.hidden = false;
+              } else if (slotActions) {
+                slotActions.hidden = false;
+              }
+            });
+          }
         })
         .catch(function (error) {
           if (activeDateRequest !== requestId) return;
@@ -641,10 +746,28 @@
     contactToggle.addEventListener('change', function () {
       contactFields.hidden = !contactToggle.checked;
     });
-    serviceSelect.addEventListener('change', findFirstAvailableDate);
+    serviceSelect.addEventListener('change', loadSlots);
     dateInput.addEventListener('change', loadSlots);
     rangeSelect.addEventListener('change', function () { renderSlots(lastSlots); });
-    refreshButton.addEventListener('click', loadSlots);
+    if (nextSlotButton) {
+      nextSlotButton.addEventListener('click', function () {
+        if (!nextAvailableSuggestion) return;
+        dateInput.value = nextAvailableSuggestion.date;
+        renderDateStrip();
+        loadSlots();
+      });
+    }
+    if (editServiceButton) {
+      editServiceButton.addEventListener('click', function () {
+        form.classList.remove('is-service-selected');
+        serviceSummary.hidden = true;
+        const selectedCard = serviceCards.find(function (card) { return card.dataset.serviceId === serviceSelect.value; });
+        const selectedCategory = selectedCard ? selectedCard.dataset.serviceCategory : 'all';
+        applyServiceFilter(selectedCategory || 'all');
+        const scrollTarget = document.querySelector('.booking-service-catalog');
+        if (scrollTarget) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
     editSlotButton.addEventListener('click', function () {
       form.classList.remove('is-time-selected');
       selectedSummary.hidden = true;
@@ -653,11 +776,7 @@
     renderDateStrip();
     syncServiceCards();
     applyServiceFilter('all');
-    if (serviceSelect.value) {
-      findFirstAvailableDate();
-    } else {
-      loadSlots();
-    }
+    loadSlots();
     syncWaitlistForm();
   });
 </script>

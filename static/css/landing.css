@@ -868,6 +868,7 @@ img { max-width: 100%; }
   background: rgba(214,167,92,0.08);
   box-shadow: 0 24px 64px rgba(0,0,0,0.34), var(--gold-glow);
 }
+.booking-service-card[hidden] { display: none !important; }
 .booking-service-card__meta {
   display: grid;
   gap: 8px;
@@ -959,8 +960,10 @@ img { max-width: 100%; }
 .selected-slot-summary[hidden] { display: none; }
 .selected-slot-summary span { display: block; color: var(--muted); font-weight: 800; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; }
 .selected-slot-summary strong { display: block; margin-top: 4px; color: var(--gold-light); font-size: 1.03rem; }
+.service-selection-summary { margin-top: 0; margin-bottom: 18px; }
+.public-booking-card.is-service-selected .booking-service-catalog { display: none; }
 .public-booking-card.is-time-selected .slot-picker__body,
-.public-booking-card.is-time-selected [data-refresh-slots] { display: none; }
+.public-booking-card.is-time-selected .slot-picker__actions { display: none; }
 .public-booking-card.is-time-selected .slot-picker { padding-bottom: 16px; }
 .booking-details-section {
   scroll-margin-top: 110px;
@@ -1028,6 +1031,13 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
 .slot-picker__head { display: flex; justify-content: space-between; gap: 16px; align-items: start; margin-bottom: 16px; }
 .slot-picker__head strong { color: var(--gold-light); font-size: 1.05rem; }
 .slot-picker__head p { margin: 5px 0 0; color: var(--muted); }
+.slot-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.slot-picker__actions[hidden] { display: none; }
 .slot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .master-slot-card {
   min-height: 116px;
@@ -1095,6 +1105,7 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   box-shadow: 0 24px 70px rgba(0,0,0,0.38);
   backdrop-filter: blur(18px);
 }
+.waitlist-card--aside { margin-top: 24px; }
 
 .waitlist-card.is-highlighted {
   animation: waitlistPulse 1.8s ease;
@@ -1143,6 +1154,51 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   border-color: rgba(80, 220, 151, 0.34);
   background: rgba(7, 61, 46, 0.36);
   color: #b8ffd9;
+}
+.waitlist-modal {
+  width: min(640px, calc(100vw - 24px));
+  padding: 0;
+  border: 1px solid rgba(240,208,145,0.35);
+  border-radius: 28px;
+  background: rgba(6,16,24,0.92);
+  color: var(--text);
+  box-shadow: 0 38px 120px rgba(0,0,0,0.78);
+  backdrop-filter: blur(24px);
+}
+.waitlist-modal::backdrop {
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(8px);
+}
+.waitlist-modal__panel {
+  position: relative;
+  padding: clamp(24px, 4vw, 34px);
+}
+.waitlist-modal__body {
+  display: grid;
+  gap: 18px;
+}
+.waitlist-modal__body h3 {
+  margin: 0;
+  color: var(--gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 2rem;
+}
+.waitlist-modal__body > p {
+  margin: 0;
+  color: var(--muted);
+}
+.waitlist-modal__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(240,208,145,0.42);
+  border-radius: 999px;
+  background: rgba(6,16,24,0.68);
+  color: var(--gold-light);
+  font-size: 1.6rem;
+  cursor: pointer;
 }
 .instagram-gallery-grid {
   display: grid;
@@ -1561,6 +1617,8 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   .slot-picker__head,
   .selected-slot-summary,
   .booking-submit-row { align-items: stretch; flex-direction: column; }
+  .slot-picker__actions { justify-content: stretch; }
+  .slot-picker__actions .btn-lux { width: 100%; }
   .booking-submit-row .btn-lux { width: 100%; }
   .instagram-gallery-grid,
   .instagram-gallery-grid--home { grid-template-columns: 1fr; }
