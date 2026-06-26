@@ -295,6 +295,9 @@ PUBLIC_TRANSLATIONS["es"].update({
     "public_booking_catalog_title": "Lista de servicios",
     "public_booking_filter_all": "Todas las ofertas",
     "public_booking_service_select": "Seleccionar",
+    "footer_contact": "Contacto",
+    "footer_whatsapp": "WhatsApp",
+    "footer_call": "Llamar",
 })
 PUBLIC_TRANSLATIONS["ru"].update({
     "contact_address_label": "Адрес",
@@ -305,6 +308,9 @@ PUBLIC_TRANSLATIONS["ru"].update({
     "public_booking_catalog_title": "Список услуг",
     "public_booking_filter_all": "Все услуги",
     "public_booking_service_select": "Выбрать",
+    "footer_contact": "Контакты",
+    "footer_whatsapp": "WhatsApp",
+    "footer_call": "Позвонить",
 })
 PUBLIC_TRANSLATIONS["en"].update({
     "contact_address_label": "Address",
@@ -315,6 +321,9 @@ PUBLIC_TRANSLATIONS["en"].update({
     "public_booking_catalog_title": "Service list",
     "public_booking_filter_all": "All services",
     "public_booking_service_select": "Select",
+    "footer_contact": "Contact",
+    "footer_whatsapp": "WhatsApp",
+    "footer_call": "Call",
 })
 PUBLIC_TRANSLATIONS["de"].update({
     "contact_address_label": "Adresse",
@@ -325,6 +334,9 @@ PUBLIC_TRANSLATIONS["de"].update({
     "public_booking_catalog_title": "Leistungsliste",
     "public_booking_filter_all": "Alle Angebote",
     "public_booking_service_select": "Auswählen",
+    "footer_contact": "Kontakt",
+    "footer_whatsapp": "WhatsApp",
+    "footer_call": "Anrufen",
 })
 PUBLIC_TRANSLATIONS["fr"].update({
     "contact_address_label": "Adresse",
@@ -335,6 +347,9 @@ PUBLIC_TRANSLATIONS["fr"].update({
     "public_booking_catalog_title": "Liste des services",
     "public_booking_filter_all": "Toutes les offres",
     "public_booking_service_select": "Sélectionner",
+    "footer_contact": "Contact",
+    "footer_whatsapp": "WhatsApp",
+    "footer_call": "Appeler",
 })
 
 

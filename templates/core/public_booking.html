@@ -166,22 +166,6 @@
       <p class="field-help">{{ t.public_booking_existing_hint }}</p>
       </div>
     </form>
-
-    <aside class="public-booking-aside">
-      <span class="lux-kicker">BRIMOON</span>
-      <h2>{{ t.public_booking_aside_title }}</h2>
-      <p>{{ t.public_booking_aside_text }}</p>
-      <div class="booking-mini-list">
-        <span>{{ t.trust_1_title }}</span>
-        <span>{{ t.trust_2_title }}</span>
-        <span>{{ t.trust_4_title }}</span>
-      </div>
-      <div class="waitlist-card waitlist-card--aside">
-        <h3>{{ t.public_waitlist_title }}</h3>
-        <p>{{ t.public_waitlist_text }}</p>
-        <button class="btn-lux btn-lux-outline btn-lux-large" type="button" data-open-waitlist>{{ t.public_waitlist_submit }}</button>
-      </div>
-    </aside>
   </div>
 </section>
 {{ waitlist_employees|json_script:"waitlist-employees-data" }}

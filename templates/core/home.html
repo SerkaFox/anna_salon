@@ -205,7 +205,14 @@
     <div class="lux-container footer-grid">
       <div><strong>BRIMOON STUDIO</strong><p>{{ t.footer_text }}</p></div>
       <div><a href="{% url 'service_index' %}">{{ t.nav_services }}</a><a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a><a href="{% url 'privacy_policy' %}">Privacidad</a><a href="{% url 'terms' %}">Términos</a><a href="{% url 'data_deletion' %}">Eliminar datos</a></div>
-      <div><a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a><span>© 2026 BRIMOON STUDIO</span></div>
+      <div>
+        <div class="footer-contact-links">
+          <a class="footer-contact-chip" href="{{ salon_whatsapp_url }}" target="_blank" rel="noopener">{{ t.footer_whatsapp }}</a>
+          <a class="footer-contact-chip" href="tel:{{ salon_phone }}">{{ t.footer_call }}</a>
+        </div>
+        <a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a>
+        <span>© 2026 BRIMOON STUDIO</span>
+      </div>
     </div>
   </footer>
 
