@@ -19,6 +19,7 @@ class PublicLegalPageTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia")
+        self.assertContains(response, "643996431")
         self.assertContains(response, "https://maps.app.goo.gl/MuEAzwCAtxvbriCC9")
         self.assertContains(response, "google.com/maps/embed")
 
@@ -80,6 +81,8 @@ class PublicBookingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Reserva")
         self.assertContains(response, self.service.name)
+        self.assertContains(response, "Lista de servicios")
+        self.assertContains(response, "35,00 €")
 
     def test_public_booking_slots_returns_employee_options(self):
         response = self.browser.get(

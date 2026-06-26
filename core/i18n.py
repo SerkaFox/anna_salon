@@ -288,33 +288,53 @@ PUBLIC_TRANSLATIONS["fr"].update({
 
 PUBLIC_TRANSLATIONS["es"].update({
     "contact_address_label": "Dirección",
+    "contact_phone_label": "Teléfono",
     "contact_map_title": "Cómo llegar a BRIMOON Studio",
     "contact_directions": "Cómo llegar",
     "contact_visit_note": "Estamos en Deusto, Bilbao. Atención con cita previa.",
+    "public_booking_catalog_title": "Lista de servicios",
+    "public_booking_filter_all": "Todas las ofertas",
+    "public_booking_service_select": "Seleccionar",
 })
 PUBLIC_TRANSLATIONS["ru"].update({
     "contact_address_label": "Адрес",
+    "contact_phone_label": "Телефон",
     "contact_map_title": "Как добраться до BRIMOON Studio",
     "contact_directions": "Как добраться",
     "contact_visit_note": "Мы находимся в Deusto, Bilbao. Работаем по предварительной записи.",
+    "public_booking_catalog_title": "Список услуг",
+    "public_booking_filter_all": "Все услуги",
+    "public_booking_service_select": "Выбрать",
 })
 PUBLIC_TRANSLATIONS["en"].update({
     "contact_address_label": "Address",
+    "contact_phone_label": "Phone",
     "contact_map_title": "How to reach BRIMOON Studio",
     "contact_directions": "Directions",
     "contact_visit_note": "We are in Deusto, Bilbao. Visits by appointment.",
+    "public_booking_catalog_title": "Service list",
+    "public_booking_filter_all": "All services",
+    "public_booking_service_select": "Select",
 })
 PUBLIC_TRANSLATIONS["de"].update({
     "contact_address_label": "Adresse",
+    "contact_phone_label": "Telefon",
     "contact_map_title": "So finden Sie BRIMOON Studio",
     "contact_directions": "Route",
     "contact_visit_note": "Wir befinden uns in Deusto, Bilbao. Besuche nach Terminvereinbarung.",
+    "public_booking_catalog_title": "Leistungsliste",
+    "public_booking_filter_all": "Alle Angebote",
+    "public_booking_service_select": "Auswählen",
 })
 PUBLIC_TRANSLATIONS["fr"].update({
     "contact_address_label": "Adresse",
+    "contact_phone_label": "Téléphone",
     "contact_map_title": "Comment arriver chez BRIMOON Studio",
     "contact_directions": "Itinéraire",
     "contact_visit_note": "Nous sommes à Deusto, Bilbao. Accueil sur rendez-vous.",
+    "public_booking_catalog_title": "Liste des services",
+    "public_booking_filter_all": "Toutes les offres",
+    "public_booking_service_select": "Sélectionner",
 })
 
 

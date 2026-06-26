@@ -40,6 +40,7 @@ from .i18n import (
 SITE_NAME = "BRIMOON Studio"
 SITE_DOMAIN = settings.PUBLIC_BASE_URL.rstrip("/")
 SALON_ADDRESS = "Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia"
+SALON_PHONE = "643996431"
 SALON_DIRECTIONS_URL = "https://maps.app.goo.gl/MuEAzwCAtxvbriCC9"
 SALON_MAP_EMBED_URL = "https://www.google.com/maps/embed?pb=!4v1782499693022!6m8!1m7!1sZLMqnJPJcUAYtK9_wgm-sQ!2m2!1d43.26916954550295!2d-2.945267819444446!3f102.83781977603822!4f-5.772567357036408!5f2.8128601815513736"
 
@@ -339,6 +340,7 @@ def _base_context(request, canonical_path):
         "articles": articles,
         "canonical_url": _absolute_url(request, canonical_path),
         "salon_address": SALON_ADDRESS,
+        "salon_phone": SALON_PHONE,
         "salon_directions_url": SALON_DIRECTIONS_URL,
         "salon_map_embed_url": SALON_MAP_EMBED_URL,
     }
@@ -355,6 +357,47 @@ def _is_future_public_slot(slot):
 
 def _public_booking_services():
     return Service.objects.filter(is_active=True).order_by("name")
+
+
+def _format_eur_amount(amount):
+    return f"{amount:.2f}".replace(".", ",") + " €"
+
+
+def _service_catalog_category(service):
+    name = (service.name or "").lower()
+    if any(token in name for token in ("manicura", "pedicura", "manos", "pies", "uña", "unas")):
+        return {"key": "nails", "label": "Uñas"}
+    if "cejas" in name:
+        return {"key": "brows", "label": "Cejas"}
+    if any(token in name for token in ("pesta", "lifting", "extensiones", "tinte")):
+        return {"key": "lashes", "label": "Pestañas y cejas"}
+    if "depil" in name:
+        return {"key": "depilation", "label": "Depilación"}
+    return {"key": "facial", "label": "Facial"}
+
+
+def _public_booking_service_catalog():
+    services = list(_public_booking_services())
+    categories = [{"key": "all", "label": "Todas las ofertas"}]
+    seen_keys = {"all"}
+    items = []
+    for service in services:
+        category = _service_catalog_category(service)
+        if category["key"] not in seen_keys:
+            categories.append(category)
+            seen_keys.add(category["key"])
+        items.append(
+            {
+                "id": service.pk,
+                "name": service.name,
+                "duration_minutes": service.duration_minutes,
+                "duration_label": f"{service.duration_minutes} min",
+                "price": _format_eur_amount(service.price),
+                "category_key": category["key"],
+                "category_label": category["label"],
+            }
+        )
+    return categories, items
 
 
 def _generate_client_username(name):
@@ -380,10 +423,13 @@ def _public_booking_error_response(request, values, errors):
 
 
 def _public_booking_context(request, values=None, errors=None):
+    booking_service_categories, booking_service_catalog = _public_booking_service_catalog()
     context = _base_context(request, reverse("public_booking"))
     context.update(
         {
             "booking_services": _public_booking_services(),
+            "booking_service_categories": booking_service_categories,
+            "booking_service_catalog": booking_service_catalog,
             "booking_values": values or {},
             "booking_errors": errors or {},
             "booking_non_field_errors": (errors or {}).get("__all__", []),

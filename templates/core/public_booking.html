@@ -24,7 +24,7 @@
       <div class="booking-alert" data-global-error {% if not booking_non_field_errors %}hidden{% endif %}>{% if booking_non_field_errors %}{{ booking_non_field_errors.0 }}{% endif %}</div>
 
       <div class="booking-form-grid booking-choice-grid">
-        <label class="lux-field">
+        <label class="lux-field booking-service-select">
           <span>{{ t.public_booking_service }}</span>
           <select class="lux-input" name="service" data-service-select required>
             <option value="">{{ t.public_booking_choose_service }}</option>
@@ -52,6 +52,33 @@
           </label>
         </div>
       </div>
+      <section class="booking-service-catalog" aria-label="{{ t.public_booking_catalog_title }}">
+        <div class="booking-service-catalog__head">
+          <strong>{{ t.public_booking_catalog_title }}</strong>
+        </div>
+        <div class="booking-service-filters" data-service-filters>
+          {% for category in booking_service_categories %}
+            <button class="service-filter-pill{% if category.key == 'all' %} is-active{% endif %}" type="button" data-service-filter="{{ category.key }}">
+              {% if category.key == 'all' %}{{ t.public_booking_filter_all }}{% else %}{{ category.label }}{% endif %}
+            </button>
+          {% endfor %}
+        </div>
+        <div class="booking-service-grid" data-service-grid>
+          {% for service in booking_service_catalog %}
+            <article class="booking-service-card{% if booking_values.service == service.id|stringformat:'s' %} is-selected{% endif %}" data-service-card data-service-id="{{ service.id }}" data-service-category="{{ service.category_key }}">
+              <div class="booking-service-card__meta">
+                <span>{{ service.category_label }}</span>
+                <strong>{{ service.name }}</strong>
+              </div>
+              <div class="booking-service-card__facts">
+                <span>{{ service.duration_label }}</span>
+                <strong>{{ service.price }}</strong>
+              </div>
+              <button class="btn-lux btn-lux-outline btn-lux-small" type="button" data-service-pick="{{ service.id }}">{{ t.public_booking_service_select }}</button>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
       <div class="booking-date-strip" data-date-strip aria-label="{{ t.public_booking_date }}"></div>
 
       <div class="selected-slot-summary" data-selected-summary hidden>
@@ -173,6 +200,8 @@
     const form = document.querySelector('[data-public-booking-form]');
     if (!form) return;
     const serviceSelect = form.querySelector('[data-service-select]');
+    const serviceCards = Array.from(form.querySelectorAll('[data-service-card]'));
+    const serviceFilterButtons = Array.from(form.querySelectorAll('[data-service-filter]'));
     const dateInput = form.querySelector('[data-date-input]');
     const rangeSelect = form.querySelector('[data-time-range]');
     const grid = form.querySelector('[data-slot-grid]');
@@ -209,6 +238,40 @@
       submitting: '{{ t.public_booking_submitting|escapejs }}'
     };
     const waitlistCtaText = '{{ t.public_waitlist_inline_cta|escapejs }}';
+
+    function syncServiceCards() {
+      const selected = serviceSelect.value;
+      serviceCards.forEach(function (card) {
+        card.classList.toggle('is-selected', card.dataset.serviceId === selected);
+      });
+    }
+
+    function applyServiceFilter(filterKey) {
+      serviceFilterButtons.forEach(function (button) {
+        button.classList.toggle('is-active', button.dataset.serviceFilter === filterKey);
+      });
+      serviceCards.forEach(function (card) {
+        card.hidden = !(filterKey === 'all' || card.dataset.serviceCategory === filterKey);
+      });
+    }
+
+    serviceFilterButtons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        applyServiceFilter(button.dataset.serviceFilter);
+      });
+    });
+
+    serviceCards.forEach(function (card) {
+      const pickButton = card.querySelector('[data-service-pick]');
+      if (!pickButton) return;
+      pickButton.addEventListener('click', function () {
+        serviceSelect.value = card.dataset.serviceId;
+        syncServiceCards();
+        resetSlot();
+        loadSlots();
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
 
     function parseIsoDate(value) {
       const parts = (value || '').split('-').map(Number);
@@ -274,6 +337,7 @@
       form.classList.remove('is-time-selected');
       selectedSummary.hidden = true;
       selectedSummaryText.textContent = '';
+      syncServiceCards();
       updateSubmitHint();
     }
 
@@ -587,6 +651,8 @@
       form.querySelector('[data-slot-picker]').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     renderDateStrip();
+    syncServiceCards();
+    applyServiceFilter('all');
     if (serviceSelect.value) {
       findFirstAvailableDate();
     } else {
