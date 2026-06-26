@@ -1,0 +1,9 @@
+[Unit]
+Description=BRIMOON Studio Instagram daily sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/seradmin/anna
+ExecStart=/home/seradmin/anna/venv/bin/python /home/seradmin/anna/manage.py sync_instagram_media

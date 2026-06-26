@@ -1,7 +1,7 @@
 import json
 import mimetypes
 from os.path import splitext
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from urllib.request import urlopen
 
 from django.conf import settings
@@ -82,9 +82,12 @@ def upsert_instagram_media_item(item):
 
 
 def _guess_extension(source_url, content_type=""):
-    extension = splitext(source_url or "")[1].lower()
-    if extension:
+    parsed_path = urlparse(source_url or "").path
+    extension = splitext(parsed_path)[1].lower()
+    if extension and 1 < len(extension) <= 8 and extension[1:].isalnum():
         return extension
+    if extension:
+        extension = ""
     guessed = mimetypes.guess_extension((content_type or "").split(";", 1)[0].strip())
     return guessed or ".bin"
 

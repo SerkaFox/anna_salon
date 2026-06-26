@@ -1,0 +1,10 @@
+[Unit]
+Description=Run BRIMOON Studio Instagram sync once a day
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+Unit=brimoon-instagram-sync.service
+
+[Install]
+WantedBy=timers.target

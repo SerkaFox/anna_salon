@@ -169,8 +169,33 @@
 
     <section class="lux-section contact-section" id="contacto">
       <div class="lux-container contact-grid">
-        <div><span class="lux-kicker">{{ t.nav_contact }}</span><h2>{{ t.contact_title }}</h2><p>{{ t.contact_address }}</p><p>{{ t.contact_whatsapp }}</p><p>{{ t.contact_hours }}</p></div>
-        <div class="contact-card"><strong>BRIMOON STUDIO</strong><p>{{ t.nav_services }} · {{ t.nav_tips }}</p><a class="btn-lux btn-lux-primary" href="#">{{ t.location }}</a></div>
+        <div class="contact-copy">
+          <span class="lux-kicker">{{ t.nav_contact }}</span>
+          <h2>{{ t.contact_title }}</h2>
+          <p class="contact-copy__lead">{{ t.contact_visit_note }}</p>
+          <div class="contact-details">
+            <p><strong>{{ t.contact_address_label }}:</strong> {{ salon_address }}</p>
+            <p>{{ t.contact_hours }}</p>
+          </div>
+          <div class="lux-actions">
+            <a class="btn-lux btn-lux-primary" href="{{ salon_directions_url }}" target="_blank" rel="noopener">{{ t.contact_directions }}</a>
+            <a class="btn-lux btn-lux-outline" href="{% url 'public_booking' %}">{{ t.nav_book }}</a>
+          </div>
+        </div>
+        <div class="contact-card">
+          <strong>BRIMOON STUDIO</strong>
+          <p>{{ t.nav_services }} · {{ t.nav_tips }}</p>
+          <div class="contact-map-frame">
+            <iframe
+              src="{{ salon_map_embed_url }}"
+              title="{{ t.contact_map_title }}"
+              loading="lazy"
+              referrerpolicy="strict-origin-when-cross-origin"
+              allowfullscreen
+            ></iframe>
+          </div>
+          <a class="btn-lux btn-lux-ghost" href="{{ salon_directions_url }}" target="_blank" rel="noopener">{{ t.location }}</a>
+        </div>
       </div>
     </section>
   </main>

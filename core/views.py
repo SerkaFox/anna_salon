@@ -39,6 +39,9 @@ from .i18n import (
 
 SITE_NAME = "BRIMOON Studio"
 SITE_DOMAIN = settings.PUBLIC_BASE_URL.rstrip("/")
+SALON_ADDRESS = "Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia"
+SALON_DIRECTIONS_URL = "https://maps.app.goo.gl/MuEAzwCAtxvbriCC9"
+SALON_MAP_EMBED_URL = "https://www.google.com/maps/embed?pb=!4v1782499693022!6m8!1m7!1sZLMqnJPJcUAYtK9_wgm-sQ!2m2!1d43.26916954550295!2d-2.945267819444446!3f102.83781977603822!4f-5.772567357036408!5f2.8128601815513736"
 
 
 class PublicBookingError(Exception):
@@ -335,6 +338,9 @@ def _base_context(request, canonical_path):
         "services": services,
         "articles": articles,
         "canonical_url": _absolute_url(request, canonical_path),
+        "salon_address": SALON_ADDRESS,
+        "salon_directions_url": SALON_DIRECTIONS_URL,
+        "salon_map_embed_url": SALON_MAP_EMBED_URL,
     }
 
 
@@ -759,7 +765,14 @@ def home(request):
         "name": SITE_NAME,
         "url": _absolute_url(request, reverse("home")),
         "description": t["home_meta"],
-        "address": {"@type": "PostalAddress", "addressLocality": "Bilbao", "addressCountry": "ES"},
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Rafaela Ybarra Kalea, 2 bis, Deusto",
+            "postalCode": "48014",
+            "addressLocality": "Bilbao",
+            "addressRegion": "Bizkaia",
+            "addressCountry": "ES",
+        },
         "openingHours": "Mo-Sa by appointment",
         "sameAs": [],
         "makesOffer": [{"@type": "Offer", "itemOffered": {"@type": "Service", "name": service["title"]}} for service in services],

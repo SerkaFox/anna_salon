@@ -286,6 +286,37 @@ PUBLIC_TRANSLATIONS["fr"].update({
     "public_waitlist_inline_cta": "Nous pouvons vous ajouter à la liste d'attente pour ce jour si quelqu'un annule.",
 })
 
+PUBLIC_TRANSLATIONS["es"].update({
+    "contact_address_label": "Dirección",
+    "contact_map_title": "Cómo llegar a BRIMOON Studio",
+    "contact_directions": "Cómo llegar",
+    "contact_visit_note": "Estamos en Deusto, Bilbao. Atención con cita previa.",
+})
+PUBLIC_TRANSLATIONS["ru"].update({
+    "contact_address_label": "Адрес",
+    "contact_map_title": "Как добраться до BRIMOON Studio",
+    "contact_directions": "Как добраться",
+    "contact_visit_note": "Мы находимся в Deusto, Bilbao. Работаем по предварительной записи.",
+})
+PUBLIC_TRANSLATIONS["en"].update({
+    "contact_address_label": "Address",
+    "contact_map_title": "How to reach BRIMOON Studio",
+    "contact_directions": "Directions",
+    "contact_visit_note": "We are in Deusto, Bilbao. Visits by appointment.",
+})
+PUBLIC_TRANSLATIONS["de"].update({
+    "contact_address_label": "Adresse",
+    "contact_map_title": "So finden Sie BRIMOON Studio",
+    "contact_directions": "Route",
+    "contact_visit_note": "Wir befinden uns in Deusto, Bilbao. Besuche nach Terminvereinbarung.",
+})
+PUBLIC_TRANSLATIONS["fr"].update({
+    "contact_address_label": "Adresse",
+    "contact_map_title": "Comment arriver chez BRIMOON Studio",
+    "contact_directions": "Itinéraire",
+    "contact_visit_note": "Nous sommes à Deusto, Bilbao. Accueil sur rendez-vous.",
+})
+
 
 def normalize_public_language(language):
     code = (language or "").split(",", 1)[0].split(";", 1)[0].split("-", 1)[0].lower()

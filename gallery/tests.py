@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from accounts.models import User
 
-from .instagram_api import sync_instagram_media
+from .instagram_api import _guess_extension, sync_instagram_media
 from .models import InstagramPost
 
 
@@ -51,6 +51,14 @@ def graph_media_payload(caption="Nueva publicacion", media_url="https://cdn.exam
 
 
 class InstagramPostModelTests(TestCase):
+    def test_guess_extension_ignores_signed_url_suffix(self):
+        extension = _guess_extension(
+            "https://example.com/video.mp4/very/long/signed/token.with.dots.that.should.not_become_extension",
+            "video/mp4",
+        )
+
+        self.assertEqual(extension, ".mp4")
+
     def test_model_creation_with_url(self):
         post = InstagramPost.objects.create(instagram_url="https://www.instagram.com/p/C6gTZD5NAFJ/")
 

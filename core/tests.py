@@ -14,6 +14,14 @@ from services_app.models import Service
 
 
 class PublicLegalPageTests(TestCase):
+    def test_home_page_contains_real_contact_details(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia")
+        self.assertContains(response, "https://maps.app.goo.gl/MuEAzwCAtxvbriCC9")
+        self.assertContains(response, "google.com/maps/embed")
+
     def test_privacy_policy_page_returns_200(self):
         response = self.client.get(reverse("privacy_policy"))
 
