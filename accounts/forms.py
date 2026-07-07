@@ -3,16 +3,17 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm, UserCreationForm
 
 from employees.models import Employee
+from .identity import resolve_user_by_identity
 
 User = get_user_model()
 
 
 class LoginForm(AuthenticationForm):
     username = forms.CharField(
-        label="Usuario",
+        label="Telefono o email",
         widget=forms.TextInput(attrs={
             "class": "input",
-            "placeholder": "Usuario",
+            "placeholder": "Telefono o email",
             "autofocus": True,
         }),
     )
@@ -23,6 +24,13 @@ class LoginForm(AuthenticationForm):
             "placeholder": "Contraseña",
         }),
     )
+
+    def clean_username(self):
+        username = (self.cleaned_data.get("username") or "").strip()
+        resolved_user = resolve_user_by_identity(username)
+        if resolved_user:
+            return resolved_user.username
+        return username
 
 
 class UserProfileForm(forms.ModelForm):

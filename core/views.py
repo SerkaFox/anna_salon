@@ -14,9 +14,15 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from accounts.models import User
+from accounts.identity import classify_contact, phone_variants_match, resolve_user_by_identity
 from bookings.forms import BookingForm
 from bookings.models import Booking, BookingWaitlistEntry
-from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
+from bookings.utils import (
+    MOBILE_SLOT_STEP_MINUTES,
+    PUBLIC_BOOKING_MAX_DAYS_AHEAD,
+    build_available_slots_for_day,
+    find_available_zone,
+)
 from clients.models import Client
 from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
 from accounts.permissions import get_client_profile
@@ -366,16 +372,25 @@ def _format_eur_amount(amount):
 
 
 def _service_catalog_category(service):
-    name = (service.name or "").lower()
-    if any(token in name for token in ("manicura", "pedicura", "manos", "pies", "uña", "unas")):
-        return {"key": "nails", "label": "Uñas"}
-    if "cejas" in name:
-        return {"key": "brows", "label": "Cejas"}
-    if any(token in name for token in ("pesta", "lifting", "extensiones", "tinte")):
-        return {"key": "lashes", "label": "Pestañas y cejas"}
-    if "depil" in name:
-        return {"key": "depilation", "label": "Depilación"}
-    return {"key": "facial", "label": "Facial"}
+    labels = {
+        Service.Categories.BROWS: "Cejas",
+        Service.Categories.LASHES: "Pestañas",
+        Service.Categories.MANICURE: "Manicura",
+        Service.Categories.PEDICURE: "Pedicura",
+        Service.Categories.DEPILATION: "Depilación",
+        Service.Categories.FACIAL: "Facial",
+        Service.Categories.OTHER: "Otro",
+    }
+    category = service.category or Service.Categories.OTHER
+    return {"key": category, "label": labels.get(category, "Otro")}
+
+
+def _last_booking_date():
+    return timezone.localdate() + timedelta(days=PUBLIC_BOOKING_MAX_DAYS_AHEAD - 1)
+
+
+def _date_within_booking_window(date_value):
+    return timezone.localdate() <= date_value <= _last_booking_date()
 
 
 def _public_booking_service_catalog():
@@ -436,6 +451,8 @@ def _public_booking_context(request, values=None, errors=None):
             "booking_errors": errors or {},
             "booking_non_field_errors": (errors or {}).get("__all__", []),
             "today": timezone.localdate().isoformat(),
+            "booking_last_date": _last_booking_date().isoformat(),
+            "booking_search_days": PUBLIC_BOOKING_MAX_DAYS_AHEAD,
             "slot_endpoint": reverse("public_booking_slots"),
             "waitlist_employees": [
                 {
@@ -485,7 +502,7 @@ def _create_public_booking(values):
     first_name = parts[0]
     last_name = parts[1] if len(parts) > 1 else ""
     phone = values.get("phone", "").strip()
-    email = values.get("email", "").strip()
+    email = values.get("email", "").strip().lower()
 
     with transaction.atomic():
         user = User(
@@ -510,6 +527,53 @@ def _create_public_booking(values):
     return user, booking
 
 
+def _resolve_client_contact_values(primary_contact, secondary_contact):
+    primary = classify_contact(primary_contact)
+    secondary = classify_contact(secondary_contact)
+    errors = {}
+
+    if not primary:
+        errors["contact"] = ["Indica telefono o email."]
+        return None, errors
+    if primary["kind"] == "invalid":
+        errors["contact"] = ["Escribe un telefono valido o un email valido."]
+        return None, errors
+
+    if secondary and secondary["kind"] == "invalid":
+        errors["secondary_contact"] = ["El contacto adicional no tiene un formato valido."]
+        return None, errors
+    if secondary and secondary["kind"] == primary["kind"]:
+        errors["secondary_contact"] = ["El contacto adicional debe ser del otro tipo."]
+        return None, errors
+    if errors:
+        return None, errors
+
+    values = {"phone": "", "email": ""}
+    for item in (primary, secondary):
+        if not item:
+            continue
+        if item["kind"] == "email":
+            values["email"] = item["value"]
+        elif item["kind"] == "phone":
+            values["phone"] = item["value"]
+    return values, {}
+
+
+def _client_contact_exists(email="", phone=""):
+    if email and User.objects.filter(email__iexact=email).exists():
+        return "email"
+    if email and Client.objects.filter(email__iexact=email).exists():
+        return "email"
+    if phone:
+        for user in User.objects.exclude(phone=""):
+            if phone_variants_match(user.phone, phone):
+                return "phone"
+        for client in Client.objects.exclude(phone=""):
+            if phone_variants_match(client.phone, phone):
+                return "phone"
+    return ""
+
+
 
 def public_booking_slots(request):
     _language, t, _services, _articles = _localized_context(request)
@@ -525,7 +589,7 @@ def public_booking_slots(request):
     except (Service.DoesNotExist, ValueError):
         return JsonResponse({"ok": False, "message": t["public_booking_error_service"]}, status=400)
 
-    if date_value < timezone.localdate():
+    if not _date_within_booking_window(date_value):
         return JsonResponse({"ok": False, "message": t["public_booking_error_future"]}, status=400)
 
     zone = None
@@ -609,7 +673,6 @@ def public_booking(request):
     _language, t, _services, _articles = _localized_context(request)
     post = request.POST
 
-    include_contact = post.get("include_contact") == "on"
     values = {
         "service": post.get("service", ""),
         "employee": post.get("employee", ""),
@@ -618,9 +681,9 @@ def public_booking(request):
         "date": post.get("date", ""),
         "name": post.get("name", "").strip(),
         "password": post.get("password", ""),
-        "include_contact": "on" if include_contact else "",
-        "phone": post.get("phone", "").strip() if include_contact else "",
-        "email": post.get("email", "").strip() if include_contact else "",
+        "contact": post.get("contact", "").strip(),
+        "secondary_contact_enabled": "on" if post.get("secondary_contact_enabled") == "on" else "",
+        "secondary_contact": post.get("secondary_contact", "").strip(),
     }
     errors = {}
 
@@ -630,6 +693,16 @@ def public_booking(request):
         errors["password"] = [t["public_booking_error_password_required"]]
     elif len(values["password"]) < 6:
         errors["password"] = [t["public_booking_error_password_min"]]
+
+    contact_values, contact_errors = _resolve_client_contact_values(
+        values["contact"],
+        values["secondary_contact"] if values["secondary_contact_enabled"] else "",
+    )
+    if contact_errors:
+        errors.update(contact_errors)
+        contact_values = {"phone": "", "email": ""}
+    values["phone"] = contact_values["phone"]
+    values["email"] = contact_values["email"]
 
     service = employee = zone = start_at = None
     try:
@@ -660,13 +733,8 @@ def public_booking(request):
         start_at = timezone.localtime(start_at).replace(second=0, microsecond=0)
         if start_at < timezone.localtime(timezone.now()).replace(second=0, microsecond=0):
             errors["start_at"] = [t["public_booking_error_future"]]
-
-    if include_contact and values["email"]:
-        if User.objects.filter(email__iexact=values["email"]).exists() or Client.objects.filter(email__iexact=values["email"]).exists():
-            errors["email"] = [t["public_booking_error_email_exists"]]
-    if include_contact and values["phone"]:
-        if User.objects.filter(phone=values["phone"]).exists() or Client.objects.filter(phone=values["phone"]).exists():
-            errors["phone"] = [t["public_booking_error_phone_exists"]]
+        elif not _date_within_booking_window(start_at.date()):
+            errors["start_at"] = [t["public_booking_error_future"]]
 
     end_at = None
     if service and employee and start_at and not errors.get("start_at"):
@@ -691,10 +759,19 @@ def public_booking(request):
 
     # The same name/password fields serve two purposes: if they match an
     # existing client account, log straight into it; otherwise create a new one.
-    login_name = values["name"]
-    candidate = User.objects.filter(username__iexact=login_name, role=User.ROLE_CLIENT).first()
+    candidate = resolve_user_by_identity(values["contact"])
+    if candidate and candidate.role != User.ROLE_CLIENT:
+        candidate = None
+
     if not candidate:
-        candidate = User.objects.filter(email__iexact=login_name, role=User.ROLE_CLIENT).exclude(email="").first()
+        existing_contact_type = _client_contact_exists(email=values["email"], phone=values["phone"])
+        if existing_contact_type == "email":
+            errors["contact" if values["email"] == classify_contact(values["contact"])["value"] else "secondary_contact"] = [t["public_booking_error_email_exists"]]
+        elif existing_contact_type == "phone":
+            primary_kind = classify_contact(values["contact"])["kind"] if classify_contact(values["contact"]) else ""
+            errors["contact" if primary_kind == "phone" else "secondary_contact"] = [t["public_booking_error_phone_exists"]]
+        if errors:
+            return _public_booking_error_response(request, values, errors)
 
     if candidate:
         authenticated_user = authenticate(request, username=candidate.username, password=values["password"])

@@ -41,6 +41,12 @@
       </div>
 
       <div class="field">
+        <label for="{{ form.category.id_for_label }}">Categoría</label>
+        {{ form.category }}
+        {{ form.category.errors }}
+      </div>
+
+      <div class="field">
         <label for="{{ form.price.id_for_label }}">Precio</label>
         {{ form.price }}
         {{ form.price.errors }}

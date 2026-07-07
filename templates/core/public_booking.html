@@ -38,7 +38,7 @@
         <div class="booking-date-range">
           <label class="lux-field">
             <span>{{ t.public_booking_date }}</span>
-            <input class="lux-input" type="date" name="date" min="{{ today }}" value="{{ booking_values.date|default:today }}" data-date-input required>
+            <input class="lux-input" type="date" name="date" min="{{ today }}" max="{{ booking_last_date }}" value="{{ booking_values.date|default:today }}" data-date-input required>
           </label>
           <label class="lux-field">
             <span>{{ t.public_booking_range }}</span>
@@ -128,7 +128,7 @@
       </div>
       <div class="booking-form-grid booking-details-grid">
         <label class="lux-field lux-field-card">
-          <span>{{ t.public_booking_name_login }}</span>
+          <span>{{ t.public_booking_name }}</span>
           <input class="lux-input" type="text" name="name" autocomplete="name" value="{{ booking_values.name }}" required>
           <small class="field-help field-help-placeholder" aria-hidden="true">&nbsp;</small>
           <small class="form-error" data-error-for="name">{% if booking_errors.name %}{{ booking_errors.name.0 }}{% endif %}</small>
@@ -141,21 +141,26 @@
         </label>
       </div>
 
-      <label class="contact-toggle">
-        <input type="checkbox" name="include_contact" data-contact-toggle {% if booking_values.include_contact %}checked{% endif %}>
-        <span>{{ t.public_booking_contact_toggle }}</span>
-      </label>
+      <p class="field-help">{{ t.public_booking_contact_required }}</p>
 
-      <div class="booking-form-grid contact-fields" data-contact-fields {% if not booking_values.include_contact %}hidden{% endif %}>
+      <div class="booking-form-grid contact-fields" data-contact-fields>
         <label class="lux-field">
-          <span>{{ t.public_booking_phone }}</span>
-          <input class="lux-input" type="tel" name="phone" autocomplete="tel" value="{{ booking_values.phone }}">
-          <small class="form-error" data-error-for="phone">{% if booking_errors.phone %}{{ booking_errors.phone.0 }}{% endif %}</small>
+          <span>{{ t.public_booking_contact_primary }}</span>
+          <input class="lux-input" type="text" name="contact" autocomplete="username" value="{{ booking_values.contact }}" required data-contact-input>
+          <small class="field-help" data-contact-help>{{ t.public_booking_contact_primary_help }}</small>
+          <small class="form-error" data-error-for="contact">{% if booking_errors.contact %}{{ booking_errors.contact.0 }}{% endif %}</small>
         </label>
+      </div>
+      <label class="contact-toggle">
+        <input type="checkbox" name="secondary_contact_enabled" data-secondary-contact-toggle {% if booking_values.secondary_contact_enabled %}checked{% endif %}>
+        <span>{{ t.public_booking_contact_add }}</span>
+      </label>
+      <div class="booking-form-grid contact-fields" data-secondary-contact-fields {% if not booking_values.secondary_contact_enabled %}hidden{% endif %}>
         <label class="lux-field">
-          <span>{{ t.public_booking_email }}</span>
-          <input class="lux-input" type="email" name="email" autocomplete="email" value="{{ booking_values.email }}">
-          <small class="form-error" data-error-for="email">{% if booking_errors.email %}{{ booking_errors.email.0 }}{% endif %}</small>
+          <span data-secondary-contact-label>{{ t.public_booking_contact_secondary }}</span>
+          <input class="lux-input" type="text" name="secondary_contact" value="{{ booking_values.secondary_contact }}" data-secondary-contact-input>
+          <small class="field-help" data-secondary-contact-help>{{ t.public_booking_contact_secondary_help }}</small>
+          <small class="form-error" data-error-for="secondary_contact">{% if booking_errors.secondary_contact %}{{ booking_errors.secondary_contact.0 }}{% endif %}</small>
         </label>
       </div>
 
@@ -226,8 +231,13 @@
     const serviceSummary = form.querySelector('[data-service-summary]');
     const serviceSummaryText = form.querySelector('[data-service-summary-text]');
     const editServiceButton = form.querySelector('[data-edit-service]');
-    const contactToggle = form.querySelector('[data-contact-toggle]');
-    const contactFields = form.querySelector('[data-contact-fields]');
+    const contactInput = form.querySelector('[data-contact-input]');
+    const contactHelp = form.querySelector('[data-contact-help]');
+    const secondaryContactToggle = form.querySelector('[data-secondary-contact-toggle]');
+    const secondaryContactFields = form.querySelector('[data-secondary-contact-fields]');
+    const secondaryContactInput = form.querySelector('[data-secondary-contact-input]');
+    const secondaryContactLabel = form.querySelector('[data-secondary-contact-label]');
+    const secondaryContactHelp = form.querySelector('[data-secondary-contact-help]');
     const selectedSummary = form.querySelector('[data-selected-summary]');
     const selectedSummaryText = form.querySelector('[data-selected-summary-text]');
     const editSlotButton = form.querySelector('[data-edit-slot]');
@@ -253,7 +263,17 @@
       passwordMin: '{{ t.public_booking_error_password_min|escapejs }}',
       nameRequired: '{{ t.public_booking_error_name|escapejs }}',
       timeRequired: '{{ t.public_booking_error_time|escapejs }}',
-      submitting: '{{ t.public_booking_submitting|escapejs }}'
+      submitting: '{{ t.public_booking_submitting|escapejs }}',
+      contactRequired: '{{ t.public_booking_contact_required|escapejs }}',
+      contactInvalid: '{{ t.public_booking_contact_invalid|escapejs }}',
+      secondaryInvalid: '{{ t.public_booking_contact_secondary_invalid|escapejs }}',
+      primaryPhoneHelp: '{{ t.public_booking_contact_primary_phone_help|escapejs }}',
+      primaryEmailHelp: '{{ t.public_booking_contact_primary_email_help|escapejs }}',
+      primaryGenericHelp: '{{ t.public_booking_contact_primary_help|escapejs }}',
+      secondaryPhoneLabel: '{{ t.public_booking_phone|escapejs }}',
+      secondaryEmailLabel: '{{ t.public_booking_email|escapejs }}',
+      secondaryPhoneHelp: '{{ t.public_booking_contact_secondary_phone_help|escapejs }}',
+      secondaryEmailHelp: '{{ t.public_booking_contact_secondary_email_help|escapejs }}'
     };
     const waitlistCtaText = '{{ t.public_waitlist_inline_cta|escapejs }}';
 
@@ -347,15 +367,39 @@
       return formatIsoDate(date);
     }
 
+    function classifyContactValue(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      if (trimmed.includes('@')) return 'email';
+      const digits = trimmed.replace(/\D+/g, '');
+      if (digits && /^[+\d\s()\-]+$/.test(trimmed)) return 'phone';
+      return 'invalid';
+    }
+
+    function syncContactFields() {
+      const primaryType = classifyContactValue(contactInput ? contactInput.value : '');
+      if (contactHelp) {
+        if (primaryType === 'phone') contactHelp.textContent = messages.primaryPhoneHelp;
+        else if (primaryType === 'email') contactHelp.textContent = messages.primaryEmailHelp;
+        else contactHelp.textContent = messages.primaryGenericHelp;
+      }
+      if (!secondaryContactFields || !secondaryContactLabel || !secondaryContactHelp || !secondaryContactInput) return;
+      const secondaryType = primaryType === 'email' ? 'phone' : 'email';
+      secondaryContactLabel.textContent = secondaryType === 'phone' ? messages.secondaryPhoneLabel : messages.secondaryEmailLabel;
+      secondaryContactHelp.textContent = secondaryType === 'phone' ? messages.secondaryPhoneHelp : messages.secondaryEmailHelp;
+      secondaryContactInput.setAttribute('inputmode', secondaryType === 'phone' ? 'tel' : 'email');
+      secondaryContactInput.setAttribute('autocomplete', secondaryType === 'phone' ? 'tel' : 'email');
+    }
+
     function renderDateStrip() {
       if (!dateStrip) return;
-      const minDate = dateInput.min || dateInput.value;
       const active = dateInput.value;
+      const startDate = active || dateInput.min;
       const formatterWeekday = new Intl.DateTimeFormat(currentLanguage, { weekday: 'short' });
       const formatterMonth = new Intl.DateTimeFormat(currentLanguage, { month: 'short' });
       dateStrip.innerHTML = '';
       for (let index = 0; index < 14; index += 1) {
-        const value = addDays(minDate, index);
+        const value = addDays(startDate, index);
         const date = parseIsoDate(value);
         if (!date) continue;
         const button = document.createElement('button');
@@ -434,7 +478,7 @@
 
     function findNextAvailableSlot(service, startDate) {
       const attempts = [];
-      for (let index = 1; index < 45; index += 1) attempts.push(addDays(startDate, index));
+      for (let index = 1; index < {{ booking_search_days }}; index += 1) attempts.push(addDays(startDate, index));
       return attempts.reduce(function (chain, candidateDate) {
         return chain.then(function (found) {
           if (found) return found;
@@ -517,8 +561,16 @@
       if (dateInputTarget) dateInputTarget.value = dateInput.value || '';
       if (rangeInput) rangeInput.value = rangeSelect.value || 'all';
       if (nameInput) nameInput.value = form.querySelector('[name="name"]').value || nameInput.value;
-      if (emailInput) emailInput.value = form.querySelector('[name="email"]').value || emailInput.value;
-      if (phoneInput) phoneInput.value = form.querySelector('[name="phone"]').value || phoneInput.value;
+      const primaryValue = contactInput ? contactInput.value : '';
+      const secondaryValue = secondaryContactInput ? secondaryContactInput.value : '';
+      const primaryType = classifyContactValue(primaryValue);
+      if (primaryType === 'email') {
+        if (emailInput) emailInput.value = primaryValue || emailInput.value;
+        if (phoneInput) phoneInput.value = secondaryValue || phoneInput.value;
+      } else if (primaryType === 'phone') {
+        if (phoneInput) phoneInput.value = primaryValue || phoneInput.value;
+        if (emailInput) emailInput.value = secondaryValue || emailInput.value;
+      }
       if (!employeeSelect) return;
       const selected = employeeSelect.value;
       employeeSelect.innerHTML = '';
@@ -587,7 +639,7 @@
       status.textContent = messages.loading;
       let date = dateInput.value || dateInput.min;
       const attempts = [];
-      for (let index = 0; index < 45; index += 1) attempts.push(addDays(date, index));
+      for (let index = 0; index < {{ booking_search_days }}; index += 1) attempts.push(addDays(date, index));
       attempts.reduce(function (chain, candidateDate) {
         return chain.then(function (found) {
           if (found || activeDateRequest !== requestId) return found;
@@ -654,6 +706,13 @@
       if (!startInput.value) errors.start_at = [messages.timeRequired];
       if (!nameInput.value.trim()) errors.name = [messages.nameRequired];
       if (!passwordInput.value || passwordInput.value.length < 6) errors.password = [messages.passwordMin];
+      const primaryType = classifyContactValue(contactInput ? contactInput.value : '');
+      if (!contactInput.value.trim()) errors.contact = [messages.contactRequired];
+      else if (primaryType === 'invalid') errors.contact = [messages.contactInvalid];
+      if (secondaryContactToggle && secondaryContactToggle.checked && secondaryContactInput && secondaryContactInput.value.trim()) {
+        const secondaryType = classifyContactValue(secondaryContactInput.value);
+        if (secondaryType === 'invalid' || secondaryType === primaryType) errors.secondary_contact = [messages.secondaryInvalid];
+      }
       if (Object.keys(errors).length) {
         showErrors(errors);
         return false;
@@ -727,9 +786,17 @@
       });
     }
 
-    contactToggle.addEventListener('change', function () {
-      contactFields.hidden = !contactToggle.checked;
-    });
+    if (secondaryContactToggle) {
+      secondaryContactToggle.addEventListener('change', function () {
+        secondaryContactFields.hidden = !secondaryContactToggle.checked;
+        syncContactFields();
+      });
+    }
+    if (contactInput) {
+      ['input', 'change'].forEach(function (eventName) {
+        contactInput.addEventListener(eventName, syncContactFields);
+      });
+    }
     serviceSelect.addEventListener('change', loadSlots);
     dateInput.addEventListener('change', loadSlots);
     rangeSelect.addEventListener('change', function () { renderSlots(lastSlots); });
@@ -757,6 +824,7 @@
       selectedSummary.hidden = true;
       form.querySelector('[data-slot-picker]').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+    syncContactFields();
     renderDateStrip();
     syncServiceCards();
     applyServiceFilter('all');

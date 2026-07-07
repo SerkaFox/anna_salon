@@ -532,10 +532,11 @@ class EmployeeScheduleSerializer(serializers.Serializer):
 class ServiceSerializer(serializers.ModelSerializer):
     allowed_zone_ids = serializers.PrimaryKeyRelatedField(source="allowed_zones", many=True, read_only=True)
     employee_ids = serializers.PrimaryKeyRelatedField(source="employees", many=True, read_only=True)
+    category_label = serializers.CharField(source="get_category_display", read_only=True)
 
     class Meta:
         model = Service
-        fields = ["id", "name", "description", "duration_minutes", "price", "color", "requires_zone", "allowed_zone_ids", "employee_ids", "is_active"]
+        fields = ["id", "name", "category", "category_label", "description", "duration_minutes", "price", "color", "requires_zone", "allowed_zone_ids", "employee_ids", "is_active"]
 
 
 class ServiceWriteSerializer(serializers.ModelSerializer):
@@ -548,6 +549,7 @@ class ServiceWriteSerializer(serializers.ModelSerializer):
         model = Service
         fields = [
             "name",
+            "category",
             "description",
             "duration_minutes",
             "price",

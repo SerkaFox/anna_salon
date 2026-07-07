@@ -7,6 +7,7 @@ class ServiceForm(forms.ModelForm):
         model = Service
         fields = [
             "name",
+            "category",
             "description",
             "duration_minutes",
             "price",
@@ -17,6 +18,7 @@ class ServiceForm(forms.ModelForm):
         ]
         widgets = {
             "name": forms.TextInput(attrs={"class": "input", "placeholder": "Nombre del servicio"}),
+            "category": forms.Select(attrs={"class": "input"}),
             "description": forms.Textarea(attrs={"class": "textarea", "placeholder": "Descripción", "rows": 5}),
             "duration_minutes": forms.NumberInput(attrs={"class": "input", "placeholder": "Duración en minutos", "min": "1"}),
             "price": forms.NumberInput(attrs={"class": "input", "placeholder": "Precio", "step": "0.01", "min": "0"}),

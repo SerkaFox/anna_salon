@@ -143,6 +143,7 @@ def main():
     services = {
         "mani": Service.objects.create(
             name="Manicura, extensiones y tratamientos 💅🏼",
+            category=Service.Categories.MANICURE,
             description="Manicura, refuerzo, extensiones, tratamientos de unas y acabados personalizados.",
             duration_minutes=75,
             price=money("38.00"),
@@ -151,6 +152,7 @@ def main():
         ),
         "pedicure": Service.objects.create(
             name="Pedicuras y tratamientos Pies 👣",
+            category=Service.Categories.PEDICURE,
             description="Pedicuras completas, cuidado de pies, tratamientos hidratantes y acabado.",
             duration_minutes=75,
             price=money("40.00"),
@@ -159,6 +161,7 @@ def main():
         ),
         "brows": Service.objects.create(
             name="Definición, depilación y lifting de cejas 🥰",
+            category=Service.Categories.BROWS,
             description="Diseno, definicion, depilacion, lifting y tinte de cejas.",
             duration_minutes=60,
             price=money("32.00"),
@@ -167,6 +170,7 @@ def main():
         ),
         "facial_depilation": Service.objects.create(
             name="Depilación facial 💋",
+            category=Service.Categories.DEPILATION,
             description="Depilacion facial precisa para labio, menton, patillas y zonas pequenas.",
             duration_minutes=30,
             price=money("18.00"),
@@ -175,6 +179,7 @@ def main():
         ),
         "lashes": Service.objects.create(
             name="Tinte, extensiones y lifting de pestañas. 👁️",
+            category=Service.Categories.LASHES,
             description="Tinte, extensiones, lifting y tratamientos para pestanas.",
             duration_minutes=75,
             price=money("45.00"),

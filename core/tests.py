@@ -51,6 +51,7 @@ class PublicBookingTests(TestCase):
         self.browser = DjangoClient()
         self.service = Service.objects.create(
             name="Manicura",
+            category=Service.Categories.MANICURE,
             duration_minutes=60,
             price=Decimal("35.00"),
             requires_zone=False,
@@ -113,6 +114,7 @@ class PublicBookingTests(TestCase):
                 "start_at": slot["start_at"],
                 "name": "Nueva Clienta",
                 "password": "secret123",
+                "contact": "+34600111222",
             },
         )
 
@@ -152,9 +154,76 @@ class PublicBookingTests(TestCase):
                 "start_at": slot["start_at"],
                 "name": "Otra Clienta",
                 "password": "secret123",
+                "contact": "+34600111222",
             },
         )
 
         self.assertEqual(response.status_code, 400)
         self.assertContains(response, "Este horario ya no esta disponible", status_code=400)
         self.assertFalse(User.objects.filter(first_name="Otra").exists())
+
+    def test_public_booking_requires_phone_or_email_for_new_account(self):
+        slot_response = self.browser.get(
+            reverse("public_booking_slots"),
+            {"service": self.service.pk, "date": self.date},
+        )
+        slot = slot_response.json()["slots"][0]
+        employee = slot["employees"][0]
+
+        response = self.browser.post(
+            reverse("public_booking"),
+            {
+                "service": self.service.pk,
+                "employee": employee["id"],
+                "zone": employee["zone"] or "",
+                "start_at": slot["start_at"],
+                "name": "Clienta Sin Contacto",
+                "password": "secret123",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Indica telefono o email", status_code=400)
+        self.assertFalse(User.objects.filter(first_name="Clienta").exists())
+
+    def test_public_booking_slots_allow_dates_up_to_one_year_ahead(self):
+        future_date = timezone.localdate() + timedelta(days=300)
+        while future_date.weekday() != 0:
+            future_date += timedelta(days=1)
+
+        response = self.browser.get(
+            reverse("public_booking_slots"),
+            {"service": self.service.pk, "date": future_date.isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+
+
+class ClientIdentityLoginTests(TestCase):
+    def test_login_form_accepts_client_email(self):
+        user = User.objects.create_user(
+            username="client_email",
+            password="secret123",
+            role=User.ROLE_CLIENT,
+            email="client@example.com",
+        )
+
+        response = self.client.post(reverse("accounts:login"), {"username": "client@example.com", "password": "secret123"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
+
+    def test_login_form_accepts_client_phone(self):
+        user = User.objects.create_user(
+            username="client_phone",
+            password="secret123",
+            role=User.ROLE_CLIENT,
+            phone="+34 600 111 222",
+        )
+
+        response = self.client.post(reverse("accounts:login"), {"username": "600111222", "password": "secret123"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)

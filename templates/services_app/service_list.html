@@ -38,6 +38,7 @@
         <thead>
           <tr>
             <th>Servicio</th>
+            <th>Categoría</th>
             <th>Duración</th>
             <th>Precio</th>
             <th>Zona</th>
@@ -50,6 +51,7 @@
           {% for service in services %}
             <tr>
               <td>{{ service.name }}</td>
+              <td>{{ service.get_category_display }}</td>
               <td>{{ service.duration_minutes }} min</td>
               <td>{{ service.price }} €</td>
               <td>

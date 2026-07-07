@@ -31,7 +31,7 @@ from bookings.client_actions import (
 from bookings.models import Booking
 from bookings.models import BookingPhoto
 from bookings.services import calculate_booking_prepayment_amount, create_booking_prepayment, refund_booking_prepayment, refresh_booking_prepayments
-from bookings.utils import MOBILE_SLOT_STEP_MINUTES, build_available_slots_for_day, find_available_zone
+from bookings.utils import MOBILE_SLOT_STEP_MINUTES, PUBLIC_BOOKING_MAX_DAYS_AHEAD, build_available_slots_for_day, find_available_zone
 from documents.models import FiscalDocument, FiscalDocumentLine
 from employees.models import Employee
 from payments.models import Payment as OnlinePayment
@@ -117,6 +117,10 @@ def _attach_online_payment_info(bookings):
 def _is_future_portal_slot(slot):
     current_time = timezone.localtime(timezone.now()).replace(second=0, microsecond=0)
     return timezone.localtime(slot["start_at"]).replace(second=0, microsecond=0) > current_time
+
+
+def _portal_last_booking_date():
+    return timezone.localdate() + timedelta(days=PUBLIC_BOOKING_MAX_DAYS_AHEAD - 1)
 
 
 @login_required
@@ -247,6 +251,9 @@ def client_portal_slots_api(request):
         service = Service.objects.prefetch_related("allowed_zones", "employees").get(pk=service_id, is_active=True)
         date_value = datetime.strptime(date_text, "%Y-%m-%d").date()
     except (Service.DoesNotExist, ValueError):
+        return JsonResponse({"ok": False, "message": "Servicio o fecha no valida."}, status=400)
+
+    if date_value < timezone.localdate() or date_value > _portal_last_booking_date():
         return JsonResponse({"ok": False, "message": "Servicio o fecha no valida."}, status=400)
 
     zone = None
@@ -993,6 +1000,8 @@ def _client_portal_context(request, client, booking_form=None):
         "photo_history": photo_history,
         "rewards": rewards,
         "top_services": top_services,
+        "booking_last_date": _portal_last_booking_date().isoformat(),
+        "booking_search_days": PUBLIC_BOOKING_MAX_DAYS_AHEAD,
     }
 
 

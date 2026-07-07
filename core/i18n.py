@@ -52,9 +52,9 @@ PUBLIC_TRANSLATIONS = {
     },
 }
 
-PUBLIC_TRANSLATIONS["es"].update({'login_title': 'Iniciar sesión', 'login_subtitle': 'Accede a tu cuenta de BRIMOON Studio.', 'login_panel': 'Área privada', 'login_user': 'Usuario', 'login_password': 'Contraseña', 'login_submit': 'Entrar', 'back_to_site': 'Volver al sitio'})
-PUBLIC_TRANSLATIONS["ru"].update({'login_title': 'Вход', 'login_subtitle': 'Войдите в свой аккаунт BRIMOON Studio.', 'login_panel': 'Личный кабинет', 'login_user': 'Логин', 'login_password': 'Пароль', 'login_submit': 'Войти', 'back_to_site': 'На сайт'})
-PUBLIC_TRANSLATIONS["en"].update({'login_title': 'Sign in', 'login_subtitle': 'Access your BRIMOON Studio account.', 'login_panel': 'Private area', 'login_user': 'Username', 'login_password': 'Password', 'login_submit': 'Sign in', 'back_to_site': 'Back to site'})
+PUBLIC_TRANSLATIONS["es"].update({'login_title': 'Iniciar sesión', 'login_subtitle': 'Accede a tu cuenta de BRIMOON Studio con tu telefono o email.', 'login_panel': 'Área privada', 'login_user': 'Telefono o email', 'login_password': 'Contraseña', 'login_submit': 'Entrar', 'back_to_site': 'Volver al sitio'})
+PUBLIC_TRANSLATIONS["ru"].update({'login_title': 'Вход', 'login_subtitle': 'Войдите в аккаунт BRIMOON Studio по телефону или email.', 'login_panel': 'Личный кабинет', 'login_user': 'Телефон или email', 'login_password': 'Пароль', 'login_submit': 'Войти', 'back_to_site': 'На сайт'})
+PUBLIC_TRANSLATIONS["en"].update({'login_title': 'Sign in', 'login_subtitle': 'Access your BRIMOON Studio account with your phone or email.', 'login_panel': 'Private area', 'login_user': 'Phone or email', 'login_password': 'Password', 'login_submit': 'Sign in', 'back_to_site': 'Back to site'})
 
 PUBLIC_TRANSLATIONS["de"] = {**PUBLIC_TRANSLATIONS["en"], **{
     "site_title": "BRIMOON STUDIO | Premium-Beauty", "home_meta": "BRIMOON Studio in Bilbao: Premium-Beauty-Salon für Brauen, Wimpern, Maniküre, Pediküre und Gesichtsdepilation nach Termin.", "og_home_title": "BRIMOON STUDIO | Premium-Beauty in Bilbao", "og_home_description": "Schönheit, Pflege und Liebe zum Detail in jedem Blick.",
@@ -85,8 +85,8 @@ PUBLIC_TRANSLATIONS["fr"] = {**PUBLIC_TRANSLATIONS["en"], **{
     "home": "Accueil", "service": "Service", "all_services_title": "Services de beauté chez BRIMOON Studio", "all_services_intro": "Découvrez nos soins pour le regard, les mains, les pieds et la peau du visage.", "premium_services": "Services premium", "tips_cta_kicker": "Conseil Brimoon", "tips_cta_title": "Prenez soin du résultat à la maison", "tips_cta_text": "Lisez nos conseils pour garder sourcils, cils, ongles et peau plus beaux entre les visites.", "see_tips": "Voir les conseils", "what_includes": "Ce que comprend ce soin", "before_after_tips": "Conseils avant et après", "personal_result": "Vous voulez un résultat adapté à vous ?", "also_interest": "Cela peut aussi vous intéresser", "more_services": "Plus de services Brimoon", "tips_page_title": "Conseils beauté, soins et petits rituels", "tips_page_intro": "Un espace pour répondre aux questions fréquentes, mieux entretenir les résultats et choisir chaque service avec plus de confiance.", "useful_portal": "Portail utile", "seo_note_title": "Guides pensés pour vos vraies questions", "seo_note_text": "Le portail grandira avec des recommandations sur la préparation, l'entretien et le choix des services.", "keep_reading": "Continuer à lire", "more_tips": "Plus de conseils utiles", "personal_advice": "Réservez votre rendez-vous et recevez une recommandation personnalisée.",
 }}
 
-PUBLIC_TRANSLATIONS["de"].update({'login_title': 'Anmelden', 'login_subtitle': 'Melden Sie sich in Ihrem BRIMOON Studio Konto an.', 'login_panel': 'Privater Bereich', 'login_user': 'Benutzername', 'login_password': 'Passwort', 'login_submit': 'Anmelden', 'back_to_site': 'Zur Website'})
-PUBLIC_TRANSLATIONS["fr"].update({'login_title': 'Connexion', 'login_subtitle': 'Accédez à votre compte BRIMOON Studio.', 'login_panel': 'Espace privé', 'login_user': 'Utilisateur', 'login_password': 'Mot de passe', 'login_submit': 'Entrer', 'back_to_site': 'Retour au site'})
+PUBLIC_TRANSLATIONS["de"].update({'login_title': 'Anmelden', 'login_subtitle': 'Melden Sie sich mit Telefon oder Email in Ihrem BRIMOON Studio Konto an.', 'login_panel': 'Privater Bereich', 'login_user': 'Telefon oder Email', 'login_password': 'Passwort', 'login_submit': 'Anmelden', 'back_to_site': 'Zur Website'})
+PUBLIC_TRANSLATIONS["fr"].update({'login_title': 'Connexion', 'login_subtitle': 'Accédez à votre compte BRIMOON Studio avec votre téléphone ou email.', 'login_panel': 'Espace privé', 'login_user': 'Téléphone ou email', 'login_password': 'Mot de passe', 'login_submit': 'Entrer', 'back_to_site': 'Retour au site'})
 
 SERVICE_TRANSLATIONS = {
     "cejas-definicion-depilacion-lifting": {
@@ -181,7 +181,7 @@ ARTICLE_TRANSLATIONS.update({
 
 PUBLIC_BOOKING_TRANSLATIONS = {
     "es": {
-        "public_booking_title": "Reserva tu cita online", "public_booking_meta": "Reserva online en BRIMOON Studio: elige servicio, fecha, hora y especialista en pocos pasos.", "public_booking_intro": "Elige un horario real disponible. Crearemos tu cuenta de cliente y dejaremos la cita en el calendario.", "public_booking_service": "Servicio", "public_booking_choose_service": "Elige un servicio", "public_booking_date": "Fecha", "public_booking_time": "Horario y especialista", "public_booking_select_service_date": "Selecciona servicio y fecha para ver horarios.", "public_booking_refresh": "Actualizar", "public_booking_name": "Nombre", "public_booking_password": "Contraseña", "public_booking_contact_toggle": "Quiero dejar telefono o email", "public_booking_phone": "Telefono", "public_booking_email": "Email", "public_booking_submit": "Reservar", "public_booking_loading": "Buscando horarios disponibles...", "public_booking_no_slots": "No hay horarios disponibles para esta fecha.", "public_booking_choose_master": "Elige una hora y una especialista.", "public_booking_selected": "Seleccionado: {time} con {employee}.", "public_booking_slots_error": "No se pudieron cargar los horarios.", "public_booking_aside_title": "Una reserva sencilla, sin perder el estilo Brimoon", "public_booking_aside_text": "Eliges la hora y confirmamos la cita al instante. Podras pagar la señal cuando quieras desde tu cuenta.", "public_booking_range": "Horario", "public_booking_range_all": "Todo el dia", "public_booking_selected_label": "Tu horario", "public_booking_edit_time": "Cambiar hora", "public_booking_password_help": "Minimo 6 caracteres. Lo usaras para entrar a tu cuenta.", "public_booking_submitting": "Procesando reserva...", "public_booking_error_name": "Indica tu nombre.", "public_booking_error_password_required": "Crea una contrasena para tu cuenta.", "public_booking_error_password_min": "La contrasena debe tener al menos 6 caracteres.", "public_booking_error_service": "Selecciona un servicio valido.", "public_booking_error_employee": "Selecciona una especialista disponible.", "public_booking_error_zone": "Zona no valida.", "public_booking_error_zone_service": "La zona no esta permitida para este servicio.", "public_booking_error_time": "Selecciona una hora disponible.", "public_booking_error_future": "Selecciona una hora futura.", "public_booking_error_email_exists": "Ya existe una cuenta con este email. Inicia sesion para reservar.", "public_booking_error_phone_exists": "Ya existe una cuenta con este telefono. Inicia sesion para reservar.", "public_booking_error_no_zone": "No hay zona libre para este horario.", "public_booking_error_slot_taken": "Este horario ya no esta disponible.", "public_booking_error_wrong_password": "Contraseña incorrecta para esa cuenta.", "public_booking_error_no_client_profile": "Esta cuenta no es de cliente.",
+        "public_booking_title": "Reserva tu cita online", "public_booking_meta": "Reserva online en BRIMOON Studio: elige servicio, fecha, hora y especialista en pocos pasos.", "public_booking_intro": "Elige un horario real disponible. Crearemos tu cuenta de cliente y dejaremos la cita en el calendario.", "public_booking_service": "Servicio", "public_booking_choose_service": "Elige un servicio", "public_booking_date": "Fecha", "public_booking_time": "Horario y especialista", "public_booking_select_service_date": "Selecciona servicio y fecha para ver horarios.", "public_booking_refresh": "Actualizar", "public_booking_name": "Nombre", "public_booking_password": "Contraseña", "public_booking_contact_toggle": "Quiero dejar telefono o email", "public_booking_phone": "Telefono", "public_booking_email": "Email", "public_booking_submit": "Reservar", "public_booking_loading": "Buscando horarios disponibles...", "public_booking_no_slots": "No hay horarios disponibles para esta fecha.", "public_booking_choose_master": "Elige una hora y una especialista.", "public_booking_selected": "Seleccionado: {time} con {employee}.", "public_booking_slots_error": "No se pudieron cargar los horarios.", "public_booking_aside_title": "Una reserva sencilla, sin perder el estilo Brimoon", "public_booking_aside_text": "Eliges la hora y confirmamos la cita al instante. Podras pagar la señal cuando quieras desde tu cuenta.", "public_booking_range": "Horario", "public_booking_range_all": "Todo el dia", "public_booking_selected_label": "Tu horario", "public_booking_edit_time": "Cambiar hora", "public_booking_password_help": "Minimo 6 caracteres. Lo usaras para entrar a tu cuenta.", "public_booking_submitting": "Procesando reserva...", "public_booking_error_name": "Indica tu nombre.", "public_booking_error_password_required": "Crea una contrasena para tu cuenta.", "public_booking_error_password_min": "La contrasena debe tener al menos 6 caracteres.", "public_booking_error_service": "Selecciona un servicio valido.", "public_booking_error_employee": "Selecciona una especialista disponible.", "public_booking_error_zone": "Zona no valida.", "public_booking_error_zone_service": "La zona no esta permitida para este servicio.", "public_booking_error_time": "Selecciona una hora disponible.", "public_booking_error_future": "Selecciona una hora futura.", "public_booking_error_email_exists": "Ya existe una cuenta con este email. Inicia sesion para reservar.", "public_booking_error_phone_exists": "Ya existe una cuenta con este telefono. Inicia sesion para reservar.", "public_booking_error_no_zone": "No hay zona libre para este horario.", "public_booking_error_slot_taken": "Este horario ya no esta disponible.", "public_booking_error_wrong_password": "Contraseña incorrecta para esa cuenta.", "public_booking_error_no_client_profile": "Esta cuenta no es de cliente.", "public_booking_contact_required": "Telefono o email obligatorios para crear tu cuenta.", "public_booking_contact_invalid": "Escribe un telefono valido o un email valido.", "public_booking_contact_primary": "Telefono o email", "public_booking_contact_primary_help": "Si escribes un telefono, podras añadir un email adicional. Si escribes un email, podras añadir un telefono adicional.", "public_booking_contact_primary_phone_help": "Has indicado un telefono. Si quieres, añade un email adicional.", "public_booking_contact_primary_email_help": "Has indicado un email. Si quieres, añade un telefono adicional.", "public_booking_contact_add": "Añadir el segundo contacto", "public_booking_contact_secondary": "Contacto adicional", "public_booking_contact_secondary_help": "Añade el otro dato de contacto si quieres.", "public_booking_contact_secondary_phone_help": "Añade un telefono adicional.", "public_booking_contact_secondary_email_help": "Añade un email adicional.", "public_booking_contact_secondary_invalid": "El contacto adicional debe ser del otro tipo y tener un formato valido.",
     },
     "ru": {
         "public_booking_title": "Запишитесь онлайн", "public_booking_meta": "Онлайн-запись в BRIMOON Studio: выберите услугу, дату, время и мастера за несколько шагов.", "public_booking_intro": "Выберите реальное свободное время. Мы создадим клиентский аккаунт и добавим запись в календарь.", "public_booking_service": "Услуга", "public_booking_choose_service": "Выберите услугу", "public_booking_date": "Дата", "public_booking_time": "Время и мастер", "public_booking_select_service_date": "Выберите услугу и дату, чтобы увидеть время.", "public_booking_refresh": "Обновить", "public_booking_name": "Имя", "public_booking_password": "Пароль", "public_booking_contact_toggle": "Хочу оставить телефон или email", "public_booking_phone": "Телефон", "public_booking_email": "Email", "public_booking_submit": "Записаться", "public_booking_loading": "Ищем свободное время...", "public_booking_no_slots": "На эту дату нет свободного времени.", "public_booking_choose_master": "Выберите время и мастера.", "public_booking_selected": "Выбрано: {time}, мастер {employee}.", "public_booking_slots_error": "Не удалось загрузить время.", "public_booking_aside_title": "Простая запись в стиле Brimoon", "public_booking_aside_text": "Выбираете время, и запись подтверждается сразу. Оплатить депозит можно будет в любой момент из личного кабинета.", "public_booking_range": "Время", "public_booking_range_all": "Весь день", "public_booking_selected_label": "Ваше время", "public_booking_edit_time": "Изменить время", "public_booking_password_help": "Минимум 6 символов. Он нужен для входа в личный кабинет.", "public_booking_submitting": "Оформляем запись...", "public_booking_error_name": "Укажите имя.", "public_booking_error_password_required": "Создайте пароль для аккаунта.", "public_booking_error_password_min": "Пароль должен быть не короче 6 символов.", "public_booking_error_service": "Выберите корректную услугу.", "public_booking_error_employee": "Выберите доступного мастера.", "public_booking_error_zone": "Некорректная зона.", "public_booking_error_zone_service": "Эта зона недоступна для выбранной услуги.", "public_booking_error_time": "Выберите доступное время.", "public_booking_error_future": "Выберите будущее время.", "public_booking_error_email_exists": "Аккаунт с таким email уже существует. Войдите, чтобы записаться.", "public_booking_error_phone_exists": "Аккаунт с таким телефоном уже существует. Войдите, чтобы записаться.", "public_booking_error_no_zone": "На это время нет свободной зоны.", "public_booking_error_slot_taken": "Это время уже недоступно.", "public_booking_error_wrong_password": "Неверный пароль для этого аккаунта.", "public_booking_error_no_client_profile": "Этот аккаунт не клиентский.",
@@ -242,47 +242,95 @@ PUBLIC_TRANSLATIONS["fr"].update({
 
 PUBLIC_TRANSLATIONS["es"].update({
     "public_booking_account_existing_title": "Si ya tienes cuenta,",
-    "public_booking_account_existing_text": "escribe tu login y contraseña y pulsa “Ya tengo cuenta”. Conservaremos el servicio, la fecha y la hora elegidos.",
+    "public_booking_account_existing_text": "escribe tu telefono o email y tu contraseña. Conservaremos el servicio, la fecha y la hora elegidos.",
     "public_booking_account_new_title": "Si eres nueva,",
-    "public_booking_account_new_text": "escribe tu nombre y una contraseña; crearemos tu cuenta automáticamente.",
+    "public_booking_account_new_text": "escribe tu nombre, telefono o email y una contraseña; crearemos tu cuenta automáticamente.",
     "public_booking_name_login": "Nombre o login",
-    "public_booking_existing_hint": "Los mismos campos sirven para iniciar sesión o crear una cuenta nueva.",
+    "public_booking_existing_hint": "El telefono o email sirven para entrar en tu cuenta en adelante.",
     "public_waitlist_inline_cta": "Podemos apuntarte a la lista de espera para este día si alguien cancela.",
 })
 PUBLIC_TRANSLATIONS["ru"].update({
     "public_booking_account_existing_title": "Если аккаунт уже есть,",
-    "public_booking_account_existing_text": "введите логин и пароль и нажмите «У меня уже есть аккаунт». Мы сохраним выбранные услугу, дату и время.",
+    "public_booking_account_existing_text": "введите телефон или email и пароль. Мы сохраним выбранные услугу, дату и время.",
     "public_booking_account_new_title": "Если аккаунта нет,",
-    "public_booking_account_new_text": "введите имя и пароль; мы создадим аккаунт автоматически.",
+    "public_booking_account_new_text": "введите имя, телефон или email и пароль; мы создадим аккаунт автоматически.",
     "public_booking_name_login": "Имя или логин",
-    "public_booking_existing_hint": "Эти же поля используются и для входа, и для создания нового аккаунта.",
+    "public_booking_existing_hint": "Телефон или email будут использоваться для входа в личный кабинет.",
+    "public_booking_contact_required": "Телефон или email обязательны для создания аккаунта.",
+    "public_booking_contact_invalid": "Укажите корректный телефон или email.",
+    "public_booking_contact_primary": "Телефон или email",
+    "public_booking_contact_primary_help": "Если укажете телефон, можно добавить email. Если укажете email, можно добавить телефон.",
+    "public_booking_contact_primary_phone_help": "Указан телефон. При желании добавьте email.",
+    "public_booking_contact_primary_email_help": "Указан email. При желании добавьте телефон.",
+    "public_booking_contact_add": "Добавить второй контакт",
+    "public_booking_contact_secondary": "Дополнительный контакт",
+    "public_booking_contact_secondary_help": "При желании добавьте второй тип контакта.",
+    "public_booking_contact_secondary_phone_help": "Добавьте дополнительный телефон.",
+    "public_booking_contact_secondary_email_help": "Добавьте дополнительный email.",
+    "public_booking_contact_secondary_invalid": "Дополнительный контакт должен быть другого типа и в корректном формате.",
     "public_waitlist_inline_cta": "Мы можем добавить вас в лист ожидания на этот день, если кто-то отменит запись.",
 })
 PUBLIC_TRANSLATIONS["en"].update({
     "public_booking_account_existing_title": "If you already have an account,",
-    "public_booking_account_existing_text": "enter your login and password and press “I already have an account”. We will keep the selected service, date and time.",
+    "public_booking_account_existing_text": "enter your phone or email and password. We will keep the selected service, date and time.",
     "public_booking_account_new_title": "If you are new,",
-    "public_booking_account_new_text": "enter your name and a password; we will create your account automatically.",
+    "public_booking_account_new_text": "enter your name, phone or email and a password; we will create your account automatically.",
     "public_booking_name_login": "Name or login",
-    "public_booking_existing_hint": "The same fields work for sign-in or new account creation.",
+    "public_booking_existing_hint": "Your phone or email will be used to sign in later.",
+    "public_booking_contact_required": "Phone or email is required to create your account.",
+    "public_booking_contact_invalid": "Enter a valid phone number or email.",
+    "public_booking_contact_primary": "Phone or email",
+    "public_booking_contact_primary_help": "If you enter a phone number, you can add an email. If you enter an email, you can add a phone number.",
+    "public_booking_contact_primary_phone_help": "Phone selected. You can add an email if you want.",
+    "public_booking_contact_primary_email_help": "Email selected. You can add a phone number if you want.",
+    "public_booking_contact_add": "Add the second contact",
+    "public_booking_contact_secondary": "Additional contact",
+    "public_booking_contact_secondary_help": "Add the other contact type if you want.",
+    "public_booking_contact_secondary_phone_help": "Add an extra phone number.",
+    "public_booking_contact_secondary_email_help": "Add an extra email.",
+    "public_booking_contact_secondary_invalid": "The additional contact must be the other type and have a valid format.",
     "public_waitlist_inline_cta": "We can add you to the waitlist for this day if someone cancels.",
 })
 PUBLIC_TRANSLATIONS["de"].update({
     "public_booking_account_existing_title": "Wenn Sie bereits ein Konto haben,",
-    "public_booking_account_existing_text": "geben Sie Login und Passwort ein und klicken Sie auf „Ich habe schon ein Konto“. Service, Datum und Uhrzeit bleiben erhalten.",
+    "public_booking_account_existing_text": "geben Sie Telefon oder Email und Ihr Passwort ein. Service, Datum und Uhrzeit bleiben erhalten.",
     "public_booking_account_new_title": "Wenn Sie neu sind,",
-    "public_booking_account_new_text": "geben Sie Namen und Passwort ein; wir erstellen Ihr Konto automatisch.",
+    "public_booking_account_new_text": "geben Sie Namen, Telefon oder Email und Passwort ein; wir erstellen Ihr Konto automatisch.",
     "public_booking_name_login": "Name oder Login",
-    "public_booking_existing_hint": "Dieselben Felder dienen zum Anmelden oder zum Erstellen eines neuen Kontos.",
+    "public_booking_existing_hint": "Telefon oder Email werden später fur die Anmeldung verwendet.",
+    "public_booking_contact_required": "Telefon oder Email sind fur die Kontoerstellung erforderlich.",
+    "public_booking_contact_invalid": "Geben Sie ein gultiges Telefon oder eine gultige Email ein.",
+    "public_booking_contact_primary": "Telefon oder Email",
+    "public_booking_contact_primary_help": "Bei Telefon konnen Sie eine Email erganzzen. Bei Email konnen Sie ein Telefon hinzufugen.",
+    "public_booking_contact_primary_phone_help": "Telefon erkannt. Sie konnen eine Email hinzufugen.",
+    "public_booking_contact_primary_email_help": "Email erkannt. Sie konnen ein Telefon hinzufugen.",
+    "public_booking_contact_add": "Zweiten Kontakt hinzufugen",
+    "public_booking_contact_secondary": "Zusatzlicher Kontakt",
+    "public_booking_contact_secondary_help": "Fugen Sie auf Wunsch den anderen Kontakttyp hinzu.",
+    "public_booking_contact_secondary_phone_help": "Zusatzliche Telefonnummer eingeben.",
+    "public_booking_contact_secondary_email_help": "Zusatzliche Email eingeben.",
+    "public_booking_contact_secondary_invalid": "Der zusatzliche Kontakt muss vom anderen Typ sein und ein gultiges Format haben.",
     "public_waitlist_inline_cta": "Wir können Sie für diesen Tag auf die Warteliste setzen, falls jemand absagt.",
 })
 PUBLIC_TRANSLATIONS["fr"].update({
     "public_booking_account_existing_title": "Si vous avez déjà un compte,",
-    "public_booking_account_existing_text": "saisissez votre identifiant et votre mot de passe puis appuyez sur « J'ai déjà un compte ». Le service, la date et l'heure restent sélectionnés.",
+    "public_booking_account_existing_text": "saisissez votre téléphone ou email et votre mot de passe. Le service, la date et l'heure restent sélectionnés.",
     "public_booking_account_new_title": "Si vous êtes nouvelle,",
-    "public_booking_account_new_text": "saisissez votre nom et un mot de passe ; nous créerons votre compte automatiquement.",
+    "public_booking_account_new_text": "saisissez votre nom, téléphone ou email et un mot de passe ; nous créerons votre compte automatiquement.",
     "public_booking_name_login": "Nom ou identifiant",
-    "public_booking_existing_hint": "Les mêmes champs servent à se connecter ou à créer un nouveau compte.",
+    "public_booking_existing_hint": "Votre téléphone ou email servira ensuite à vous connecter.",
+    "public_booking_contact_required": "Téléphone ou email obligatoire pour créer votre compte.",
+    "public_booking_contact_invalid": "Indiquez un téléphone ou un email valide.",
+    "public_booking_contact_primary": "Téléphone ou email",
+    "public_booking_contact_primary_help": "Si vous indiquez un téléphone, vous pourrez ajouter un email. Si vous indiquez un email, vous pourrez ajouter un téléphone.",
+    "public_booking_contact_primary_phone_help": "Téléphone indiqué. Vous pouvez ajouter un email.",
+    "public_booking_contact_primary_email_help": "Email indiqué. Vous pouvez ajouter un téléphone.",
+    "public_booking_contact_add": "Ajouter le second contact",
+    "public_booking_contact_secondary": "Contact supplémentaire",
+    "public_booking_contact_secondary_help": "Ajoutez l'autre type de contact si vous le souhaitez.",
+    "public_booking_contact_secondary_phone_help": "Ajoutez un téléphone supplémentaire.",
+    "public_booking_contact_secondary_email_help": "Ajoutez un email supplémentaire.",
+    "public_booking_contact_secondary_invalid": "Le contact supplémentaire doit être de l'autre type et avoir un format valide.",
     "public_waitlist_inline_cta": "Nous pouvons vous ajouter à la liste d'attente pour ce jour si quelqu'un annule.",
 })
 
