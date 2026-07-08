@@ -830,6 +830,15 @@ class BookingWriteSerializer(serializers.Serializer):
         self._booking_form = form
         return attrs
 
+    def create(self, validated_data):
+        return self._booking_form.save()
+
+    def update(self, instance, validated_data):
+        return self._booking_form.save()
+
+    def save(self, **kwargs):
+        return self._booking_form.save()
+
 
 class FiscalDocumentLineSerializer(serializers.ModelSerializer):
     total_amount = serializers.SerializerMethodField()
