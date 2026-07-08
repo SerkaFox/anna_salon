@@ -1,4 +1,5 @@
 import json
+import logging
 import secrets
 from datetime import datetime, timedelta
 
@@ -30,6 +31,7 @@ from employees.models import Employee
 from gallery.selectors import get_public_instagram_posts
 from salon.models import Zone
 from services_app.models import Service
+from whatsapp_bot.services import queue_booking_confirmation, send_whatsapp_message
 
 from .i18n import (
     ARTICLE_TRANSLATIONS,
@@ -44,6 +46,7 @@ from .i18n import (
 
 
 SITE_NAME = "BRIMOON Studio"
+logger = logging.getLogger(__name__)
 SITE_DOMAIN = settings.PUBLIC_BASE_URL.rstrip("/")
 SALON_ADDRESS = "Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia"
 SALON_PHONE = "643996431"
@@ -527,6 +530,16 @@ def _create_public_booking(values):
     return user, booking
 
 
+def _notify_public_booking_created(booking):
+    if not getattr(settings, "WHATSAPP_SEND_CONFIRMATION_ON_BOOKING", True):
+        return
+    try:
+        message, _created = queue_booking_confirmation(booking)
+        send_whatsapp_message(message)
+    except Exception:
+        logger.exception("Could not send WhatsApp booking confirmation for booking %s", booking.pk)
+
+
 def _resolve_client_contact_values(primary_contact, secondary_contact):
     primary = classify_contact(primary_contact)
     secondary = classify_contact(secondary_contact)
@@ -802,6 +815,8 @@ def public_booking(request):
             )
         except PublicBookingError as exc:
             return _public_booking_error_response(request, values, exc.errors)
+
+    _notify_public_booking_created(booking)
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     language = detect_public_language(request)

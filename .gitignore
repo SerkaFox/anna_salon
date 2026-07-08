@@ -17,4 +17,8 @@ logs/
 media/
 staticfiles/
 
+node_modules/
+whatsapp_bridge/sessions/
+whatsapp_bridge/.wwebjs_*/
+
 .DS_Store

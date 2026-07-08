@@ -1,0 +1,19 @@
+[Unit]
+Description=BRIMOON WhatsApp bridge
+After=network.target
+
+[Service]
+User=seradmin
+Group=seradmin
+WorkingDirectory=/home/seradmin/anna/whatsapp_bridge
+EnvironmentFile=/home/seradmin/anna/.env
+Environment=NODE_ENV=production
+Environment=WHATSAPP_BRIDGE_PORT=8125
+Environment=WHATSAPP_CHROME_PATH=/snap/bin/chromium
+Environment=WHATSAPP_AUTH_DATA_PATH=/home/seradmin/anna/whatsapp_bridge/sessions
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

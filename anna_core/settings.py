@@ -115,6 +115,7 @@ INSTALLED_APPS = [
     'auditlog', # — journal de cambios
     'core',
     'mobile_api',
+    'whatsapp_bot',
 ]
 
 MIDDLEWARE = [
@@ -206,3 +207,10 @@ STRIPE_CURRENCY = os.getenv('STRIPE_CURRENCY', 'eur').lower()
 BOOKING_DEPOSIT_AMOUNT_EUR = os.getenv('BOOKING_DEPOSIT_AMOUNT_EUR', '')
 BOOKING_FREE_CANCEL_HOURS = int(os.getenv('BOOKING_FREE_CANCEL_HOURS', '24'))
 BOOKING_DEPOSIT_PERCENT = os.getenv('BOOKING_DEPOSIT_PERCENT', '10')
+
+WHATSAPP_BRIDGE_URL = os.getenv('WHATSAPP_BRIDGE_URL', '')
+WHATSAPP_BRIDGE_TOKEN = os.getenv('WHATSAPP_BRIDGE_TOKEN', '')
+WHATSAPP_DRY_RUN = os.getenv('WHATSAPP_DRY_RUN', 'true').lower() in {'1', 'true', 'yes', 'on'}
+WHATSAPP_SEND_CONFIRMATION_ON_BOOKING = os.getenv('WHATSAPP_SEND_CONFIRMATION_ON_BOOKING', 'true').lower() in {'1', 'true', 'yes', 'on'}
+WHATSAPP_DEFAULT_COUNTRY_CODE = os.getenv('WHATSAPP_DEFAULT_COUNTRY_CODE', '34')
+WHATSAPP_LOCAL_PHONE_LENGTH = int(os.getenv('WHATSAPP_LOCAL_PHONE_LENGTH', '9'))
