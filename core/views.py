@@ -338,7 +338,7 @@ _DEMO_IMAGES = {
     "cejas-definicion-depilacion-lifting": "demo/eyebrows-portrait.jpg",
     "depilacion-facial": "demo/waxing-legs.jpg",
     "manicura-extensiones-tratamientos": "demo/manicure-1.jpg",
-    "pedicuras-tratamientos": "demo/pedicure-1.jpg",
+    "pedicuras-tratamientos-pies": "demo/pedicure-1.jpg",
     "pestanas-tinte-extensiones-lifting": "demo/eyelash-1.jpg",
     "como-cuidar-cejas-despues-lifting": "demo/eyebrow-tweezing.jpg",
     "manicura-elegante-que-dura": "demo/manicure-3.jpg",
