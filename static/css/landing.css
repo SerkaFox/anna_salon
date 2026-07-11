@@ -39,26 +39,30 @@ html[data-theme="aurora"] {
   --grad-a: rgba(196,116,138,0.09);
   --grad-b: rgba(212,83,122,0.05);
 }
-/* Aurora – body background: light, no dark overlay */
+/* Aurora – body background: solid light, NO photo, no drift */
 html[data-theme="aurora"] body.landing-body::before {
   background:
     radial-gradient(circle at 12% 18%, rgba(196,116,138,0.14), transparent 30%),
     radial-gradient(circle at 86% 72%, rgba(212,83,122,0.09), transparent 32%),
     radial-gradient(circle at 52% 96%, rgba(184,80,106,0.07), transparent 38%),
     #fdf2f5;
+  background-size: auto;
+  animation: none;
+  transform: none;
 }
 html[data-theme="aurora"] body.landing-body::after {
   background: linear-gradient(120deg, transparent 0%, rgba(196,116,138,0.05) 42%, transparent 58%);
   opacity: 0.5;
+  animation: none;
 }
-/* Aurora – hero overlay: light tint, keeps image visible at ~20% */
+/* Aurora – hero: no dark overlay, clean light */
 html[data-theme="aurora"] .lux-hero::before {
   background:
-    linear-gradient(90deg, rgba(253,242,245,0.88) 0%, rgba(253,242,245,0.62) 44%, rgba(253,242,245,0.14) 100%),
-    radial-gradient(circle at 20% 52%, rgba(196,116,138,0.12), transparent 30%);
+    radial-gradient(circle at 20% 52%, rgba(196,116,138,0.10), transparent 30%),
+    radial-gradient(circle at 78% 30%, rgba(212,83,122,0.07), transparent 28%);
 }
 html[data-theme="aurora"] .lux-hero::after {
-  background: linear-gradient(180deg, transparent, rgba(253,242,245,0.97));
+  background: linear-gradient(180deg, transparent, rgba(253,242,245,0.60));
 }
 /* Aurora – nav pill */
 html[data-theme="aurora"] .lux-nav {
@@ -194,26 +198,30 @@ html[data-theme="bosque"] {
   --grad-a: rgba(125,186,138,0.09);
   --grad-b: rgba(76,175,106,0.05);
 }
-/* Bosque – body background: light sage, no dark overlay */
+/* Bosque – body background: solid sage light, NO photo, no drift */
 html[data-theme="bosque"] body.landing-body::before {
   background:
     radial-gradient(circle at 14% 16%, rgba(125,186,138,0.13), transparent 30%),
     radial-gradient(circle at 88% 74%, rgba(76,175,106,0.09), transparent 32%),
     radial-gradient(circle at 50% 96%, rgba(61,136,85,0.07), transparent 38%),
     #f1f6f3;
+  background-size: auto;
+  animation: none;
+  transform: none;
 }
 html[data-theme="bosque"] body.landing-body::after {
   background: linear-gradient(120deg, transparent 0%, rgba(125,186,138,0.05) 42%, transparent 58%);
   opacity: 0.5;
+  animation: none;
 }
-/* Bosque – hero overlay */
+/* Bosque – hero: clean light, no dark overlay */
 html[data-theme="bosque"] .lux-hero::before {
   background:
-    linear-gradient(90deg, rgba(241,246,243,0.88) 0%, rgba(241,246,243,0.62) 44%, rgba(241,246,243,0.14) 100%),
-    radial-gradient(circle at 20% 52%, rgba(125,186,138,0.11), transparent 30%);
+    radial-gradient(circle at 20% 52%, rgba(125,186,138,0.10), transparent 30%),
+    radial-gradient(circle at 78% 30%, rgba(76,175,106,0.07), transparent 28%);
 }
 html[data-theme="bosque"] .lux-hero::after {
-  background: linear-gradient(180deg, transparent, rgba(241,246,243,0.97));
+  background: linear-gradient(180deg, transparent, rgba(241,246,243,0.60));
 }
 /* Bosque – nav pill */
 html[data-theme="bosque"] .lux-nav {
