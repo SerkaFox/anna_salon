@@ -79,11 +79,17 @@ ALLOWED_HOSTS = [
     'localhost',
     '192.168.0.159',
 ]
+_extra_hosts = [h.strip() for h in os.getenv('EXTRA_ALLOWED_HOSTS', '').split(',') if h.strip()]
+if _extra_hosts:
+    ALLOWED_HOSTS += _extra_hosts
 
 CSRF_TRUSTED_ORIGINS = [
     'https://brimoon.es',
     'https://www.brimoon.es',
 ]
+_extra_origins = [o.strip() for o in os.getenv('EXTRA_CSRF_ORIGINS', '').split(',') if o.strip()]
+if _extra_origins:
+    CSRF_TRUSTED_ORIGINS += _extra_origins
 
 SITE_URL = os.getenv('SITE_URL', 'https://brimoon.es')
 PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', SITE_URL)
@@ -166,7 +172,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
-STATIC_ROOT = '/var/www/anna/static'
+STATIC_ROOT = os.getenv('STATIC_ROOT', '/var/www/anna/static')
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
