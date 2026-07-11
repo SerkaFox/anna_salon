@@ -1,6 +1,6 @@
 {% extends "panel_base.html" %}
 
-{% block title %}Enlace de pago | BRIMOON Studio{% endblock %}
+{% block title %}Enlace de pago | {{ salon_name }}{% endblock %}
 {% block panel_title %}Enlace de pago{% endblock %}
 {% block panel_subtitle %}Reserva #{{ booking.id }} · {{ booking.client }} · {{ payment.amount }} {{ payment.currency|upper }}{% endblock %}
 

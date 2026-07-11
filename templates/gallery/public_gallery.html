@@ -1,15 +1,15 @@
 {% extends "core/public_base.html" %}
 
-{% block title %}Galería | BRIMOON Studio{% endblock %}
-{% block meta_description %}Galería de BRIMOON Studio: trabajos, detalles y momentos del salón.{% endblock %}
-{% block og_title %}Galería | BRIMOON Studio{% endblock %}
-{% block og_description %}Trabajos y momentos de BRIMOON Studio.{% endblock %}
+{% block title %}Galería | {{ salon_name }}{% endblock %}
+{% block meta_description %}Galería de {{ salon_name }}: trabajos, detalles y momentos del salón.{% endblock %}
+{% block og_title %}Galería | {{ salon_name }}{% endblock %}
+{% block og_description %}Trabajos y momentos de {{ salon_name }}.{% endblock %}
 
 {% block page_hero %}
   <section class="content-hero">
     <div class="lux-container">
       <span class="lux-kicker">Portfolio</span>
-      <h1>Galería BRIMOON Studio</h1>
+      <h1>Galería {{ salon_name }}</h1>
       <p>Trabajos, detalles y momentos recientes del salón.</p>
     </div>
   </section>

@@ -1,6 +1,6 @@
 {% extends "core/public_base.html" %}
 {% load static %}
-{% block title %}{{ article.title }} | {{ t.nav_tips }} BRIMOON Studio{% endblock %}
+{% block title %}{{ article.title }} | {{ t.nav_tips }} {{ salon_name }}{% endblock %}
 {% block meta_description %}{{ article.meta }}{% endblock %}
 {% block og_title %}{{ article.title }}{% endblock %}
 {% block og_description %}{{ article.summary }}{% endblock %}

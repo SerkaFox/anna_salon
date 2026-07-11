@@ -146,6 +146,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'anna_core.context_processors.salon_globals',
             ],
         },
     },
@@ -222,3 +223,4 @@ WHATSAPP_DEFAULT_COUNTRY_CODE = os.getenv('WHATSAPP_DEFAULT_COUNTRY_CODE', '34')
 WHATSAPP_LOCAL_PHONE_LENGTH = int(os.getenv('WHATSAPP_LOCAL_PHONE_LENGTH', '9'))
 
 DEMO_MODE = os.getenv('DEMO_MODE', 'false').lower() in {'1', 'true', 'yes', 'on'}
+SALON_NAME = os.getenv('SALON_NAME', 'BRIMOON Studio')

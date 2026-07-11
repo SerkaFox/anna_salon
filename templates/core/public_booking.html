@@ -1,9 +1,9 @@
 {% extends "core/public_base.html" %}
 {% load static %}
 
-{% block title %}{{ t.public_booking_title }} | BRIMOON Studio{% endblock %}
+{% block title %}{{ t.public_booking_title }} | {{ salon_name }}{% endblock %}
 {% block meta_description %}{{ t.public_booking_meta }}{% endblock %}
-{% block og_title %}{{ t.public_booking_title }} | BRIMOON Studio{% endblock %}
+{% block og_title %}{{ t.public_booking_title }} | {{ salon_name }}{% endblock %}
 {% block og_description %}{{ t.public_booking_meta }}{% endblock %}
 
 {% block page_hero %}
@@ -179,7 +179,7 @@
   <div class="waitlist-modal__panel">
     <button class="waitlist-modal__close" type="button" data-close-waitlist aria-label="Cerrar">×</button>
     <div class="waitlist-modal__body">
-      <span class="lux-kicker">BRIMOON</span>
+      <span class="lux-kicker">{{ salon_name }}</span>
       <h3>{{ t.public_waitlist_title }}</h3>
       <p>{{ t.public_waitlist_text }}</p>
       <form class="waitlist-card waitlist-card--modal" method="post" action="{% url 'public_waitlist' %}" data-waitlist-form>

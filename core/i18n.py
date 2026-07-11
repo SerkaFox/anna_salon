@@ -1,3 +1,19 @@
+import os
+
+_SALON_NAME = os.getenv("SALON_NAME", "BRIMOON Studio")
+_SALON_NAME_UPPER = _SALON_NAME.upper()
+_SALON_NAME_SHORT = _SALON_NAME.split()[0]  # e.g. "Aura" from "Aura Studio"
+
+
+def _subst(text):
+    if not isinstance(text, str):
+        return text
+    return (text
+        .replace("BRIMOON Studio", _SALON_NAME)
+        .replace("BRIMOON STUDIO", _SALON_NAME_UPPER)
+        .replace("Brimoon", _SALON_NAME_SHORT))
+
+
 PUBLIC_LANGUAGES = [
     ("es", "Español"),
     ("ru", "Русский"),
@@ -427,7 +443,8 @@ def detect_public_language(request):
 
 def public_texts(language):
     language = normalize_public_language(language)
-    return {**PUBLIC_TRANSLATIONS[DEFAULT_PUBLIC_LANGUAGE], **PUBLIC_TRANSLATIONS.get(language, {})}
+    merged = {**PUBLIC_TRANSLATIONS[DEFAULT_PUBLIC_LANGUAGE], **PUBLIC_TRANSLATIONS.get(language, {})}
+    return {k: _subst(v) for k, v in merged.items()}
 
 
 def localize_items(items, translations, language):

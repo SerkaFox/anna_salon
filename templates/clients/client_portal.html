@@ -1,7 +1,7 @@
 {% extends "client_portal_base.html" %}
 {% load client_i18n %}
 
-{% block title %}{% ct "my_portal" %} | BRIMOON Studio{% endblock %}
+{% block title %}{% ct "my_portal" %} | {{ salon_name }}{% endblock %}
 {% block portal_title %}{% ct "hello" name=client.full_name %}{% endblock %}
 {% block portal_subtitle %}{% ct "portal_subtitle" %}{% endblock %}
 

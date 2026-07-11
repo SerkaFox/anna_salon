@@ -9,7 +9,7 @@
       data-thumbnail-url="{{ post.display_thumbnail_url }}"
       data-caption="{{ post.caption|default:'' }}"
       data-permalink="{{ post.instagram_url }}"
-      aria-label="Abrir trabajo de BRIMOON Studio"
+      aria-label="Abrir trabajo de {{ salon_name }}"
     >
       {% if post.media_type == "VIDEO" or post.media_type == "REEL" %}
         <video autoplay muted loop playsinline preload="metadata">
@@ -19,7 +19,7 @@
       {% else %}
         <img
           src="{{ post.display_thumbnail_url }}"
-          alt="{{ post.caption|default:'Trabajo de BRIMOON Studio' }}"
+          alt="{{ post.caption|default:'Trabajo de {{ salon_name }}' }}"
           loading="lazy"
         >
         {% if post.media_type == "CAROUSEL_ALBUM" %}
@@ -40,7 +40,7 @@
     </div>
   {% else %}
     <a class="portfolio-card__fallback" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
-      <strong>{{ post.caption|default:post.title|default:"Trabajo BRIMOON" }}</strong>
+      <strong>{{ post.caption|default:post.title|default:"Trabajo {{ salon_name }}" }}</strong>
       <span>Ver en Instagram</span>
     </a>
   {% endif %}

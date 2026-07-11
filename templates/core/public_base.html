@@ -9,11 +9,11 @@
   <meta name="description" content="{% block meta_description %}{{ t.home_meta }}{% endblock %}">
   <link rel="canonical" href="{{ canonical_url }}">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="BRIMOON Studio">
+  <meta property="og:site_name" content="{{ salon_name }}">
   <meta property="og:title" content="{% block og_title %}{{ t.site_title }}{% endblock %}">
   <meta property="og:description" content="{% block og_description %}{{ t.og_home_description }}{% endblock %}">
   <meta property="og:url" content="{{ canonical_url }}">
-  <meta property="og:image" content="https://brimoon.es{% static 'Fon2.png' %}">
+  <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static salon_hero %}">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,12 +21,12 @@
   <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260616-portfolio">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
-<body class="landing-body" style="--page-image: url('{% static 'Fon2.png' %}');">
+<body class="landing-body" style="--page-image: url('{% static salon_hero %}');">
   <header class="lux-page-header">
     <nav class="lux-nav" aria-label="Navegación principal">
-      <a class="lux-brand" href="{% url 'home' %}" aria-label="BRIMOON Studio inicio">
-        <img src="{% static 'logo.png' %}" alt="BRIMOON Studio" class="lux-brand__logo">
-        <span>BRIMOON STUDIO</span>
+      <a class="lux-brand" href="{% url 'home' %}" aria-label="{{ salon_name }} inicio">
+        <img src="{% static salon_logo %}" alt="{{ salon_name }}" class="lux-brand__logo">
+        <span>{{ salon_name }}</span>
       </a>
       <button class="lux-menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false" data-menu-toggle>
         <span></span><span></span><span></span>
@@ -58,7 +58,7 @@
 
   <footer class="lux-footer">
     <div class="lux-container footer-grid">
-      <div><strong>BRIMOON STUDIO</strong><p>{{ t.footer_text }}</p></div>
+      <div><strong>{{ salon_name }}</strong><p>{{ t.footer_text }}</p></div>
       <div><a href="{% url 'service_index' %}">{{ t.nav_services }}</a><a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a><a href="{% url 'privacy_policy' %}">Privacidad</a><a href="{% url 'terms' %}">Términos</a><a href="{% url 'data_deletion' %}">Eliminar datos</a></div>
       <div>
         <div class="footer-contact-links">
@@ -66,7 +66,7 @@
           <a class="footer-contact-chip" href="tel:{{ salon_phone }}">{{ t.footer_call }}</a>
         </div>
         <a href="{% url 'accounts:login' %}">{{ t.nav_account }}</a>
-        <span>© 2026 BRIMOON STUDIO</span>
+        <span>© 2026 {{ salon_name }}</span>
       </div>
     </div>
   </footer>

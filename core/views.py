@@ -38,6 +38,7 @@ from .i18n import (
     PUBLIC_LANGUAGE_SESSION_KEY,
     PUBLIC_LANGUAGES,
     SERVICE_TRANSLATIONS,
+    _subst,
     detect_public_language,
     localize_items,
     normalize_public_language,
@@ -45,7 +46,7 @@ from .i18n import (
 )
 
 
-SITE_NAME = "BRIMOON Studio"
+SITE_NAME = getattr(settings, "SALON_NAME", "BRIMOON Studio")
 logger = logging.getLogger(__name__)
 SITE_DOMAIN = settings.PUBLIC_BASE_URL.rstrip("/")
 SALON_ADDRESS = "Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia"
@@ -314,7 +315,7 @@ def _service_schema(request, service):
         "@context": "https://schema.org",
         "@type": "Service",
         "name": service["title"],
-        "description": service["meta"],
+        "description": _subst(service["meta"]),
         "provider": {"@type": "BeautySalon", "name": SITE_NAME},
         "areaServed": "Bilbao",
         "url": _absolute_url(request, reverse("service_detail", args=[service["slug"]])),
@@ -326,7 +327,7 @@ def _article_schema(request, article):
         "@context": "https://schema.org",
         "@type": "Article",
         "headline": article["title"],
-        "description": article["meta"],
+        "description": _subst(article["meta"]),
         "author": {"@type": "Organization", "name": SITE_NAME},
         "publisher": {"@type": "Organization", "name": SITE_NAME},
         "mainEntityOfPage": _absolute_url(request, reverse("article_detail", args=[article["slug"]])),

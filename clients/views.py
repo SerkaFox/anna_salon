@@ -182,7 +182,7 @@ def client_portal(request):
                 instance=booking,
                 message=f"Reserva pendiente creada tras login de cliente: {client.full_name}.",
             )
-            messages.success(request, "Solicitud enviada. BRIMOON Studio revisara y confirmara tu cita.")
+            messages.success(request, f"Solicitud enviada. {getattr(settings, 'SALON_NAME', 'BRIMOON Studio')} revisara y confirmara tu cita.")
             return redirect("clients:portal")
         first_error = next((items[0] for items in errors.values() if items), "No se pudo crear la reserva.")
         messages.error(request, first_error)
@@ -223,7 +223,7 @@ def client_portal(request):
                 instance=booking,
                 message=f"Solicitud de reserva creada desde portal cliente: {client.full_name}.",
             )
-            messages.success(request, "Solicitud enviada. BRIMOON Studio revisara y confirmara tu cita.")
+            messages.success(request, f"Solicitud enviada. {getattr(settings, 'SALON_NAME', 'BRIMOON Studio')} revisara y confirmara tu cita.")
             return redirect("clients:portal")
     else:
         form = None
@@ -1080,7 +1080,7 @@ def client_delete_own_account(request):
             message=f"Cuenta dada de baja por el propio cliente: {client_name}.",
         )
         logout(request)
-        messages.success(request, "Tu cuenta ha sido eliminada. Gracias por confiar en BRIMOON Studio.")
+        messages.success(request, f"Tu cuenta ha sido eliminada. Gracias por confiar en {getattr(settings, 'SALON_NAME', 'BRIMOON Studio')}.")
         return redirect("home")
 
     return render(request, "clients/client_delete_account.html", {"active_section": "profile"})

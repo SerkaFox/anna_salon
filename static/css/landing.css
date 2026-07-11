@@ -1,3 +1,4 @@
+/* ── Theme: Noche (default dark/gold) ───────────────────────── */
 :root {
   --bg: #061018;
   --bg-soft: rgba(13, 24, 35, 0.72);
@@ -15,6 +16,48 @@
   --emerald-glow: 0 18px 54px rgba(11, 75, 56, 0.44);
   --radius: 22px;
   --container: min(1180px, calc(100% - 36px));
+  --grad-a: rgba(240, 208, 145, 0.22);
+  --grad-b: rgba(25, 168, 118, 0.15);
+}
+
+/* ── Theme: Aurora (rose/pink) ───────────────────────────────── */
+html[data-theme="aurora"] {
+  --bg: #100610;
+  --bg-soft: rgba(28, 10, 28, 0.72);
+  --bg-card: rgba(20, 6, 20, 0.58);
+  --gold: #c4748a;
+  --gold-light: #e8a0b5;
+  --emerald: #4a1030;
+  --emerald-light: #d4537a;
+  --text: #f7e8ee;
+  --muted: #c6aab5;
+  --line: rgba(196, 116, 138, 0.22);
+  --line-strong: rgba(196, 116, 138, 0.46);
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.52);
+  --gold-glow: 0 18px 54px rgba(196, 116, 138, 0.28);
+  --emerald-glow: 0 18px 54px rgba(74, 16, 48, 0.44);
+  --grad-a: rgba(196, 116, 138, 0.22);
+  --grad-b: rgba(212, 83, 122, 0.12);
+}
+
+/* ── Theme: Bosque (forest green) ───────────────────────────── */
+html[data-theme="bosque"] {
+  --bg: #050f08;
+  --bg-soft: rgba(8, 22, 12, 0.72);
+  --bg-card: rgba(5, 15, 8, 0.58);
+  --gold: #7dba8a;
+  --gold-light: #b0d9b5;
+  --emerald: #0d2e14;
+  --emerald-light: #4caf6a;
+  --text: #e8f5ea;
+  --muted: #9dbda3;
+  --line: rgba(125, 186, 138, 0.22);
+  --line-strong: rgba(125, 186, 138, 0.46);
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.52);
+  --gold-glow: 0 18px 54px rgba(76, 175, 106, 0.26);
+  --emerald-glow: 0 18px 54px rgba(13, 46, 20, 0.44);
+  --grad-a: rgba(125, 186, 138, 0.18);
+  --grad-b: rgba(76, 175, 106, 0.12);
 }
 
 * { box-sizing: border-box; }

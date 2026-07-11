@@ -2,16 +2,16 @@
 {% load static %}
 
 {% block html_lang %}{{ public_language|default:"es" }}{% endblock %}
-{% block title %}{{ t.login_title|default:"Acceso" }} | BRIMOON Studio{% endblock %}
+{% block title %}{{ t.login_title|default:"Acceso" }} | {{ salon_name }}{% endblock %}
 {% block body_class %}client-lux-body login-lux-body{% endblock %}
 
 {% block body %}
 <div class="login-shell login-lux-shell">
   <div class="login-card login-lux-card">
     <div class="login-brand">
-      <div class="logo"><img src="{% static 'logo.png' %}" alt="BRIMOON Studio"></div>
+      <div class="logo"><img src="{% static salon_logo %}" alt="{{ salon_name }}"></div>
       <div>
-        <strong>BRIMOON Studio</strong>
+        <strong>{{ salon_name }}</strong>
         <span>{{ t.login_panel|default:"Área privada" }}</span>
       </div>
     </div>
@@ -31,7 +31,7 @@
     </div>
 
     <h1>{{ t.login_title|default:"Iniciar sesión" }}</h1>
-    <p class="login-text">{{ t.login_subtitle|default:"Accede a tu cuenta de BRIMOON Studio." }}</p>
+    <p class="login-text">{{ t.login_subtitle|default:"Accede a tu cuenta de {{ salon_name }}." }}</p>
 
     {% if demo_mode %}
     <div class="demo-credentials">

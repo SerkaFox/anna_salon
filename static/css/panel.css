@@ -1468,6 +1468,7 @@
 }
 
 
+/* ── Portal base: Noche ─────────────────────────────────────── */
 .client-lux-body {
   --bg: #061018;
   --bg-soft: rgba(13, 24, 35, 0.72);
@@ -1495,8 +1496,8 @@
 .client-lux-body::before {
   z-index: -2;
   background:
-    radial-gradient(circle at 16% 14%, rgba(240, 208, 145, 0.22), transparent 26%),
-    radial-gradient(circle at 82% 34%, rgba(25, 168, 118, 0.15), transparent 30%),
+    radial-gradient(circle at 16% 14%, var(--grad-a, rgba(240, 208, 145, 0.22)), transparent 26%),
+    radial-gradient(circle at 82% 34%, var(--grad-b, rgba(25, 168, 118, 0.15)), transparent 30%),
     linear-gradient(180deg, rgba(2, 6, 10, 0.83) 0%, rgba(6, 16, 24, 0.9) 46%, rgba(2, 6, 10, 0.95) 100%),
     url("../Fon2.png");
   background-size: auto, auto, auto, cover;
@@ -1505,9 +1506,43 @@
 }
 .client-lux-body::after {
   z-index: -1;
-  background: linear-gradient(120deg, transparent 0%, rgba(240, 208, 145, 0.08) 42%, transparent 58%);
+  background: linear-gradient(120deg, transparent 0%, var(--grad-a, rgba(240, 208, 145, 0.08)) 42%, transparent 58%);
   opacity: 0.24;
   animation: clientVeilSweep 11s ease-in-out infinite alternate;
+}
+
+/* ── Portal: Aurora theme ────────────────────────────────────── */
+html[data-theme="aurora"] .client-lux-body {
+  --bg: #100610;
+  --bg-soft: rgba(28, 10, 28, 0.72);
+  --panel: rgba(20, 6, 20, 0.58);
+  --line: rgba(196, 116, 138, 0.22);
+  --text: #f7e8ee;
+  --muted: #c6aab5;
+  --accent: #c4748a;
+  --accent-2: #e8a0b5;
+  --accent-deep: #4a1030;
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.52);
+  --grad-a: rgba(196, 116, 138, 0.22);
+  --grad-b: rgba(212, 83, 122, 0.12);
+  background-color: #100610;
+}
+
+/* ── Portal: Bosque theme ────────────────────────────────────── */
+html[data-theme="bosque"] .client-lux-body {
+  --bg: #050f08;
+  --bg-soft: rgba(8, 22, 12, 0.72);
+  --panel: rgba(5, 15, 8, 0.58);
+  --line: rgba(125, 186, 138, 0.22);
+  --text: #e8f5ea;
+  --muted: #9dbda3;
+  --accent: #7dba8a;
+  --accent-2: #b0d9b5;
+  --accent-deep: #0d2e14;
+  --shadow: 0 28px 80px rgba(0, 0, 0, 0.52);
+  --grad-a: rgba(125, 186, 138, 0.18);
+  --grad-b: rgba(76, 175, 106, 0.12);
+  background-color: #050f08;
 }
 .client-lux-panel {
   width: min(1180px, calc(100% - 36px));
@@ -2039,3 +2074,33 @@
 @media (max-width: 480px) {
   .demo-credentials__row { grid-template-columns: 1fr; }
 }
+
+/* Theme switcher (demo mode only) */
+.theme-switcher {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 9999;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 40px;
+  padding: 6px 10px;
+}
+.theme-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, border-color 0.15s;
+  background: none;
+}
+.theme-dot:hover { transform: scale(1.2); }
+.theme-dot.active { border-color: rgba(255,255,255,0.7); transform: scale(1.15); }

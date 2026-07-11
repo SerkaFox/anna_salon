@@ -1,15 +1,15 @@
 {% extends "layout.html" %}
 {% load static %}
 
-{% block title %}Eliminar reserva | BRIMOON Studio{% endblock %}
+{% block title %}Eliminar reserva | {{ salon_name }}{% endblock %}
 
 {% block body %}
 <div class="dashboard-shell">
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <div class="logo"><img src="{% static 'logo.png' %}" alt="BRIMOON Studio"></div>
+      <div class="logo"><img src="{% static salon_logo %}" alt="{{ salon_name }}"></div>
       <div>
-        <strong>BRIMOON Studio</strong>
+        <strong>{{ salon_name }}</strong>
         <span>Gestión interna</span>
       </div>
     </div>

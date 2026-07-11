@@ -1,6 +1,6 @@
 {% extends "core/public_base.html" %}
 
-{% block title %}Pago seguro | BRIMOON Studio{% endblock %}
+{% block title %}Pago seguro | {{ salon_name }}{% endblock %}
 
 {% block content %}
 <main class="lux-section payment-result-section">
@@ -13,7 +13,7 @@
     {% else %}
       <span class="lux-kicker">TPV seguro</span>
       <h1>Pago no completado</h1>
-      <p>El pago no se ha completado o ha sido cancelado. Puedes volver a intentarlo o contactar con BRIMOON Studio.</p>
+      <p>El pago no se ha completado o ha sido cancelado. Puedes volver a intentarlo o contactar con {{ salon_name }}.</p>
       <div class="lux-actions">
         <a class="btn-lux btn-lux-outline" href="{% url 'clients:portal' %}">Volver a mi cuenta</a>
         <a class="btn-lux btn-lux-emerald" href="{% url 'home' %}#contacto">Contactar</a>

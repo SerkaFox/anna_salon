@@ -1,6 +1,6 @@
 {% extends "panel_base.html" %}
 
-{% block title %}{% if is_edit %}Editar post{% else %}Nuevo post{% endif %} | BRIMOON Studio{% endblock %}
+{% block title %}{% if is_edit %}Editar post{% else %}Nuevo post{% endif %} | {{ salon_name }}{% endblock %}
 {% block panel_title %}{% if is_edit %}Editar post{% else %}Nuevo post Instagram{% endif %}{% endblock %}
 {% block panel_subtitle %}Pega una URL o un blockquote oficial de Instagram. Los scripts se eliminan automáticamente.{% endblock %}
 

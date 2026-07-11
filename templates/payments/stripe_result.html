@@ -1,7 +1,7 @@
 {% extends "core/public_base.html" %}
 
-{% block title %}Pago Stripe | BRIMOON Studio{% endblock %}
-{% block meta_description %}Resultado del pago online de BRIMOON Studio.{% endblock %}
+{% block title %}Pago Stripe | {{ salon_name }}{% endblock %}
+{% block meta_description %}Resultado del pago online de {{ salon_name }}.{% endblock %}
 
 {% block page_hero %}
   <section class="content-hero">
@@ -12,7 +12,7 @@
         <p>Stripe nos avisará cuando el pago quede confirmado. Puedes volver a tu cuenta para revisar la reserva.</p>
       {% else %}
         <h1>Pago cancelado</h1>
-        <p>No se ha confirmado ningún pago. Puedes intentarlo de nuevo desde tu cuenta o contactar con BRIMOON Studio.</p>
+        <p>No se ha confirmado ningún pago. Puedes intentarlo de nuevo desde tu cuenta o contactar con {{ salon_name }}.</p>
       {% endif %}
       <div class="lux-actions">
         <a class="btn-lux btn-lux-primary" href="{% url 'clients:portal' %}">Mi cuenta</a>

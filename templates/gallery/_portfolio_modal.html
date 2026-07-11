@@ -1,4 +1,4 @@
-<dialog class="portfolio-modal" data-portfolio-modal aria-label="Trabajo de BRIMOON Studio">
+<dialog class="portfolio-modal" data-portfolio-modal aria-label="Trabajo de {{ salon_name }}">
   <div class="portfolio-modal__panel">
     <button class="portfolio-modal__close" type="button" data-portfolio-close aria-label="Cerrar">×</button>
     <div class="portfolio-modal__media" data-portfolio-modal-media></div>
@@ -38,7 +38,7 @@
       }
       const image = document.createElement('img');
       image.src = thumbnailUrl;
-      image.alt = 'Trabajo de BRIMOON Studio';
+      image.alt = 'Trabajo de {{ salon_name }}';
       mediaSlot.appendChild(image);
     }
 

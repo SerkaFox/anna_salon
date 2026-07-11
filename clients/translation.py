@@ -1,3 +1,12 @@
+import os as _os
+_SALON_NAME = _os.getenv("SALON_NAME", "BRIMOON Studio")
+_SALON_NAME_SHORT = _SALON_NAME.split()[0]
+
+def _cs(text):
+    if not isinstance(text, str):
+        return text
+    return text.replace("BRIMOON Studio", _SALON_NAME).replace("Brimoon", _SALON_NAME_SHORT)
+
 CLIENT_LANGUAGES = [
     ("es", "Español"),
     ("ru", "Русский"),
@@ -156,6 +165,7 @@ def detect_client_language(request):
 def translate_client(key, language=None, **kwargs):
     language = normalize_client_language(language)
     text = CLIENT_TRANSLATIONS.get(language, {}).get(key) or CLIENT_TRANSLATIONS[DEFAULT_CLIENT_LANGUAGE].get(key) or key
+    text = _cs(text)
     if kwargs:
         try:
             return text.format(**kwargs)
