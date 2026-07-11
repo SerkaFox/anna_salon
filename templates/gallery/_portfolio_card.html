@@ -19,7 +19,7 @@
       {% else %}
         <img
           src="{{ post.display_thumbnail_url }}"
-          alt="{{ post.caption|default:'Trabajo de {{ salon_name }}' }}"
+          alt="{{ post.caption|default:salon_name }}"
           loading="lazy"
         >
         {% if post.media_type == "CAROUSEL_ALBUM" %}
@@ -40,7 +40,7 @@
     </div>
   {% else %}
     <a class="portfolio-card__fallback" href="{{ post.instagram_url }}" target="_blank" rel="noopener">
-      <strong>{{ post.caption|default:post.title|default:"Trabajo {{ salon_name }}" }}</strong>
+      <strong>{% if post.caption %}{{ post.caption }}{% elif post.title %}{{ post.title }}{% else %}Trabajo {{ salon_name }}{% endif %}</strong>
       <span>Ver en Instagram</span>
     </a>
   {% endif %}
