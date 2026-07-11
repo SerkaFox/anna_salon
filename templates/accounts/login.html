@@ -33,6 +33,33 @@
     <h1>{{ t.login_title|default:"Iniciar sesión" }}</h1>
     <p class="login-text">{{ t.login_subtitle|default:"Accede a tu cuenta de BRIMOON Studio." }}</p>
 
+    {% if demo_mode %}
+    <div class="demo-credentials">
+      <div class="demo-credentials__title">🎯 Modo demo — credenciales de prueba</div>
+      <div class="demo-credentials__row">
+        <div class="demo-credentials__card" onclick="fillLogin('demo_admin','Demo2026!')">
+          <div class="demo-credentials__role">👩‍💼 Administrador / Empleado</div>
+          <div class="demo-credentials__field"><span>Usuario:</span> <code>demo_admin</code></div>
+          <div class="demo-credentials__field"><span>Contraseña:</span> <code>Demo2026!</code></div>
+          <div class="demo-credentials__hint">Clic para rellenar</div>
+        </div>
+        <div class="demo-credentials__card" onclick="fillLogin('demo_cliente','Demo2026!')">
+          <div class="demo-credentials__role">🙋 Cliente</div>
+          <div class="demo-credentials__field"><span>Usuario:</span> <code>demo_cliente</code></div>
+          <div class="demo-credentials__field"><span>Contraseña:</span> <code>Demo2026!</code></div>
+          <div class="demo-credentials__hint">Clic para rellenar</div>
+        </div>
+      </div>
+    </div>
+    <script>
+    function fillLogin(u, p) {
+      document.getElementById('id_username').value = u;
+      document.getElementById('id_password').value = p;
+      document.querySelector('.login-form button[type=submit]').focus();
+    }
+    </script>
+    {% endif %}
+
     <form method="post" class="login-form">
       {% csrf_token %}
 

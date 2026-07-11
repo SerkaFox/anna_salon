@@ -1976,3 +1976,66 @@
   .client-login-summary,
   .portal-pay-form { align-items: stretch; flex-direction: column; }
 }
+
+/* Demo mode credentials box */
+.demo-credentials {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: 14px;
+}
+.demo-credentials__title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #a5b4fc;
+  letter-spacing: 0.02em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+.demo-credentials__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.demo-credentials__card {
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.demo-credentials__card:hover {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+.demo-credentials__role {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #c7d2fe;
+  margin-bottom: 5px;
+}
+.demo-credentials__field {
+  font-size: 0.73rem;
+  color: #9ca3af;
+  margin-bottom: 2px;
+}
+.demo-credentials__field span { color: #6b7280; }
+.demo-credentials__field code {
+  background: rgba(0,0,0,0.3);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #e5e7eb;
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+.demo-credentials__hint {
+  margin-top: 6px;
+  font-size: 0.65rem;
+  color: #6366f1;
+  font-style: italic;
+}
+@media (max-width: 480px) {
+  .demo-credentials__row { grid-template-columns: 1fr; }
+}

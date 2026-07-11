@@ -43,6 +43,7 @@ class UserLoginView(LoginView):
             "public_languages": PUBLIC_LANGUAGES,
             "t": t,
             "canonical_url": f"{settings.PUBLIC_BASE_URL.rstrip('/')}{reverse('accounts:login')}",
+            "demo_mode": getattr(settings, "DEMO_MODE", False),
         })
         return context
 
