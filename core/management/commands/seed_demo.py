@@ -199,74 +199,65 @@ class Command(BaseCommand):
     def _create_bookings(self, clients, employees, services):
         today = timezone.localdate()
 
-        def make_booking(client, employee, service, day_offset, hour, minute=0, status=Booking.Statuses.CONFIRMED):
-            target_date = today + timedelta(days=day_offset)
+        def make_booking(client, employee, service, target_date, hour, minute=0):
             start = timezone.make_aware(timezone.datetime.combine(target_date, time(hour, minute)))
             end = start + timedelta(minutes=service.duration_minutes)
+            if Booking.objects.filter(employee=employee, start_at=start).exists():
+                return
             price = service.price
             commission = price * (employee.commission_percent / 100)
-            existing = Booking.objects.filter(client=client, employee=employee, start_at=start).first()
-            if not existing:
-                Booking.objects.create(
-                    client=client, employee=employee, service=service,
-                    start_at=start, end_at=end, status=status,
-                    source=Booking.Sources.WEBSITE if day_offset < 0 else Booking.Sources.MANUAL,
-                    price_snapshot=price, client_price_snapshot=price,
-                    employee_amount_snapshot=commission,
-                )
+            is_past = target_date < today
+            Booking.objects.create(
+                client=client, employee=employee, service=service,
+                start_at=start, end_at=end,
+                status=Booking.Statuses.CONFIRMED,
+                source=Booking.Sources.WEBSITE if is_past else Booking.Sources.MANUAL,
+                price_snapshot=price, client_price_snapshot=price,
+                employee_amount_snapshot=commission,
+            )
 
         ana, sofia, carmen = employees[0], employees[1], employees[2]
-        manicura_b = next(s for s in services if s.name == "Manicura básica")
-        manicura_s = next(s for s in services if s.name == "Manicura semipermanente")
-        nail_art   = next(s for s in services if s.name == "Manicura con nail art")
-        pedicura   = next(s for s in services if s.name == "Pedicura completa")
-        pedi_semi  = next(s for s in services if s.name == "Pedicura semipermanente")
-        cejas      = next(s for s in services if s.name == "Diseño de cejas")
-        laminado   = next(s for s in services if s.name == "Laminado de cejas")
-        lifting    = next(s for s in services if s.name == "Lifting de pestañas")
-        extensiones = next(s for s in services if s.name == "Extensiones de pestañas")
-        facial     = next(s for s in services if s.name == "Facial hidratante")
-        depilacion = next(s for s in services if s.name == "Depilación piernas completas")
 
-        c = clients  # shortcut
+        # Services per employee (categories they handle)
+        emp_services = {
+            ana.pk:    [s for s in services if s.category in (Service.Categories.MANICURE, Service.Categories.PEDICURE)],
+            sofia.pk:  [s for s in services if s.category in (Service.Categories.LASHES, Service.Categories.BROWS)],
+            carmen.pk: [s for s in services if s.category in (Service.Categories.FACIAL, Service.Categories.DEPILATION, Service.Categories.PEDICURE)],
+        }
 
-        # --- PAST BOOKINGS (last 60 days) ---
-        past = [
-            (c[0], ana,    manicura_s, -60, 10), (c[1], sofia,  lifting,    -58, 11),
-            (c[2], carmen, facial,     -55, 10), (c[3], ana,    manicura_b, -52, 9),
-            (c[4], sofia,  cejas,      -50, 12), (c[5], carmen, pedicura,   -48, 10),
-            (c[6], ana,    nail_art,   -45, 11), (c[7], sofia,  laminado,   -43, 14),
-            (c[8], carmen, depilacion, -40, 10), (c[9], ana,    manicura_s, -38, 9),
-            (c[0], sofia,  cejas,      -35, 11), (c[1], carmen, facial,     -33, 15),
-            (c[2], ana,    pedicura,   -30, 10), (c[3], sofia,  lifting,    -28, 13),
-            (c[4], carmen, pedi_semi,  -25, 11), (c[5], ana,    manicura_b, -23, 9),
-            (c[6], sofia,  extensiones,-20, 10), (c[7], carmen, depilacion, -18, 15),
-            (c[8], ana,    nail_art,   -15, 11), (c[9], sofia,  laminado,   -13, 12),
-            (c[0], carmen, facial,     -12, 10), (c[1], ana,    manicura_s, -10, 9),
-            (c[2], sofia,  cejas,      -8,  11), (c[3], carmen, pedicura,   -7,  14),
-            (c[4], ana,    manicura_b, -6,  10), (c[5], sofia,  lifting,    -5,  13),
-            (c[6], carmen, pedi_semi,  -4,  11), (c[7], ana,    nail_art,   -3,  9),
-            (c[8], sofia,  extensiones,-2,  10), (c[9], carmen, depilacion, -1,  15),
-        ]
-        for args in past:
-            make_booking(*args)
+        # Time slots per employee (fixed slots that don't overlap even for 120-min services)
+        emp_slots = {
+            ana.pk:    [(9, 0), (11, 0), (13, 30), (15, 30)],   # works 9-17
+            sofia.pk:  [(10, 0), (12, 0), (14, 30), (16, 30)],  # works 10-18/19
+            carmen.pk: [(9, 0), (11, 30), (14, 0), (16, 0)],    # works 9-18
+        }
 
-        # --- UPCOMING BOOKINGS (next 30 days) ---
-        upcoming = [
-            (c[0], ana,    manicura_s,  2, 10), (c[1], sofia,  lifting,    3, 11),
-            (c[2], carmen, facial,      4, 10), (c[3], ana,    manicura_b, 5, 9),
-            (c[4], sofia,  cejas,       6, 12), (c[5], carmen, pedicura,   7, 10),
-            (c[6], ana,    nail_art,    8, 11), (c[7], sofia,  laminado,   9, 14),
-            (c[8], carmen, depilacion, 10, 10), (c[9], ana,    manicura_s, 11, 9),
-            (c[0], sofia,  extensiones,12, 11), (c[1], carmen, facial,     14, 15),
-            (c[2], ana,    pedicura,   15, 10), (c[3], sofia,  lifting,    16, 13),
-            (c[4], carmen, pedi_semi,  17, 11), (c[5], ana,    manicura_b, 18, 9),
-            (c[6], sofia,  cejas,      19, 10), (c[7], carmen, pedi_semi,  20, 15),
-            (c[8], ana,    nail_art,   21, 11), (c[9], sofia,  laminado,   22, 12),
-            (c[0], carmen, facial,     23, 10), (c[1], ana,    manicura_s, 24, 9),
-            (c[2], sofia,  lifting,    25, 11), (c[3], carmen, depilacion, 26, 14),
-            (c[4], ana,    manicura_b, 27, 10), (c[5], sofia,  extensiones,28, 13),
-            (c[6], carmen, pedicura,   29, 11), (c[7], ana,    nail_art,   30, 9),
-        ]
-        for args in upcoming:
-            make_booking(*args)
+        # Working weekdays per employee (0=Mon)
+        emp_weekdays = {
+            ana.pk:    {0, 1, 2, 3, 4},
+            sofia.pk:  {1, 2, 3, 4, 5},
+            carmen.pk: {0, 2, 3, 4, 5},
+        }
+
+        # Generate bookings from -90 days to +365 days
+        for day_offset in range(-90, 366):
+            target_date = today + timedelta(days=day_offset)
+            weekday = target_date.weekday()
+
+            for emp in employees:
+                if weekday not in emp_weekdays[emp.pk]:
+                    continue
+
+                svc_pool = emp_services[emp.pk]
+                slots = emp_slots[emp.pk]
+
+                # Pick 2-4 random slots per day (more on weekdays, fewer on weekends)
+                n_slots = random.randint(2, 4) if weekday < 5 else random.randint(1, 3)
+                chosen_slots = random.sample(slots, min(n_slots, len(slots)))
+
+                for hour, minute in chosen_slots:
+                    client = random.choice(clients)
+                    service = random.choice(svc_pool)
+                    make_booking(client, emp, service, target_date, hour, minute)
+
+        self.stdout.write(f"  Bookings created: {Booking.objects.count()}")
