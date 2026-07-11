@@ -334,10 +334,26 @@ def _article_schema(request, article):
     }, ensure_ascii=False)
 
 
+_DEMO_IMAGES = {
+    "cejas-definicion-depilacion-lifting": "demo/eyebrows-portrait.jpg",
+    "depilacion-facial": "demo/waxing-legs.jpg",
+    "manicura-extensiones-tratamientos": "demo/manicure-1.jpg",
+    "pedicuras-tratamientos": "demo/pedicure-1.jpg",
+    "pestanas-tinte-extensiones-lifting": "demo/eyelash-1.jpg",
+    "como-cuidar-cejas-despues-lifting": "demo/eyebrow-tweezing.jpg",
+    "manicura-elegante-que-dura": "demo/manicure-3.jpg",
+    "depilacion-facial-piel-sensible": "demo/facial-mask.jpg",
+    "mirada-natural-pestanas-cejas": "demo/eyelash-2.jpg",
+}
+
+
 def _localized_context(request):
     language = detect_public_language(request)
     services = localize_items(SERVICES, SERVICE_TRANSLATIONS, language)
     articles = localize_items(ARTICLES, ARTICLE_TRANSLATIONS, language)
+    if getattr(settings, "DEMO_MODE", False):
+        services = [dict(s, image=_DEMO_IMAGES.get(s["slug"], s["image"])) for s in services]
+        articles = [dict(a, image=_DEMO_IMAGES.get(a["slug"], a["image"])) for a in articles]
     return language, public_texts(language), services, articles
 
 

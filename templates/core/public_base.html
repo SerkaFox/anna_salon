@@ -1,8 +1,9 @@
 {% load static %}
 <!doctype html>
-<html lang="{{ public_language|default:'es' }}">
+<html lang="{{ public_language|default:'es' }}" data-theme="">
 <head>
   {% include "includes/google_tag.html" %}
+  <script>(function(){var t=localStorage.getItem('salon_theme')||'';document.documentElement.setAttribute('data-theme',t);})();</script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ t.site_title }}{% endblock %}</title>
@@ -87,5 +88,28 @@
       }));
     });
   </script>
+  {% if demo_mode %}
+  <div class="theme-switcher" title="Cambiar estilo">
+    <button class="theme-dot theme-dot--noche" data-t="" title="Noche">🌑</button>
+    <button class="theme-dot theme-dot--aurora" data-t="aurora" title="Aurora">🌸</button>
+    <button class="theme-dot theme-dot--bosque" data-t="bosque" title="Bosque">🌿</button>
+  </div>
+  <script>
+  (function(){
+    var dots=document.querySelectorAll('.theme-dot');
+    var cur=localStorage.getItem('salon_theme')||'';
+    dots.forEach(function(b){
+      if(b.getAttribute('data-t')===cur)b.classList.add('active');
+      b.addEventListener('click',function(){
+        var t=this.getAttribute('data-t');
+        document.documentElement.setAttribute('data-theme',t);
+        localStorage.setItem('salon_theme',t);
+        dots.forEach(function(x){x.classList.remove('active');});
+        this.classList.add('active');
+      });
+    });
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>
