@@ -11,7 +11,8 @@ from .models import WhatsAppConnection, WhatsAppMessage
 
 
 def get_default_connection():
-    connection, _created = WhatsAppConnection.objects.get_or_create(name="main")
+    name = getattr(settings, "WHATSAPP_CONNECTION_NAME", "main")
+    connection, _created = WhatsAppConnection.objects.get_or_create(name=name)
     return connection
 
 
@@ -28,24 +29,61 @@ def normalize_whatsapp_phone(value):
     return f"+{digits}"
 
 
+def _salon_name():
+    return getattr(settings, "SALON_NAME", "BRIMOON Studio")
+
+
+def _portal_url():
+    base = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
+    return f"{base}/panel/clientes/portal/"
+
+
 def booking_message(booking, *, kind):
     local_start = timezone.localtime(booking.start_at)
     date_text = local_start.strftime("%d/%m/%Y")
     time_text = local_start.strftime("%H:%M")
     service_name = booking.service.name
     client_name = booking.client.first_name or booking.client.full_name or "hola"
+    salon = _salon_name()
+    portal = _portal_url()
+
+    if kind == WhatsAppMessage.Kinds.BOOKING_CONFIRMATION:
+        booking_url = f"{portal.rstrip('/')}/../bookings/{booking.pk}/"
+        # clean up double slashes
+        import re
+        booking_url = re.sub(r"(?<!:)//+", "/", booking_url)
+        return (
+            f"Hola {client_name} 👋 Tu cita en {salon} está confirmada:\n"
+            f"📅 {date_text} a las {time_text}\n"
+            f"💅 {service_name}\n\n"
+            f"Para pagar la señal y confirmar tu reserva accede a tu área privada:\n"
+            f"🔗 {booking_url}"
+        )
+    if kind == WhatsAppMessage.Kinds.BOOKING_CANCELLED:
+        return (
+            f"Hola {client_name}. Tu cita en {salon} del {date_text} "
+            f"a las {time_text} ({service_name}) ha sido cancelada.\n"
+            f"Si quieres volver a reservar: {portal}"
+        )
+    if kind == WhatsAppMessage.Kinds.BOOKING_RESCHEDULED:
+        return (
+            f"Hola {client_name}. Tu cita en {salon} ha sido reagendada:\n"
+            f"📅 {date_text} a las {time_text}\n"
+            f"💅 {service_name}\n\n"
+            f"Ver detalles: {portal}"
+        )
     if kind == WhatsAppMessage.Kinds.REMINDER_24H:
         return (
-            f"Hola {client_name}. Te recordamos tu cita en BRIMOON Studio manana "
+            f"Hola {client_name} 👋 Te recordamos tu cita en {salon} mañana "
             f"{date_text} a las {time_text} para {service_name}."
         )
     if kind == WhatsAppMessage.Kinds.REMINDER_2H:
         return (
-            f"Hola {client_name}. Te esperamos en BRIMOON Studio en 2 horas, "
+            f"Hola {client_name} 👋 Te esperamos en {salon} en 2 horas, "
             f"a las {time_text}, para {service_name}."
         )
     return (
-        f"Hola {client_name}. Tu cita en BRIMOON Studio esta confirmada para "
+        f"Hola {client_name}. Tu cita en {salon} está confirmada para "
         f"el {date_text} a las {time_text}: {service_name}."
     )
 
@@ -72,6 +110,30 @@ def queue_booking_message(booking, *, kind, scheduled_for=None):
 
 def queue_booking_confirmation(booking):
     return queue_booking_message(booking, kind=WhatsAppMessage.Kinds.BOOKING_CONFIRMATION)
+
+
+def queue_booking_cancellation(booking):
+    return queue_booking_message(booking, kind=WhatsAppMessage.Kinds.BOOKING_CANCELLED)
+
+
+def queue_booking_rescheduled(booking):
+    # Delete previous reschedule message for this booking so we can send a fresh one.
+    WhatsAppMessage.objects.filter(
+        booking=booking, kind=WhatsAppMessage.Kinds.BOOKING_RESCHEDULED
+    ).delete()
+    connection = get_default_connection()
+    phone = normalize_whatsapp_phone(booking.client.phone)
+    message = WhatsAppMessage(
+        connection=connection,
+        booking=booking,
+        client=booking.client,
+        kind=WhatsAppMessage.Kinds.BOOKING_RESCHEDULED,
+        to_phone=phone,
+        body=booking_message(booking, kind=WhatsAppMessage.Kinds.BOOKING_RESCHEDULED),
+        scheduled_for=timezone.now(),
+    )
+    message.save()
+    return message, True
 
 
 def queue_due_reminders(*, hours, window_minutes=15):

@@ -64,6 +64,8 @@ class WhatsAppLoginLink(models.Model):
 class WhatsAppMessage(models.Model):
     class Kinds(models.TextChoices):
         BOOKING_CONFIRMATION = "booking_confirmation", "Booking confirmation"
+        BOOKING_CANCELLED = "booking_cancelled", "Booking cancelled"
+        BOOKING_RESCHEDULED = "booking_rescheduled", "Booking rescheduled"
         REMINDER_24H = "reminder_24h", "Reminder 24h"
         REMINDER_2H = "reminder_2h", "Reminder 2h"
         MANUAL = "manual", "Manual"

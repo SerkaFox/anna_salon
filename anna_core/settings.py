@@ -221,6 +221,7 @@ WHATSAPP_DRY_RUN = os.getenv('WHATSAPP_DRY_RUN', 'true').lower() in {'1', 'true'
 WHATSAPP_SEND_CONFIRMATION_ON_BOOKING = os.getenv('WHATSAPP_SEND_CONFIRMATION_ON_BOOKING', 'true').lower() in {'1', 'true', 'yes', 'on'}
 WHATSAPP_DEFAULT_COUNTRY_CODE = os.getenv('WHATSAPP_DEFAULT_COUNTRY_CODE', '34')
 WHATSAPP_LOCAL_PHONE_LENGTH = int(os.getenv('WHATSAPP_LOCAL_PHONE_LENGTH', '9'))
+WHATSAPP_CONNECTION_NAME = os.getenv('WHATSAPP_CONNECTION_NAME', 'main')
 
 DEMO_MODE = os.getenv('DEMO_MODE', 'false').lower() in {'1', 'true', 'yes', 'on'}
 SALON_NAME = os.getenv('SALON_NAME', 'BRIMOON Studio')

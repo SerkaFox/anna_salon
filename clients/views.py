@@ -43,6 +43,7 @@ from payments.stripe_service import (
     get_booking_deposit_amount,
     get_booking_full_amount,
 )
+from whatsapp_bot.services import queue_booking_cancellation, queue_booking_rescheduled, send_whatsapp_message
 from .forms import ClientForm
 from .models import Client, ClientRewardRule
 from salon.models import Zone
@@ -493,6 +494,11 @@ def client_booking_cancel(request, pk):
         instance=booking,
         message=f"Reserva cancelada por cliente desde portal: #{booking.pk}.",
     )
+    try:
+        wa_msg, _ = queue_booking_cancellation(booking)
+        send_whatsapp_message(wa_msg)
+    except Exception:
+        pass
     messages.success(request, message)
     return redirect("clients:booking_detail", pk=booking.pk)
 
@@ -530,6 +536,11 @@ def client_booking_reschedule(request, pk):
         instance=booking,
         message=f"Reserva reprogramada por cliente desde portal: #{booking.pk}.",
     )
+    try:
+        wa_msg, _ = queue_booking_rescheduled(booking)
+        send_whatsapp_message(wa_msg)
+    except Exception:
+        pass
     messages.success(request, "La cita se ha cambiado correctamente.")
     return redirect("clients:booking_detail", pk=booking.pk)
 
