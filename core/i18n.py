@@ -447,6 +447,93 @@ def public_texts(language):
     return {k: _subst(v) for k, v in merged.items()}
 
 
+PUBLIC_TRANSLATIONS["es"].update({
+    "hint_booking_title": "📅 Reservas online 24/7",
+    "hint_booking_text": "Los clientes eligen servicio, empleado y horario desde móvil o web. Sin llamadas ni WhatsApp.",
+    "hint_services_title": "💆 Catálogo editable",
+    "hint_services_text": "Fotos, precios y duraciones configurables. Cada servicio tiene su propia página SEO.",
+    "hint_gallery_title": "📸 Instagram sincronizado",
+    "hint_gallery_text": "Conecta tu Instagram y las fotos del salón aparecen aquí automáticamente.",
+    "hint_blog_title": "✍️ Blog SEO incluido",
+    "hint_blog_text": "Artículos de belleza para atraer visitas de Google sin coste publicitario.",
+    "hint_payments_title": "💳 Señal de pago integrada",
+    "hint_payments_text": "Stripe y Redsys (TPV virtual español) listos para cobrar el depósito al reservar.",
+    "hint_portal_title": "👤 Portal privado de clientes",
+    "hint_portal_text": "Historial de citas, puntos de fidelidad y notificaciones automáticas. Acceso desde móvil o web.",
+    "hint_contact_title": "📍 Todo personalizable",
+    "hint_contact_text": "Dirección, teléfono, horarios, WhatsApp y mapa configurables sin tocar el código.",
+    "hint_theme_label": "Diseño",
+})
+PUBLIC_TRANSLATIONS["ru"].update({
+    "hint_booking_title": "📅 Онлайн-запись 24/7",
+    "hint_booking_text": "Клиенты выбирают услугу, мастера и время с телефона или сайта. Без звонков и WhatsApp.",
+    "hint_services_title": "💆 Редактируемый каталог",
+    "hint_services_text": "Фото, цены и длительность настраиваются. У каждой услуги своя SEO-страница.",
+    "hint_gallery_title": "📸 Instagram синхронизирован",
+    "hint_gallery_text": "Подключи Instagram — фотографии салона появляются здесь автоматически.",
+    "hint_blog_title": "✍️ SEO-блог включён",
+    "hint_blog_text": "Статьи о красоте привлекают посетителей из Google без затрат на рекламу.",
+    "hint_payments_title": "💳 Предоплата интегрирована",
+    "hint_payments_text": "Stripe и Redsys (испанский виртуальный POS) готовы принимать депозит при записи.",
+    "hint_portal_title": "👤 Личный кабинет клиента",
+    "hint_portal_text": "История записей, баллы лояльности и автоуведомления. Доступ с телефона или сайта.",
+    "hint_contact_title": "📍 Всё настраивается",
+    "hint_contact_text": "Адрес, телефон, часы работы, WhatsApp и карта — без правок в коде.",
+    "hint_theme_label": "Стиль",
+})
+PUBLIC_TRANSLATIONS["en"].update({
+    "hint_booking_title": "📅 Online booking 24/7",
+    "hint_booking_text": "Clients choose service, staff and time from their phone or browser. No calls needed.",
+    "hint_services_title": "💆 Editable catalogue",
+    "hint_services_text": "Photos, prices and durations are configurable. Each service has its own SEO page.",
+    "hint_gallery_title": "📸 Instagram sync",
+    "hint_gallery_text": "Connect your Instagram and salon photos appear here automatically.",
+    "hint_blog_title": "✍️ SEO blog included",
+    "hint_blog_text": "Beauty articles to attract Google traffic with no ad spend.",
+    "hint_payments_title": "💳 Deposit payments built in",
+    "hint_payments_text": "Stripe and Redsys (Spanish virtual POS) ready to collect deposits at booking.",
+    "hint_portal_title": "👤 Private client portal",
+    "hint_portal_text": "Appointment history, loyalty points and automatic notifications. Mobile and web access.",
+    "hint_contact_title": "📍 All customisable",
+    "hint_contact_text": "Address, phone, hours, WhatsApp and map configurable without touching code.",
+    "hint_theme_label": "Style",
+})
+PUBLIC_TRANSLATIONS["de"].update({
+    "hint_booking_title": "📅 Online-Termine 24/7",
+    "hint_booking_text": "Kunden wählen Service, Mitarbeiterin und Uhrzeit per Smartphone oder Browser.",
+    "hint_services_title": "💆 Bearbeitbarer Katalog",
+    "hint_services_text": "Fotos, Preise und Dauern konfigurierbar. Jeder Service hat eine eigene SEO-Seite.",
+    "hint_gallery_title": "📸 Instagram-Synchronisation",
+    "hint_gallery_text": "Instagram verbinden und Salonfotos erscheinen hier automatisch.",
+    "hint_blog_title": "✍️ SEO-Blog inklusive",
+    "hint_blog_text": "Beauty-Artikel für Google-Traffic ohne Werbekosten.",
+    "hint_payments_title": "💳 Anzahlungen integriert",
+    "hint_payments_text": "Stripe und Redsys (spanisches virtuelles POS) für Kaution bei der Buchung bereit.",
+    "hint_portal_title": "👤 Privates Kundenportal",
+    "hint_portal_text": "Terminverlauf, Treuepunkte und automatische Benachrichtigungen. Mobil und Web.",
+    "hint_contact_title": "📍 Alles anpassbar",
+    "hint_contact_text": "Adresse, Telefon, Öffnungszeiten, WhatsApp und Karte ohne Code-Änderungen.",
+    "hint_theme_label": "Design",
+})
+PUBLIC_TRANSLATIONS["fr"].update({
+    "hint_booking_title": "📅 Réservations en ligne 24/7",
+    "hint_booking_text": "Les clients choisissent service, employée et horaire depuis leur téléphone ou navigateur.",
+    "hint_services_title": "💆 Catalogue éditable",
+    "hint_services_text": "Photos, prix et durées configurables. Chaque service a sa propre page SEO.",
+    "hint_gallery_title": "📸 Instagram synchronisé",
+    "hint_gallery_text": "Connectez Instagram et les photos du salon apparaissent ici automatiquement.",
+    "hint_blog_title": "✍️ Blog SEO inclus",
+    "hint_blog_text": "Articles beauté pour attirer du trafic Google sans dépenses publicitaires.",
+    "hint_payments_title": "💳 Acomptes intégrés",
+    "hint_payments_text": "Stripe et Redsys (TPV virtuel espagnol) prêts à encaisser le dépôt à la réservation.",
+    "hint_portal_title": "👤 Portail client privé",
+    "hint_portal_text": "Historique des rendez-vous, points de fidélité et notifications automatiques.",
+    "hint_contact_title": "📍 Tout personnalisable",
+    "hint_contact_text": "Adresse, téléphone, horaires, WhatsApp et carte sans toucher au code.",
+    "hint_theme_label": "Style",
+})
+
+
 def localize_items(items, translations, language):
     language = normalize_public_language(language)
     localized = []
