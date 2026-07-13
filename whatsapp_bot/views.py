@@ -1,5 +1,4 @@
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.shortcuts import render
 from django.utils import timezone
@@ -8,15 +7,8 @@ from . import bridge
 from .models import WhatsAppConnection, WhatsAppLoginLink
 
 
-def _require_admin(user):
-    role = getattr(user, "role", None)
-    if not (user.is_staff or role in ("owner", "admin")):
-        raise PermissionDenied
-
-
 @login_required
 def whatsapp_connect(request, name):
-    _require_admin(request.user)
     connection, _ = WhatsAppConnection.objects.get_or_create(name=name)
 
     qr_image = ""
