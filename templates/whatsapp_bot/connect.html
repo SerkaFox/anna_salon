@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WhatsApp — {{ connection.name }}</title>
+  {% if connection.status != "ready" %}
+  <meta http-equiv="refresh" content="4">
+  {% endif %}
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #111; color: #eee;
+           display: flex; align-items: center; justify-content: center;
+           min-height: 100vh; padding: 24px; }
+    .card { background: #1a1a1a; border: 1px solid #333; border-radius: 20px;
+            padding: 36px; max-width: 420px; width: 100%; text-align: center; }
+    .card h1 { font-size: 18px; font-weight: 600; margin-bottom: 6px; color: #fff; }
+    .card .sub { font-size: 13px; color: #888; margin-bottom: 28px; }
+    .qr-wrap { background: #fff; border-radius: 12px; padding: 16px; display: inline-block; margin-bottom: 20px; }
+    .qr-wrap img { display: block; width: 240px; height: 240px; }
+    .status { display: inline-block; padding: 6px 16px; border-radius: 20px;
+              font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+    .status.ready    { background: #0a3d22; color: #25d366; }
+    .status.qr       { background: #1a3050; color: #63b3ed; }
+    .status.starting { background: #2a2a00; color: #f6e05e; }
+    .status.error    { background: #3d0a0a; color: #fc8181; }
+    .status.other    { background: #222; color: #aaa; }
+    .phone { font-size: 22px; font-weight: 700; color: #25d366; margin: 12px 0; }
+    .hint { font-size: 12px; color: #555; line-height: 1.6; margin-top: 20px; }
+    .hint code { background: #222; padding: 2px 6px; border-radius: 4px;
+                 font-family: monospace; color: #aaa; font-size: 11px; }
+    .err { background: #3d0a0a; color: #fc8181; border-radius: 10px;
+           padding: 12px 16px; font-size: 13px; text-align: left; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>WhatsApp · {{ connection.name }}</h1>
+  <p class="sub">{{ now|date:"d/m/Y H:i:s" }}</p>
+
+  {% if connection.status == "ready" %}
+    <div class="status ready">✓ Conectado</div>
+    <div class="phone">{{ connection.phone }}</div>
+    <p class="hint">El bot está activo y enviando mensajes desde este número.</p>
+
+  {% elif bridge_error %}
+    <div class="status error">✗ Error de bridge</div>
+    <div class="err">{{ bridge_error }}</div>
+
+  {% elif qr_image %}
+    <div class="status qr">Escanea el QR</div>
+    <div class="qr-wrap">
+      <img src="{{ qr_image }}" alt="QR WhatsApp">
+    </div>
+    <p class="hint">
+      Abre WhatsApp → tres puntos → <strong>Dispositivos vinculados</strong><br>
+      → Vincular un dispositivo → escanea este código.<br><br>
+      La página se actualiza sola cada 4 segundos.
+    </p>
+
+  {% else %}
+    <div class="status starting">⏳ Iniciando…</div>
+    <p class="hint">El bridge está arrancando la sesión. La página se recarga automáticamente.</p>
+  {% endif %}
+
+  <p class="hint" style="margin-top:28px;border-top:1px solid #2a2a2a;padding-top:16px;">
+    Para desconectar y generar nuevo QR:<br>
+    <code>python manage.py whatsapp_reset {{ connection.name }}</code>
+  </p>
+</div>
+</body>
+</html>

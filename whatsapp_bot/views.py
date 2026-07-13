@@ -1,11 +1,50 @@
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.shortcuts import render
 from django.utils import timezone
 
 from . import bridge
-from .models import WhatsAppLoginLink
+from .models import WhatsAppConnection, WhatsAppLoginLink
 
 
+def _require_admin(user):
+    role = getattr(user, "role", None)
+    if not (user.is_staff or role in ("owner", "admin")):
+        raise PermissionDenied
+
+
+@login_required
+def whatsapp_connect(request, name):
+    _require_admin(request.user)
+    connection, _ = WhatsAppConnection.objects.get_or_create(name=name)
+
+    qr_image = ""
+    bridge_error = ""
+    try:
+        data = bridge.get_qr(connection)
+        qr_image = data.get("qr_image", "")
+        status = data.get("status", connection.status)
+        phone = data.get("phone", connection.phone or "")
+        connection.status = status
+        connection.phone = phone
+        connection.last_error = ""
+        connection.save(update_fields=["status", "phone", "last_error", "updated_at"])
+    except bridge.WhatsAppBridgeError as exc:
+        bridge_error = str(exc)
+        connection.status = WhatsAppConnection.Statuses.ERROR
+        connection.last_error = bridge_error
+        connection.save(update_fields=["status", "last_error", "updated_at"])
+
+    return render(request, "whatsapp_bot/connect.html", {
+        "connection": connection,
+        "qr_image": qr_image,
+        "bridge_error": bridge_error,
+        "now": timezone.now(),
+    })
+
+
+# Keep old token-based view for backwards compatibility
 def login_link(request, token):
     try:
         login = WhatsAppLoginLink.objects.select_related("connection").get(token=token)
@@ -29,14 +68,10 @@ def login_link(request, token):
     if request.method == "POST" and login.is_valid:
         login.mark_used()
 
-    return render(
-        request,
-        "whatsapp_bot/login_link.html",
-        {
-            "login": login,
-            "connection": login.connection,
-            "qr_payload": qr_payload or {},
-            "bridge_error": bridge_error,
-            "now": timezone.now(),
-        },
-    )
+    return render(request, "whatsapp_bot/login_link.html", {
+        "login": login,
+        "connection": login.connection,
+        "qr_payload": qr_payload or {},
+        "bridge_error": bridge_error,
+        "now": timezone.now(),
+    })

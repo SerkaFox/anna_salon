@@ -131,6 +131,21 @@ app.get("/sessions/:session/status", (req, res) => {
   res.json(publicState(getSession(req.params.session)));
 });
 
+app.post("/sessions/:session/reset", async (req, res) => {
+  const sessionName = normalizeSession(req.params.session);
+  const state = sessions.get(sessionName);
+  if (state && state.client) {
+    try { await state.client.destroy(); } catch (_) {}
+  }
+  sessions.delete(sessionName);
+  const { rm } = await import("fs/promises");
+  const dataPath = process.env.WHATSAPP_AUTH_DATA_PATH || "./sessions";
+  try {
+    await rm(`${dataPath}/session-${sessionName}`, { recursive: true, force: true });
+  } catch (_) {}
+  res.json({ ok: true, session: sessionName });
+});
+
 app.post("/messages", async (req, res) => {
   const state = getSession(req.body?.session);
   if (state.status !== "ready") {

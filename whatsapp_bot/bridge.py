@@ -50,6 +50,10 @@ def get_status(connection):
     return _request(f"/sessions/{connection.name}/status")
 
 
+def reset_session(connection):
+    return _request(f"/sessions/{connection.name}/reset", {})
+
+
 def send_message(connection, *, to_phone, body):
     return _request(
         "/messages",
