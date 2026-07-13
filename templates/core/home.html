@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260711-themes">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260713-hints">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static salon_hero %}');">
@@ -60,7 +60,7 @@
       <p class="lux-hero__lead">{{ t.hero_lead }}</p>
       <p class="lux-hero__copy">{{ t.hero_copy }}</p>
       <div class="lux-actions" aria-label="Acciones principales">
-        <a class="btn-lux btn-lux-primary btn-lux-large" href="{% url 'public_booking' %}">{{ t.nav_book }}</a>
+        <a class="btn-lux btn-lux-primary btn-lux-large" href="{% url 'public_booking' %}">{{ t.nav_book }}</a>{% if demo_mode %}<span class="demo-hint" id="hint-booking"><button class="demo-hint__btn" aria-label="Función">?</button><span class="demo-hint__pop demo-hint__pop--down"><strong>📅 Reservas online 24/7</strong>Los clientes eligen servicio, empleado y horario disponible desde móvil o web. Sin llamadas ni WhatsApp.</span></span>{% endif %}
         <a class="btn-lux btn-lux-outline btn-lux-large" href="#servicios">{{ t.hero_services }}</a>
         <a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">{{ t.hero_whatsapp }}</a>
       </div>
@@ -83,6 +83,7 @@
           <span class="lux-kicker">{{ t.nav_services }}</span>
           <h2>{{ t.services_title }}</h2>
           <p>{{ t.services_text }}</p>
+          {% if demo_mode %}<span class="demo-hint" id="hint-services"><button class="demo-hint__btn" aria-label="Función">?</button><span class="demo-hint__pop"><strong>💆 Catálogo editable</strong>Fotos, precios y duraciones configurables. Cada servicio tiene su propia página web con posicionamiento SEO individual.</span></span>{% endif %}
         </div>
         <div class="services-grid">
           {% for service in services %}
@@ -99,7 +100,7 @@
       <div class="lux-container gallery-layout">
         <div class="lux-section-head align-left">
           <span class="lux-kicker">{{ t.nav_gallery }}</span>
-          <h2>Nuestros trabajos</h2>
+          <h2>Nuestros trabajos</h2>{% if demo_mode %}<span class="demo-hint" id="hint-gallery"><button class="demo-hint__btn" aria-label="Función">?</button><span class="demo-hint__pop demo-hint__pop--down"><strong>📸 Instagram sincronizado</strong>Conecta tu cuenta de Instagram y las fotos del salón aparecen aquí automáticamente, sin actualizaciones manuales.</span></span>{% endif %}
           <p>{{ t.experience_text }}</p>
           <div class="lux-actions">
             <a class="btn-lux btn-lux-outline" href="{% url 'public_gallery' %}">Ver galería</a>
@@ -134,6 +135,7 @@
           <span class="lux-kicker">{{ t.guide_kicker }}</span>
           <h2>{{ t.guide_title }}</h2>
           <p>{{ t.guide_text }}</p>
+          {% if demo_mode %}<span class="demo-hint" id="hint-blog"><button class="demo-hint__btn" aria-label="Función">?</button><span class="demo-hint__pop"><strong>✍️ Blog SEO incluido</strong>Artículos de belleza para atraer visitas de Google. Más clientes sin coste publicitario, mejora el posicionamiento del salón.</span></span>{% endif %}
         </div>
         <div class="article-card-grid">
           {% for article in articles %}
@@ -158,7 +160,7 @@
 
     <section class="lux-section cta-section" id="reserva">
       <div class="lux-container cta-card">
-        <div><span class="lux-kicker">{{ t.booking_kicker }}</span><h2>{{ t.booking_title }}</h2><p>{{ t.booking_text }}</p></div>
+        <div><span class="lux-kicker">{{ t.booking_kicker }}</span><h2>{{ t.booking_title }}</h2><p>{{ t.booking_text }}</p>{% if demo_mode %}<span class="demo-hint" id="hint-payments"><button class="demo-hint__btn" aria-label="Función">?</button><span class="demo-hint__pop demo-hint__pop--down"><strong>💳 Señal de pago integrada</strong>Stripe (internacional) y Redsys — TPV virtual español — listos para cobrar el depósito al confirmar la reserva.</span></span>{% endif %}</div>
         <div class="lux-actions"><a class="btn-lux btn-lux-primary btn-lux-large" href="{% url 'public_booking' %}">{{ t.nav_book }}</a><a class="btn-lux btn-lux-emerald btn-lux-large" href="#contacto">{{ t.whatsapp_contact }}</a></div>
       </div>
     </section>
@@ -169,6 +171,7 @@
           <span class="lux-kicker">{{ t.account_kicker }}</span>
           <h2>{{ t.account_title }}</h2>
           <p>{{ t.account_text }}</p>
+          {% if demo_mode %}<span class="demo-hint" id="hint-portal"><button class="demo-hint__btn" aria-label="Función">?</button><span class="demo-hint__pop demo-hint__pop--down"><strong>👤 Portal privado de clientes</strong>Historial de citas, facturas, puntos de fidelidad y notificaciones automáticas. Acceso desde móvil o web.</span></span>{% endif %}
         </article>
         <div class="account-actions"><a class="btn-lux btn-lux-outline" href="{% url 'accounts:login' %}">{{ t.account_access }}</a><a class="btn-lux btn-lux-ghost" href="{% url 'accounts:login' %}">{{ t.account_create }}</a></div>
       </div>
@@ -184,6 +187,7 @@
             <p><strong>{{ t.contact_address_label }}:</strong> {{ salon_address }}</p>
             <p><strong>{{ t.contact_phone_label }}:</strong> <a href="tel:{{ salon_phone }}">{{ salon_phone }}</a></p>
             <p>{{ t.contact_hours }}</p>
+            {% if demo_mode %}<span class="demo-hint" id="hint-contact"><button class="demo-hint__btn" aria-label="Función">?</button><span class="demo-hint__pop"><strong>📍 Todo personalizable</strong>Dirección, teléfono, horarios, WhatsApp y mapa se configuran desde variables de entorno. Sin tocar el código.</span></span>{% endif %}
           </div>
           <div class="lux-actions">
             <a class="btn-lux btn-lux-primary" href="{{ salon_directions_url }}" target="_blank" rel="noopener">{{ t.contact_directions }}</a>
@@ -295,11 +299,26 @@
   </script>
   {% if demo_mode %}
   <div class="theme-switcher" title="Cambiar estilo">
+    <span class="theme-switcher__label">Diseño</span>
     <button class="theme-dot theme-dot--noche" data-t="" title="Noche">🌑</button>
     <button class="theme-dot theme-dot--aurora" data-t="aurora" title="Aurora">🌸</button>
     <button class="theme-dot theme-dot--bosque" data-t="bosque" title="Bosque">🌿</button>
   </div>
   <script>
+  (function(){
+    var hints=document.querySelectorAll('.demo-hint');
+    hints.forEach(function(h){
+      h.querySelector('.demo-hint__btn').addEventListener('click',function(e){
+        e.stopPropagation();
+        var open=h.classList.contains('is-open');
+        hints.forEach(function(x){x.classList.remove('is-open');});
+        if(!open)h.classList.add('is-open');
+      });
+    });
+    document.addEventListener('click',function(){
+      hints.forEach(function(x){x.classList.remove('is-open');});
+    });
+  })();
   (function(){
     var dots=document.querySelectorAll('.theme-dot');
     var cur=localStorage.getItem('salon_theme')||'';

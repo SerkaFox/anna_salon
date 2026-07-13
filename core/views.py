@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta
 
@@ -49,11 +50,11 @@ from .i18n import (
 SITE_NAME = getattr(settings, "SALON_NAME", "BRIMOON Studio")
 logger = logging.getLogger(__name__)
 SITE_DOMAIN = settings.PUBLIC_BASE_URL.rstrip("/")
-SALON_ADDRESS = "Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia"
-SALON_PHONE = "643996431"
-SALON_DIRECTIONS_URL = "https://maps.app.goo.gl/MuEAzwCAtxvbriCC9"
-SALON_MAP_EMBED_URL = "https://www.google.com/maps/embed?pb=!4v1782499693022!6m8!1m7!1sZLMqnJPJcUAYtK9_wgm-sQ!2m2!1d43.26916954550295!2d-2.945267819444446!3f102.83781977603822!4f-5.772567357036408!5f2.8128601815513736"
-SALON_WHATSAPP_URL = "https://wa.me/34643996431"
+SALON_ADDRESS = os.getenv("SALON_ADDRESS", "Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia")
+SALON_PHONE = os.getenv("SALON_PHONE", "643996431")
+SALON_DIRECTIONS_URL = os.getenv("SALON_DIRECTIONS_URL", "https://maps.app.goo.gl/MuEAzwCAtxvbriCC9")
+SALON_MAP_EMBED_URL = os.getenv("SALON_MAP_EMBED_URL", "https://www.google.com/maps/embed?pb=!4v1782499693022!6m8!1m7!1sZLMqnJPJcUAYtK9_wgm-sQ!2m2!1d43.26916954550295!2d-2.945267819444446!3f102.83781977603822!4f-5.772567357036408!5f2.8128601815513736")
+SALON_WHATSAPP_URL = os.getenv("SALON_WHATSAPP_URL", "https://wa.me/34643996431")
 
 
 class PublicBookingError(Exception):
