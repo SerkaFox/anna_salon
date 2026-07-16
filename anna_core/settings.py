@@ -226,3 +226,7 @@ WHATSAPP_CONNECTION_NAME = os.getenv('WHATSAPP_CONNECTION_NAME', 'main')
 
 DEMO_MODE = os.getenv('DEMO_MODE', 'false').lower() in {'1', 'true', 'yes', 'on'}
 SALON_NAME = os.getenv('SALON_NAME', 'BRIMOON Studio')
+
+GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
+GOOGLE_PLACE_ID = os.getenv('GOOGLE_PLACE_ID', '')
+GOOGLE_PLACE_REVIEW_COUNT = int(os.getenv('GOOGLE_PLACE_REVIEW_COUNT', '91'))

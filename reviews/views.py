@@ -1,7 +1,8 @@
+from django.conf import settings
 from django.db.models import Avg, Count, Q
 from django.views.generic import ListView
 
-from .models import TreatwellReview
+from .models import GoogleReview, TreatwellReview
 
 
 class ReviewListView(ListView):
@@ -47,4 +48,8 @@ class ReviewListView(ListView):
         ctx["current_sort"] = self.request.GET.get("sort", "recent")
         ctx["current_rating"] = self.request.GET.get("rating", "")
         ctx["current_service"] = self.request.GET.get("service", "")
+        ctx["google_reviews"] = GoogleReview.objects.all()[:5]
+        ctx["google_review_url"] = GoogleReview.review_url()
+        ctx["google_rating"] = GoogleReview.objects.aggregate(avg=Avg("rating"))["avg"] or 0
+        ctx["google_count"] = getattr(settings, "GOOGLE_PLACE_REVIEW_COUNT", 91)
         return ctx
