@@ -32,7 +32,7 @@ from employees.models import Employee
 from gallery.selectors import get_public_instagram_posts
 from salon.models import Zone
 from services_app.models import Service
-from whatsapp_bot.services import queue_booking_confirmation, send_whatsapp_message
+from notifications.services import notify_booking_confirmation, notify_welcome_credentials
 
 from .i18n import (
     ARTICLE_TRANSLATIONS,
@@ -549,13 +549,10 @@ def _create_public_booking(values):
 
 
 def _notify_public_booking_created(booking):
-    if not getattr(settings, "WHATSAPP_SEND_CONFIRMATION_ON_BOOKING", True):
-        return
     try:
-        message, _created = queue_booking_confirmation(booking)
-        send_whatsapp_message(message)
+        notify_booking_confirmation(booking)
     except Exception:
-        logger.exception("Could not send WhatsApp booking confirmation for booking %s", booking.pk)
+        logger.exception("Could not send booking confirmation notification for booking %s", booking.pk)
 
 
 def _resolve_client_contact_values(primary_contact, secondary_contact):
@@ -833,6 +830,10 @@ def public_booking(request):
             )
         except PublicBookingError as exc:
             return _public_booking_error_response(request, values, exc.errors)
+        try:
+            notify_welcome_credentials(booking, username=user.username, password=values["password"])
+        except Exception:
+            logger.exception("Could not send welcome credentials notification for booking %s", booking.pk)
 
     _notify_public_booking_created(booking)
 
@@ -915,8 +916,10 @@ def set_public_language(request):
 
 
 def home(request):
+    from reviews.models import TreatwellReview
     language, t, services, articles = _localized_context(request)
     homepage_instagram_posts, homepage_gallery_source = get_public_instagram_posts(limit=9)
+    featured_reviews = list(TreatwellReview.objects.filter(rating__gte=4).order_by("-date")[:6])
     schema = json.dumps({
         "@context": "https://schema.org",
         "@type": "BeautySalon",
@@ -941,6 +944,7 @@ def home(request):
         "articles": articles[:3],
         "homepage_instagram_posts": homepage_instagram_posts,
         "homepage_gallery_source": homepage_gallery_source,
+        "featured_reviews": featured_reviews,
         "schema_json": schema,
     })
     return render(request, "core/home.html", context)

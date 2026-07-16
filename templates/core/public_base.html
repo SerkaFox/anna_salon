@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260711-themes">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260713-cards">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static salon_hero %}');">
@@ -36,6 +36,7 @@
         <a href="{% url 'service_index' %}">{{ t.nav_services }}</a>
         <a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a>
         <a href="{% url 'public_gallery' %}">{{ t.nav_gallery }}</a>
+        <a href="{% url 'reviews:list' %}">Opiniones</a>
         <a href="{% url 'home' %}#contacto">{{ t.nav_contact }}</a>
         
         <form method="post" action="{% url 'set_public_language' %}" class="lux-language-switcher">

@@ -18,6 +18,7 @@ from .views import (
     client_booking_document,
     client_booking_prepayment_refund,
     client_portal_slots_api,
+    notification_unsubscribe,
     use_referral_reward,
     set_client_language,
 )
@@ -37,6 +38,7 @@ urlpatterns = [
     path("portal/slots/", client_portal_slots_api, name="portal_slots_api"),
     path("portal/language/", set_client_language, name="set_language"),
     path("portal/delete-account/", client_delete_own_account, name="delete_own_account"),
+    path("portal/unsubscribe/", notification_unsubscribe, name="notification_unsubscribe"),
     path("", client_list, name="list"),
     path("new/", client_create, name="create"),
     path("api/new/", client_create_api, name="create_api"),

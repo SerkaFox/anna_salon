@@ -43,7 +43,12 @@ from payments.stripe_service import (
     get_booking_deposit_amount,
     get_booking_full_amount,
 )
-from whatsapp_bot.services import queue_booking_cancellation, queue_booking_rescheduled, send_whatsapp_message
+from notifications.services import (
+    notify_booking_cancelled,
+    notify_booking_confirmation,
+    notify_booking_rescheduled,
+    notify_welcome_credentials,
+)
 from .forms import ClientForm
 from .models import Client, ClientRewardRule
 from salon.models import Zone
@@ -52,6 +57,38 @@ from .rewards import client_reward_progress
 from core.i18n import PUBLIC_LANGUAGE_SESSION_KEY
 from core.booking_requests import PUBLIC_PENDING_BOOKING_SESSION_KEY, create_booking_for_client_from_pending
 from .translation import CLIENT_LANGUAGE_SESSION_KEY, normalize_client_language
+
+
+def _anonymize_and_delete_client(client):
+    """Delete future bookings, wipe personal data, remove the user account.
+
+    Past bookings stay in the DB for statistics, linked to the now-anonymous
+    client row (Booking.client is PROTECT so we can't delete the Client row
+    while historical bookings exist).
+    """
+    # 1. Delete all future bookings (frees calendar slots; WA messages cascade)
+    Booking.objects.filter(client=client, start_at__gte=timezone.now()).delete()
+
+    # 2. Anonymize client record – clear PII, keep the row for statistics
+    if client.avatar:
+        client.avatar.delete(save=False)
+    client.first_name = "Cuenta"
+    client.last_name = "eliminada"
+    client.phone = ""
+    client.email = ""
+    client.notes = ""
+    client.avatar = None
+    client.is_active = False
+    client.referred_by = None
+    client.save(update_fields=[
+        "first_name", "last_name", "phone", "email",
+        "notes", "avatar", "is_active", "referred_by", "updated_at",
+    ])
+
+    # 3. Delete user account (Client.user becomes NULL via SET_NULL)
+    user = client.user
+    if user:
+        user.delete()
 
 
 def build_referral_tree(root_client):
@@ -183,6 +220,10 @@ def client_portal(request):
                 instance=booking,
                 message=f"Reserva pendiente creada tras login de cliente: {client.full_name}.",
             )
+            try:
+                notify_booking_confirmation(booking)
+            except Exception:
+                pass
             messages.success(request, f"Solicitud enviada. {getattr(settings, 'SALON_NAME', 'BRIMOON Studio')} revisara y confirmara tu cita.")
             return redirect("clients:portal")
         first_error = next((items[0] for items in errors.values() if items), "No se pudo crear la reserva.")
@@ -224,6 +265,10 @@ def client_portal(request):
                 instance=booking,
                 message=f"Solicitud de reserva creada desde portal cliente: {client.full_name}.",
             )
+            try:
+                notify_booking_confirmation(booking)
+            except Exception:
+                pass
             messages.success(request, f"Solicitud enviada. {getattr(settings, 'SALON_NAME', 'BRIMOON Studio')} revisara y confirmara tu cita.")
             return redirect("clients:portal")
     else:
@@ -326,6 +371,9 @@ def client_portal_slots_api(request):
 @login_required
 @require_POST
 def client_booking_payment(request, pk):
+    if getattr(settings, "DEMO_MODE", False):
+        return redirect("payments:demo_pay", pk=pk)
+
     client = get_client_profile(request.user)
     if not client:
         raise PermissionDenied
@@ -495,8 +543,7 @@ def client_booking_cancel(request, pk):
         message=f"Reserva cancelada por cliente desde portal: #{booking.pk}.",
     )
     try:
-        wa_msg, _ = queue_booking_cancellation(booking)
-        send_whatsapp_message(wa_msg)
+        notify_booking_cancelled(booking)
     except Exception:
         pass
     messages.success(request, message)
@@ -537,8 +584,7 @@ def client_booking_reschedule(request, pk):
         message=f"Reserva reprogramada por cliente desde portal: #{booking.pk}.",
     )
     try:
-        wa_msg, _ = queue_booking_rescheduled(booking)
-        send_whatsapp_message(wa_msg)
+        notify_booking_rescheduled(booking)
     except Exception:
         pass
     messages.success(request, "La cita se ha cambiado correctamente.")
@@ -794,20 +840,14 @@ def client_delete(request, pk):
 
     if request.method == "POST":
         client_name = client.full_name
-        try:
-            client.delete()
-            log_event(
-                actor=request.user,
-                section="client",
-                action="delete",
-                message=f"Cliente eliminado: {client_name}.",
-            )
-            messages.success(request, f"Cliente eliminado: {client_name}")
-        except ProtectedError:
-            messages.error(
-                request,
-                "No se puede eliminar este cliente porque tiene reservas u otros datos relacionados."
-            )
+        _anonymize_and_delete_client(client)
+        log_event(
+            actor=request.user,
+            section="client",
+            action="delete",
+            message=f"Cliente eliminado y anonimizado: {client_name}.",
+        )
+        messages.success(request, f"Cliente eliminado: {client_name}")
         return redirect("clients:list")
 
     return render(
@@ -1079,19 +1119,51 @@ def client_delete_own_account(request):
 
         user = request.user
         client_name = client.full_name
-        client.is_active = False
-        client.save(update_fields=["is_active", "updated_at"])
-        user.is_active = False
-        user.save(update_fields=["is_active"])
         log_event(
             actor=user,
             section="client",
             action="self_delete",
             instance=client,
-            message=f"Cuenta dada de baja por el propio cliente: {client_name}.",
+            message=f"Cuenta eliminada por el propio cliente: {client_name}.",
         )
         logout(request)
+        _anonymize_and_delete_client(client)
         messages.success(request, f"Tu cuenta ha sido eliminada. Gracias por confiar en {getattr(settings, 'SALON_NAME', 'BRIMOON Studio')}.")
         return redirect("home")
+
+    return render(request, "clients/client_delete_account.html", {"active_section": "profile"})
+
+
+@login_required
+@require_POST
+def notification_unsubscribe(request):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+
+    channel = request.POST.get("channel")
+    if channel not in ("whatsapp", "email"):
+        messages.error(request, "Canal no válido.")
+        return redirect("clients:portal")
+
+    # Never let the client unsubscribe from the last active channel
+    active_channels = sum([
+        bool(client.phone and client.notify_whatsapp),
+        bool(client.email and client.notify_email),
+    ])
+    if active_channels <= 1:
+        messages.error(request, "Debes mantener al menos un canal de notificaciones activo.")
+        return redirect("clients:portal")
+
+    if channel == "whatsapp":
+        client.notify_whatsapp = False
+        client.save(update_fields=["notify_whatsapp", "updated_at"])
+        messages.success(request, "Te has dado de baja de las notificaciones por WhatsApp.")
+    else:
+        client.notify_email = False
+        client.save(update_fields=["notify_email", "updated_at"])
+        messages.success(request, "Te has dado de baja de las notificaciones por email.")
+
+    return redirect("clients:portal")
 
     return render(request, "clients/client_delete_account.html", {"active_section": "profile"})

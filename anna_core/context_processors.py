@@ -7,5 +7,5 @@ def salon_globals(request):
         "salon_name": getattr(settings, "SALON_NAME", "BRIMOON Studio"),
         "demo_mode": demo,
         "salon_logo": "demo/logo-aura-studio.jpg" if demo else "logo.png",
-        "salon_hero": "demo/manicure-2.jpg" if demo else "Fon2.png",
+        "salon_hero": "fonNew.png" if demo else "Fon2.png",
     }

@@ -1,0 +1,128 @@
+{% extends "core/public_base.html" %}
+{% load static %}
+
+{% block title %}Opiniones · {{ salon_name }}{% endblock %}
+{% block meta_description %}{{ total_count }} opiniones verificadas de clientes de {{ salon_name }} en Treatwell. Valoración media: {{ avg_rating|floatformat:1 }} sobre 5.{% endblock %}
+
+{% block page_hero %}
+<section class="content-hero lux-container">
+  <div class="lux-kicker">Reseñas verificadas</div>
+  <h1>Opiniones de clientes</h1>
+  <p>{{ total_count }} reseñas reales · {{ avg_rating|floatformat:1 }} de 5 ⭐</p>
+</section>
+{% endblock %}
+
+{% block content %}
+<section class="lux-section reviews-page">
+  <div class="lux-container">
+
+    <!-- Rating summary bar -->
+    <div class="reviews-summary">
+      <div class="reviews-summary__score">
+        <span class="reviews-summary__big">{{ avg_rating|floatformat:1 }}</span>
+        <div class="reviews-summary__stars">
+          {% for i in "12345" %}
+            <span class="star-icon{% if forloop.counter <= avg_rating|floatformat:0|add:0 %} filled{% endif %}">★</span>
+          {% endfor %}
+        </div>
+        <span class="reviews-summary__count">{{ total_count }} opiniones</span>
+      </div>
+      <div class="reviews-summary__bars">
+        {% for stars, count in rating_dist.items %}
+        <div class="reviews-bar">
+          <span class="reviews-bar__label">{{ stars }}★</span>
+          <div class="reviews-bar__track">
+            <div class="reviews-bar__fill" style="width:{% if total_count %}{% widthratio count total_count 100 %}{% else %}0{% endif %}%"></div>
+          </div>
+          <span class="reviews-bar__num">{{ count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <form class="reviews-filters" method="get" action="">
+      <div class="reviews-filters__group">
+        <label>Ordenar</label>
+        <select name="sort" onchange="this.form.submit()">
+          <option value="recent" {% if current_sort == "recent" %}selected{% endif %}>Más recientes</option>
+          <option value="best" {% if current_sort == "best" %}selected{% endif %}>Mejor valoración</option>
+          <option value="oldest" {% if current_sort == "oldest" %}selected{% endif %}>Más antiguas</option>
+        </select>
+      </div>
+      <div class="reviews-filters__group">
+        <label>Puntuación</label>
+        <select name="rating" onchange="this.form.submit()">
+          <option value="" {% if not current_rating %}selected{% endif %}>Todas</option>
+          {% for s in "54321" %}
+          <option value="{{ s }}" {% if current_rating == s %}selected{% endif %}>{{ s }} ★</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="reviews-filters__group">
+        <label>Servicio</label>
+        <select name="service" onchange="this.form.submit()">
+          <option value="" {% if not current_service %}selected{% endif %}>Todos</option>
+          {% for svc in all_services %}
+          <option value="{{ svc }}" {% if current_service == svc %}selected{% endif %}>{{ svc }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if current_rating or current_service or current_sort != "recent" %}
+      <a class="reviews-filters__clear" href="{% url 'reviews:list' %}">Limpiar filtros</a>
+      {% endif %}
+    </form>
+
+    <!-- Review cards grid -->
+    <div class="reviews-grid">
+      {% for review in reviews %}
+      <article class="review-card">
+        <div class="review-card__header">
+          <div class="review-card__avatar">{{ review.reviewer_name|first|upper }}</div>
+          <div class="review-card__meta">
+            <strong class="review-card__name">{{ review.reviewer_name }}</strong>
+            <time class="review-card__date">{{ review.date|date:"d M Y" }}</time>
+          </div>
+          {% if review.verified %}
+          <span class="review-card__verified" title="Reseña verificada">✓ verificada</span>
+          {% endif %}
+        </div>
+        <div class="review-card__stars">
+          {% for i in review.stars_range %}<span class="star filled">★</span>{% endfor %}
+          {% for i in review.empty_stars_range %}<span class="star">★</span>{% endfor %}
+        </div>
+        {% if review.text %}
+        <p class="review-card__text">{{ review.text }}</p>
+        {% endif %}
+        {% if review.services %}
+        <div class="review-card__services">
+          {% for svc in review.services %}
+          <span class="review-card__tag">{{ svc }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <div class="review-card__source">
+          <span>Opinión verificada</span>
+        </div>
+      </article>
+      {% empty %}
+      <p class="reviews-empty">No hay opiniones con estos filtros.</p>
+      {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <nav class="lux-pagination" aria-label="Páginas de opiniones">
+      {% if page_obj.has_previous %}
+      <a class="lux-page-btn" href="?{% if current_sort %}sort={{ current_sort }}&{% endif %}{% if current_rating %}rating={{ current_rating }}&{% endif %}{% if current_service %}service={{ current_service }}&{% endif %}page={{ page_obj.previous_page_number }}">← Anterior</a>
+      {% endif %}
+      <span class="lux-page-info">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+      <a class="lux-page-btn" href="?{% if current_sort %}sort={{ current_sort }}&{% endif %}{% if current_rating %}rating={{ current_rating }}&{% endif %}{% if current_service %}service={{ current_service }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente →</a>
+      {% endif %}
+    </nav>
+    {% endif %}
+
+  </div>
+</section>
+{% endblock %}

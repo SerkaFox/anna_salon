@@ -1,13 +1,21 @@
-from django.db import transaction
-from django.core.exceptions import ValidationError
+import uuid
+from decimal import Decimal
+
+from django.conf import settings
 from django.contrib import messages
-from django.shortcuts import redirect, render
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.http import HttpResponseBadRequest, HttpResponse
 import stripe
 
+from accounts.permissions import get_client_profile
+from bookings.models import Booking
+from bookings.services import create_booking_prepayment
 from .models import Payment
 from .redsys import RedsysSignatureError, is_successful_response, sanitize_redsys_payload, verify_signature
 from .stripe_service import handle_stripe_event, verify_webhook_signature
@@ -126,3 +134,60 @@ def stripe_webhook(request):
         return HttpResponseBadRequest("Unknown Stripe payment.")
 
     return HttpResponse("OK")
+
+
+@login_required
+@require_POST
+def demo_pay(request, pk):
+    """Fake payment for DEMO_MODE — immediately marks booking as paid."""
+    if not getattr(settings, "DEMO_MODE", False):
+        raise PermissionDenied
+
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+
+    booking = get_object_or_404(
+        Booking.objects.select_related("client", "service", "employee"),
+        pk=pk,
+        client=client,
+    )
+    if booking.status in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW}:
+        messages.error(request, "Esta reserva no se puede pagar.")
+        return redirect("clients:booking_detail", pk=pk)
+
+    from django.db.models import Sum as _Sum
+    existing_paid = booking.online_payments.filter(
+        status=Payment.Statuses.PAID
+    ).aggregate(total=_Sum("amount"))["total"] or Decimal("0.00")
+
+    amount = (booking.client_price_snapshot or Decimal("0.00")) - existing_paid
+    if amount <= Decimal("0.00"):
+        messages.success(request, "Esta reserva ya está pagada.")
+        return redirect("clients:booking_detail", pk=pk)
+
+    with transaction.atomic():
+        payment = Payment.objects.create(
+            booking=booking,
+            amount=amount,
+            currency="eur",
+            order_number=f"demo-{uuid.uuid4().hex[:12]}",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            paid_at=timezone.now(),
+            raw_request={"demo": True},
+        )
+        if booking.status == Booking.Statuses.PENDING:
+            booking.status = Booking.Statuses.CONFIRMED
+            booking.save(update_fields=["status", "updated_at"])
+        create_booking_prepayment(booking, payment)
+
+    try:
+        from notifications.services import notify_payment_receipt
+        notify_payment_receipt(booking, payment)
+    except Exception:
+        pass
+
+    messages.success(request, f"✅ Pago de {amount:.2f} € recibido. ¡Tu reserva está confirmada!")
+    return redirect("clients:booking_detail", pk=pk)

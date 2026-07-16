@@ -108,6 +108,7 @@ def profile_view(request):
             "password_form": password_form,
             "fiscal_form": fiscal_form,
             "linked_employee": Employee.objects.filter(user=request.user).first(),
+            "client_profile": client,
         },
     )
 

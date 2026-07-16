@@ -122,6 +122,7 @@ INSTALLED_APPS = [
     'core',
     'mobile_api',
     'whatsapp_bot',
+    'reviews',
 ]
 
 MIDDLEWARE = [

@@ -68,6 +68,8 @@ class WhatsAppMessage(models.Model):
         BOOKING_RESCHEDULED = "booking_rescheduled", "Booking rescheduled"
         REMINDER_24H = "reminder_24h", "Reminder 24h"
         REMINDER_2H = "reminder_2h", "Reminder 2h"
+        WELCOME_CREDENTIALS = "welcome_credentials", "Welcome / login credentials"
+        PAYMENT_RECEIPT = "payment_receipt", "Payment receipt"
         MANUAL = "manual", "Manual"
 
     class Statuses(models.TextChoices):

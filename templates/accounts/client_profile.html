@@ -131,6 +131,53 @@
 <section class="panel-card" style="margin-top: 18px;">
   <div class="section-heading">
     <div>
+      <h2>Notificaciones</h2>
+      <p>Elige por qué canales quieres recibir avisos de tus citas. Debes mantener al menos uno activo.</p>
+    </div>
+  </div>
+  {% with wa_active=client_profile.notify_whatsapp em_active=client_profile.notify_email has_phone=client_profile.phone has_email=client_profile.email %}
+  {% if has_phone %}
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
+    <span>📱 WhatsApp <strong>{{ has_phone }}</strong></span>
+    {% if wa_active %}
+      {% if has_email and em_active %}
+      <form method="post" action="{% url 'clients:notification_unsubscribe' %}" style="display:inline;">
+        {% csrf_token %}
+        <input type="hidden" name="channel" value="whatsapp">
+        <button class="btn btn-light btn-small" type="submit" onclick="return confirm('¿Desactivar WhatsApp?')">Desactivar</button>
+      </form>
+      {% else %}
+        <span class="muted-text" style="font-size:0.82rem;">Canal principal — no se puede desactivar</span>
+      {% endif %}
+    {% else %}
+      <span style="color:#aaa;font-size:0.82rem;">Desactivado</span>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if has_email %}
+  <div style="display:flex;align-items:center;gap:14px;">
+    <span>✉️ Email <strong>{{ has_email }}</strong></span>
+    {% if em_active %}
+      {% if has_phone and wa_active %}
+      <form method="post" action="{% url 'clients:notification_unsubscribe' %}" style="display:inline;">
+        {% csrf_token %}
+        <input type="hidden" name="channel" value="email">
+        <button class="btn btn-light btn-small" type="submit" onclick="return confirm('¿Desactivar email?')">Desactivar</button>
+      </form>
+      {% else %}
+        <span class="muted-text" style="font-size:0.82rem;">Canal principal — no se puede desactivar</span>
+      {% endif %}
+    {% else %}
+      <span style="color:#aaa;font-size:0.82rem;">Desactivado</span>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endwith %}
+</section>
+
+<section class="panel-card" style="margin-top: 18px;">
+  <div class="section-heading">
+    <div>
       <h2>{% ct "delete_account" %}</h2>
       <p>{% ct "delete_account_intro" %}</p>
     </div>

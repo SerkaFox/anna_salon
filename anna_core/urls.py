@@ -21,6 +21,7 @@ urlpatterns = [
     path("reservar/slots/", core_views.public_booking_slots, name="public_booking_slots"),
     path("reservar/lista-espera/", core_views.public_waitlist, name="public_waitlist"),
     path("bookings/<int:pk>/pay/", booking_views.booking_pay, name="booking_pay"),
+    path("opiniones/", include("reviews.urls")),
     path("set-language/", core_views.set_public_language, name="set_public_language"),
     path("robots.txt", core_views.robots_txt, name="robots_txt"),
     path("sitemap.xml", core_views.sitemap_xml, name="sitemap_xml"),

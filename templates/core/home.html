@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260713-hints2">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260713-cards">
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
 <body class="landing-body" style="--page-image: url('{% static salon_hero %}');">
@@ -37,6 +37,7 @@
         <a href="{% url 'advice_index' %}">{{ t.nav_tips }}</a>
         <a href="#galeria">{{ t.nav_gallery }}</a>
         <a href="#precios">{{ t.nav_prices }}</a>
+        <a href="{% url 'reviews:list' %}">Opiniones</a>
         <a href="#contacto">{{ t.nav_contact }}</a>
         
         <form method="post" action="{% url 'set_public_language' %}" class="lux-language-switcher">
@@ -157,6 +158,40 @@
         <div class="lux-actions centered"><a class="btn-lux btn-lux-primary" href="{% url 'public_booking' %}">{{ t.nav_book }}</a><a class="btn-lux btn-lux-ghost" href="#servicios">{{ t.view_treatments }}</a></div>
       </div>
     </section>
+
+    {% if featured_reviews %}
+    <section class="lux-section reviews-home-section" id="opiniones">
+      <div class="lux-container">
+        <div class="lux-section-head">
+          <span class="lux-kicker">Opiniones verificadas</span>
+          <h2>Lo que dicen nuestras clientas</h2>
+          <p>{{ featured_reviews|length }} de las últimas reseñas en Treatwell</p>
+        </div>
+        <div class="reviews-grid reviews-grid--home">
+          {% for review in featured_reviews %}
+          <article class="review-card">
+            <div class="review-card__header">
+              <div class="review-card__avatar">{{ review.reviewer_name|first|upper }}</div>
+              <div class="review-card__meta">
+                <strong class="review-card__name">{{ review.reviewer_name }}</strong>
+                <time class="review-card__date">{{ review.date|date:"d M Y" }}</time>
+              </div>
+            </div>
+            <div class="review-card__stars">
+              {% for i in review.stars_range %}<span class="star filled">★</span>{% endfor %}
+              {% for i in review.empty_stars_range %}<span class="star">★</span>{% endfor %}
+            </div>
+            {% if review.text %}<p class="review-card__text">{{ review.text }}</p>{% endif %}
+            {% if review.primary_service %}<span class="review-card__tag">{{ review.primary_service }}</span>{% endif %}
+          </article>
+          {% endfor %}
+        </div>
+        <div class="lux-actions centered" style="margin-top:32px">
+          <a class="btn-lux btn-lux-outline" href="{% url 'reviews:list' %}">Ver todas las opiniones →</a>
+        </div>
+      </div>
+    </section>
+    {% endif %}
 
     <section class="lux-section cta-section" id="reserva">
       <div class="lux-container cta-card">

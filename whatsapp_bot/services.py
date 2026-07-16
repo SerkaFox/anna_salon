@@ -48,10 +48,8 @@ def booking_message(booking, *, kind):
     portal = _portal_url()
 
     if kind == WhatsAppMessage.Kinds.BOOKING_CONFIRMATION:
-        booking_url = f"{portal.rstrip('/')}/../bookings/{booking.pk}/"
-        # clean up double slashes
-        import re
-        booking_url = re.sub(r"(?<!:)//+", "/", booking_url)
+        base = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
+        booking_url = f"{base}/panel/clientes/portal/bookings/{booking.pk}/"
         return (
             f"Hola {client_name} 👋 Tu cita en {salon} está confirmada:\n"
             f"📅 {date_text} a las {time_text}\n"
@@ -110,6 +108,40 @@ def queue_booking_message(booking, *, kind, scheduled_for=None):
 
 def queue_booking_confirmation(booking):
     return queue_booking_message(booking, kind=WhatsAppMessage.Kinds.BOOKING_CONFIRMATION)
+
+
+def queue_welcome_credentials(booking, *, username, password):
+    client = booking.client
+    salon = _salon_name()
+    base = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
+    login_url = f"{base}/panel/clientes/portal/"
+    client_name = client.first_name or client.full_name or "hola"
+    body = (
+        f"Hola {client_name} 👋 Bienvenida/o a {salon}.\n\n"
+        f"Tus datos de acceso al área privada:\n"
+        f"🔑 Usuario: {username}\n"
+        f"🔒 Contraseña: {password}\n\n"
+        f"Accede aquí cuando quieras:\n"
+        f"🔗 {login_url}\n\n"
+        f"Guarda este mensaje para no perder tus datos."
+    )
+    connection = get_default_connection()
+    phone = normalize_whatsapp_phone(client.phone)
+    message = WhatsAppMessage(
+        connection=connection,
+        booking=booking,
+        client=client,
+        kind=WhatsAppMessage.Kinds.WELCOME_CREDENTIALS,
+        to_phone=phone,
+        body=body,
+        scheduled_for=timezone.now(),
+    )
+    try:
+        with transaction.atomic():
+            message.save()
+    except IntegrityError:
+        return WhatsAppMessage.objects.get(booking=booking, kind=WhatsAppMessage.Kinds.WELCOME_CREDENTIALS), False
+    return message, True
 
 
 def queue_booking_cancellation(booking):

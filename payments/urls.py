@@ -12,4 +12,5 @@ urlpatterns = [
     path("stripe/success/", views.stripe_success, name="stripe_success"),
     path("stripe/cancel/", views.stripe_cancel, name="stripe_cancel"),
     path("stripe/webhook/", views.stripe_webhook, name="stripe_webhook"),
+    path("demo/pay/<int:pk>/", views.demo_pay, name="demo_pay"),
 ]

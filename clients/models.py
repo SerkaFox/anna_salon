@@ -23,6 +23,8 @@ class Client(models.Model):
     birth_date = models.DateField("Fecha de nacimiento", null=True, blank=True)
     notes = models.TextField("Notas", blank=True)
     is_active = models.BooleanField("Activo", default=True)
+    notify_whatsapp = models.BooleanField("Notif. WhatsApp", default=True)
+    notify_email = models.BooleanField("Notif. Email", default=True)
     created_at = models.DateTimeField("Creado", auto_now_add=True)
     updated_at = models.DateTimeField("Actualizado", auto_now=True)
 
