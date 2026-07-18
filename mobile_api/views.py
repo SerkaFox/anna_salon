@@ -1961,8 +1961,7 @@ class NotificationTemplateListView(MobileApiMixin, APIView):
     GET  /api/v1/notifications/          — list all templates + enabled state (admin only)
     """
     def get(self, request):
-        if not _mobile_admin_required(request.user):
-            return Response({"detail": "Forbidden."}, status=403)
+        _mobile_admin_required(request.user)
         from whatsapp_bot.models import WhatsAppTemplate, TEMPLATE_DEFAULTS, TEMPLATE_NAMES, TEMPLATE_VARIABLES
         WhatsAppTemplate.ensure_defaults()
         templates = WhatsAppTemplate.objects.all()
@@ -2006,16 +2005,14 @@ class NotificationTemplateDetailView(MobileApiMixin, APIView):
         }
 
     def get(self, request, kind):
-        if not _mobile_admin_required(request.user):
-            return Response({"detail": "Forbidden."}, status=403)
+        _mobile_admin_required(request.user)
         tmpl = self._get_template(kind)
         if not tmpl:
             return Response({"detail": "Not found."}, status=404)
         return Response(self._serialize(tmpl))
 
     def patch(self, request, kind):
-        if not _mobile_admin_required(request.user):
-            return Response({"detail": "Forbidden."}, status=403)
+        _mobile_admin_required(request.user)
         tmpl = self._get_template(kind)
         if not tmpl:
             return Response({"detail": "Not found."}, status=404)
@@ -2032,8 +2029,7 @@ class NotificationTemplateDetailView(MobileApiMixin, APIView):
 class NotificationTemplateResetView(MobileApiMixin, APIView):
     """POST /api/v1/notifications/{kind}/reset/ — restore default body."""
     def post(self, request, kind):
-        if not _mobile_admin_required(request.user):
-            return Response({"detail": "Forbidden."}, status=403)
+        _mobile_admin_required(request.user)
         from whatsapp_bot.models import WhatsAppTemplate, TEMPLATE_DEFAULTS, TEMPLATE_NAMES
         default_body = TEMPLATE_DEFAULTS.get(kind)
         if not default_body:
