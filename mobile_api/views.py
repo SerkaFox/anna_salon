@@ -123,6 +123,7 @@ def _normalize_id_aliases(data):
 def _mobile_admin_required(user):
     if not getattr(user, "can_manage_staff", False):
         raise PermissionDenied("Sin permiso para gestionar caja.")
+    return True
 
 
 def _parse_mobile_date(value):
