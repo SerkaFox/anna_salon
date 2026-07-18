@@ -1,0 +1,57 @@
+{% extends "panel_base.html" %}
+{% block title %}Google Business Profile · Autorización{% endblock %}
+{% block panel_title %}Google Business Profile{% endblock %}
+
+{% block panel_content %}
+<div style="max-width:560px;">
+
+  {% if error %}
+  <div class="alert alert-danger">❌ {{ error }}</div>
+  {% endif %}
+
+  {% if error_sync %}
+  <div class="alert alert-warning">✅ Autorización OK, pero error al sincronizar reseñas: {{ error_sync }}</div>
+  {% endif %}
+
+  {% if success and not error_sync %}
+  <div class="alert alert-success">
+    ✅ <strong>¡Autorización completada!</strong><br>
+    Cuenta: <code>{{ account }}</code><br>
+    Localización: <code>{{ location }}</code><br>
+    Reseñas importadas: <strong>{{ created }}</strong> nuevas · {{ updated }} actualizadas · {{ total }} en total
+  </div>
+  <a href="{% url 'reviews_auth:google_status' %}" class="btn btn-primary">Ver estado</a>
+  {% endif %}
+
+  {% if token %}
+    {% if token.account_name %}
+    <div class="alert alert-success">✅ Conectado — {{ token.account_name }}</div>
+    <p style="color:var(--text-muted);font-size:.9rem;">Localización: {{ token.location_name }}</p>
+    <p style="color:var(--text-muted);font-size:.9rem;">Reseñas en DB: <strong>{{ review_count }}</strong></p>
+    {% if synced %}
+    <div class="alert alert-success">Sync: {{ synced.created }} nuevas · {{ synced.updated }} actualizadas · {{ synced.total }} total</div>
+    {% endif %}
+    {% if sync_error %}
+    <div class="alert alert-danger">Error sync: {{ sync_error }}</div>
+    {% endif %}
+    <div style="display:flex;gap:12px;margin-top:20px;">
+      <form method="post">{% csrf_token %}
+        <button class="btn btn-primary" type="submit">🔄 Sincronizar ahora</button>
+      </form>
+      <a href="{% url 'reviews_auth:google_start' %}" class="btn btn-outline">Re-autorizar</a>
+    </div>
+    {% else %}
+    <p>Token guardado pero sin cuenta configurada.</p>
+    <a href="{% url 'reviews_auth:google_start' %}" class="btn btn-primary">Conectar con Google</a>
+    {% endif %}
+  {% else %}
+  <p style="color:var(--text-muted);margin-bottom:24px;">
+    Conecta la cuenta de Google que gestiona el perfil de negocio de BRIMOON para importar todas las reseñas automáticamente.
+  </p>
+  <a href="{% url 'reviews_auth:google_start' %}" class="btn btn-primary" style="font-size:1rem;padding:12px 28px;">
+    Conectar con Google →
+  </a>
+  {% endif %}
+
+</div>
+{% endblock panel_content %}

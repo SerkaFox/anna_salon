@@ -26,6 +26,8 @@ from services_app.models import Service
 from .forms import BookingForm, BookingPhotoForm
 from .models import Booking, BookingPhoto
 from .services import notify_waitlist_for_booking_opening
+from whatsapp_bot.services import queue_and_send
+from whatsapp_bot.models import WhatsAppMessage
 from payments.models import Payment as OnlinePayment
 from payments.stripe_service import create_checkout_session, create_pending_stripe_payment
 from .utils import (
@@ -253,10 +255,11 @@ def booking_create(request):
             else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
         )
         if form.is_valid():
-            old_status = booking.status
             booking = form.save()
-            if old_status != Booking.Statuses.CANCELLED and booking.status == Booking.Statuses.CANCELLED:
+            if booking.status == Booking.Statuses.CANCELLED:
                 notify_waitlist_for_booking_opening(booking)
+            elif booking.status == Booking.Statuses.CONFIRMED and booking.client.phone:
+                queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CONFIRMATION)
             log_event(
                 actor=request.user,
                 section="booking",
@@ -337,6 +340,8 @@ def booking_update(request, pk):
             else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
         )
         if form.is_valid():
+            old_status = booking.status
+            old_start_at = booking.start_at
             payment_info = _booking_payment_info(booking)
             paid_booking_changed = payment_info["is_paid"] and any(
                 form.cleaned_data.get(field) != getattr(booking, field)
@@ -345,6 +350,15 @@ def booking_update(request, pk):
             booking = form.save()
             if paid_booking_changed:
                 messages.warning(request, "Reserva pagada. El cambio no ajusta el importe cobrado; revisa manualmente si hace falta.")
+            if booking.client.phone:
+                new_status = booking.status
+                if new_status == Booking.Statuses.CANCELLED and old_status != Booking.Statuses.CANCELLED:
+                    notify_waitlist_for_booking_opening(booking)
+                    queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CANCELLED)
+                elif booking.start_at != old_start_at and new_status not in (Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW):
+                    queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_RESCHEDULED)
+                elif new_status == Booking.Statuses.CONFIRMED and old_status != Booking.Statuses.CONFIRMED:
+                    queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CONFIRMATION)
             log_event(
                 actor=request.user,
                 section="booking",
@@ -384,11 +398,14 @@ def booking_delete(request, pk):
     if request.method == "POST":
         booking_label = str(booking)
         booking_client = str(booking.client)
+        has_phone = bool(booking.client.phone)
         notify_waitlist_for_booking_opening(booking)
         payment_info = _booking_payment_info(booking)
         if payment_info["is_paid"]:
             booking.status = Booking.Statuses.CANCELLED
             booking.save(update_fields=["status", "updated_at"])
+            if has_phone:
+                queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CANCELLED)
             log_event(
                 actor=request.user,
                 section="booking",
@@ -399,6 +416,8 @@ def booking_delete(request, pk):
             )
             messages.warning(request, "Reserva pagada. Reembolso pendiente de gestión manual.")
             return redirect("bookings:list")
+        if has_phone:
+            queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CANCELLED)
         booking.delete()
         log_event(
             actor=request.user,

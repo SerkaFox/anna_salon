@@ -38,5 +38,6 @@ urlpatterns = [
     path("panel/documentos/", include("documents.urls")),
     path("panel/galeria/", include("gallery.urls")),
     path("panel/auditoria/", include("auditlog.urls")),
+    path("panel/google-auth/", include("reviews.auth_urls")),
     path("dj-admin/", admin.site.urls),
 ]

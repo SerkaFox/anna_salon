@@ -70,6 +70,7 @@ class WhatsAppMessage(models.Model):
         REMINDER_2H = "reminder_2h", "Reminder 2h"
         WELCOME_CREDENTIALS = "welcome_credentials", "Welcome / login credentials"
         PAYMENT_RECEIPT = "payment_receipt", "Payment receipt"
+        BIRTHDAY_GREETING = "birthday_greeting", "Birthday greeting"
         MANUAL = "manual", "Manual"
 
     class Statuses(models.TextChoices):
@@ -100,3 +101,111 @@ class WhatsAppMessage(models.Model):
 
     def __str__(self):
         return f"{self.kind} to {self.to_phone} ({self.status})"
+
+
+# Default bodies are defined here so services.py can import them and fall back to them.
+TEMPLATE_DEFAULTS = {
+    WhatsAppMessage.Kinds.BOOKING_CONFIRMATION: (
+        "Hola {client_name} 👋 Tu cita en {salon_name} está confirmada:\n"
+        "📅 {date} a las {time}\n"
+        "💅 {service_name}\n\n"
+        "Accede a tu área privada para pagar la señal:\n"
+        "🔗 {booking_url}"
+    ),
+    WhatsAppMessage.Kinds.BOOKING_CANCELLED: (
+        "Hola {client_name}. Tu cita en {salon_name} del {date} "
+        "a las {time} ({service_name}) ha sido cancelada.\n"
+        "Si quieres volver a reservar: {portal_url}"
+    ),
+    WhatsAppMessage.Kinds.BOOKING_RESCHEDULED: (
+        "Hola {client_name}. Tu cita en {salon_name} ha sido reagendada:\n"
+        "📅 {date} a las {time}\n"
+        "💅 {service_name}\n\n"
+        "Ver detalles: {portal_url}"
+    ),
+    WhatsAppMessage.Kinds.REMINDER_24H: (
+        "Hola {client_name} 👋 Te recordamos tu cita en {salon_name} mañana "
+        "{date} a las {time} para {service_name}."
+    ),
+    WhatsAppMessage.Kinds.REMINDER_2H: (
+        "Hola {client_name} 👋 Te esperamos en {salon_name} en 2 horas, "
+        "a las {time}, para {service_name}."
+    ),
+    WhatsAppMessage.Kinds.WELCOME_CREDENTIALS: (
+        "Hola {client_name} 👋 Bienvenida/o a {salon_name}.\n\n"
+        "Tus datos de acceso al área privada:\n"
+        "🔑 Usuario: {username}\n"
+        "🔒 Contraseña: {password}\n\n"
+        "Accede aquí:\n🔗 {portal_url}\n\n"
+        "Guarda este mensaje para no perder tus datos."
+    ),
+    WhatsAppMessage.Kinds.BIRTHDAY_GREETING: (
+        "Hola {client_name} 🎂 ¡Feliz cumpleaños de parte de todo el equipo de {salon_name}!\n\n"
+        "Como regalo te esperamos con {offer} 🎁\n\n"
+        "¡Que tengas un día maravilloso! 💅"
+    ),
+}
+
+TEMPLATE_NAMES = {
+    WhatsAppMessage.Kinds.BOOKING_CONFIRMATION: "Confirmación de cita",
+    WhatsAppMessage.Kinds.BOOKING_CANCELLED: "Cancelación de cita",
+    WhatsAppMessage.Kinds.BOOKING_RESCHEDULED: "Reagendamiento de cita",
+    WhatsAppMessage.Kinds.REMINDER_24H: "Recordatorio 24h antes",
+    WhatsAppMessage.Kinds.REMINDER_2H: "Recordatorio 2h antes",
+    WhatsAppMessage.Kinds.WELCOME_CREDENTIALS: "Bienvenida con credenciales",
+    WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "Felicitación de cumpleaños",
+}
+
+TEMPLATE_VARIABLES = {
+    WhatsAppMessage.Kinds.BOOKING_CONFIRMATION: "{client_name} {salon_name} {date} {time} {service_name} {booking_url} {portal_url}",
+    WhatsAppMessage.Kinds.BOOKING_CANCELLED: "{client_name} {salon_name} {date} {time} {service_name} {portal_url}",
+    WhatsAppMessage.Kinds.BOOKING_RESCHEDULED: "{client_name} {salon_name} {date} {time} {service_name} {portal_url}",
+    WhatsAppMessage.Kinds.REMINDER_24H: "{client_name} {salon_name} {date} {time} {service_name}",
+    WhatsAppMessage.Kinds.REMINDER_2H: "{client_name} {salon_name} {time} {service_name}",
+    WhatsAppMessage.Kinds.WELCOME_CREDENTIALS: "{client_name} {salon_name} {username} {password} {portal_url}",
+    WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "{client_name} {salon_name} {offer}",
+}
+
+
+class WhatsAppTemplate(models.Model):
+    kind = models.CharField(
+        max_length=40, choices=WhatsAppMessage.Kinds.choices, unique=True
+    )
+    name = models.CharField(max_length=120)
+    body = models.TextField()
+    enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["kind"]
+
+    def __str__(self):
+        status = "✓" if self.enabled else "✗"
+        return f"[{status}] {self.name}"
+
+    @classmethod
+    def get_body(cls, kind):
+        """Return enabled template body from DB or hardcoded default."""
+        try:
+            tmpl = cls.objects.get(kind=kind)
+            if not tmpl.enabled:
+                return None
+            return tmpl.body
+        except cls.DoesNotExist:
+            return TEMPLATE_DEFAULTS.get(kind)
+
+    @classmethod
+    def is_enabled(cls, kind):
+        try:
+            return cls.objects.get(kind=kind).enabled
+        except cls.DoesNotExist:
+            return True  # enabled by default if no DB record
+
+    @classmethod
+    def ensure_defaults(cls):
+        """Create DB rows for any kinds not yet in the DB."""
+        for kind, body in TEMPLATE_DEFAULTS.items():
+            cls.objects.get_or_create(
+                kind=kind,
+                defaults={"name": TEMPLATE_NAMES.get(kind, kind), "body": body},
+            )

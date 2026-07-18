@@ -32,6 +32,26 @@ class GoogleReview(models.Model):
         return f"https://search.google.com/local/writereview?placeid={place_id}"
 
 
+class GoogleOAuthToken(models.Model):
+    """Stores OAuth tokens for Google Business Profile API."""
+    access_token = models.TextField(blank=True)
+    refresh_token = models.TextField()
+    token_expiry = models.DateTimeField(null=True, blank=True)
+    account_name = models.CharField(max_length=200, blank=True)   # accounts/XXXXXXX
+    location_name = models.CharField(max_length=200, blank=True)  # accounts/X/locations/Y
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Google OAuth Token"
+
+    def __str__(self):
+        return f"Google OAuth ({self.account_name or 'not configured'})"
+
+    @classmethod
+    def get(cls):
+        return cls.objects.first()
+
+
 class TreatwellReview(models.Model):
     treatwell_id = models.BigIntegerField(unique=True, null=True, blank=True)
     reviewer_name = models.CharField(max_length=120)

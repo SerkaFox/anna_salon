@@ -45,4 +45,7 @@ urlpatterns = [
     path("cashbox/documents/<int:pk>/lines/", views.CashDocumentLineCreateView.as_view(), name="cash_document_line_create"),
     path("cashbox/documents/<int:pk>/payments/", views.CashDocumentPaymentCreateView.as_view(), name="cash_document_payment_create"),
     path("cashbox/documents/<int:pk>/share/", views.CashDocumentShareView.as_view(), name="cash_document_share"),
+    path("notifications/", views.NotificationTemplateListView.as_view(), name="notification_templates"),
+    path("notifications/<str:kind>/", views.NotificationTemplateDetailView.as_view(), name="notification_template_detail"),
+    path("notifications/<str:kind>/reset/", views.NotificationTemplateResetView.as_view(), name="notification_template_reset"),
 ]

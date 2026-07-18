@@ -7,7 +7,7 @@ from django.utils import timezone
 from bookings.models import Booking
 
 from . import bridge
-from .models import WhatsAppConnection, WhatsAppMessage
+from .models import WhatsAppConnection, WhatsAppMessage, WhatsAppTemplate
 
 
 def get_default_connection():
@@ -40,49 +40,22 @@ def _portal_url():
 
 def booking_message(booking, *, kind):
     local_start = timezone.localtime(booking.start_at)
-    date_text = local_start.strftime("%d/%m/%Y")
-    time_text = local_start.strftime("%H:%M")
-    service_name = booking.service.name
-    client_name = booking.client.first_name or booking.client.full_name or "hola"
-    salon = _salon_name()
-    portal = _portal_url()
-
-    if kind == WhatsAppMessage.Kinds.BOOKING_CONFIRMATION:
-        base = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
-        booking_url = f"{base}/panel/clientes/portal/bookings/{booking.pk}/"
-        return (
-            f"Hola {client_name} 👋 Tu cita en {salon} está confirmada:\n"
-            f"📅 {date_text} a las {time_text}\n"
-            f"💅 {service_name}\n\n"
-            f"Para pagar la señal y confirmar tu reserva accede a tu área privada:\n"
-            f"🔗 {booking_url}"
-        )
-    if kind == WhatsAppMessage.Kinds.BOOKING_CANCELLED:
-        return (
-            f"Hola {client_name}. Tu cita en {salon} del {date_text} "
-            f"a las {time_text} ({service_name}) ha sido cancelada.\n"
-            f"Si quieres volver a reservar: {portal}"
-        )
-    if kind == WhatsAppMessage.Kinds.BOOKING_RESCHEDULED:
-        return (
-            f"Hola {client_name}. Tu cita en {salon} ha sido reagendada:\n"
-            f"📅 {date_text} a las {time_text}\n"
-            f"💅 {service_name}\n\n"
-            f"Ver detalles: {portal}"
-        )
-    if kind == WhatsAppMessage.Kinds.REMINDER_24H:
-        return (
-            f"Hola {client_name} 👋 Te recordamos tu cita en {salon} mañana "
-            f"{date_text} a las {time_text} para {service_name}."
-        )
-    if kind == WhatsAppMessage.Kinds.REMINDER_2H:
-        return (
-            f"Hola {client_name} 👋 Te esperamos en {salon} en 2 horas, "
-            f"a las {time_text}, para {service_name}."
-        )
+    base_url = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
+    ctx = {
+        "client_name": booking.client.first_name or booking.client.full_name or "hola",
+        "salon_name": _salon_name(),
+        "date": local_start.strftime("%d/%m/%Y"),
+        "time": local_start.strftime("%H:%M"),
+        "service_name": booking.service.name,
+        "portal_url": _portal_url(),
+        "booking_url": f"{base_url}/panel/clientes/portal/bookings/{booking.pk}/",
+    }
+    body = WhatsAppTemplate.get_body(kind)
+    if body:
+        return body.format_map(ctx)
     return (
-        f"Hola {client_name}. Tu cita en {salon} está confirmada para "
-        f"el {date_text} a las {time_text}: {service_name}."
+        f"Hola {ctx['client_name']}. Tu cita en {ctx['salon_name']} está confirmada para "
+        f"el {ctx['date']} a las {ctx['time']}: {ctx['service_name']}."
     )
 
 
@@ -112,18 +85,17 @@ def queue_booking_confirmation(booking):
 
 def queue_welcome_credentials(booking, *, username, password):
     client = booking.client
-    salon = _salon_name()
-    base = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
-    login_url = f"{base}/panel/clientes/portal/"
-    client_name = client.first_name or client.full_name or "hola"
-    body = (
-        f"Hola {client_name} 👋 Bienvenida/o a {salon}.\n\n"
-        f"Tus datos de acceso al área privada:\n"
-        f"🔑 Usuario: {username}\n"
-        f"🔒 Contraseña: {password}\n\n"
-        f"Accede aquí cuando quieras:\n"
-        f"🔗 {login_url}\n\n"
-        f"Guarda este mensaje para no perder tus datos."
+    ctx = {
+        "client_name": client.first_name or client.full_name or "hola",
+        "salon_name": _salon_name(),
+        "username": username,
+        "password": password,
+        "portal_url": _portal_url(),
+    }
+    tmpl = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.WELCOME_CREDENTIALS)
+    body = tmpl.format_map(ctx) if tmpl else (
+        f"Hola {ctx['client_name']} 👋 Bienvenida/o a {ctx['salon_name']}.\n\n"
+        f"Usuario: {username}\nContraseña: {password}\n\n{ctx['portal_url']}"
     )
     connection = get_default_connection()
     phone = normalize_whatsapp_phone(client.phone)
@@ -220,6 +192,50 @@ def send_whatsapp_message(message):
     message.error = ""
     message.save(update_fields=["status", "provider_message_id", "sent_at", "error", "updated_at"])
     return message
+
+
+def queue_and_send(booking, *, kind):
+    """Queue a booking notification and dispatch it immediately."""
+    msg, created = queue_booking_message(booking, kind=kind)
+    if created:
+        send_whatsapp_message(msg)
+    return msg, created
+
+
+def queue_birthday_greeting(client):
+    from django.utils import timezone as tz
+    ctx = {
+        "client_name": client.first_name or client.full_name or "hola",
+        "salon_name": _salon_name(),
+        "offer": getattr(settings, "WHATSAPP_BIRTHDAY_OFFER", "un descuento especial en tu próxima visita"),
+    }
+    tmpl = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.BIRTHDAY_GREETING)
+    body = tmpl.format_map(ctx) if tmpl else (
+        f"Hola {ctx['client_name']} 🎂 ¡Feliz cumpleaños de parte de {ctx['salon_name']}! "
+        f"Como regalo: {ctx['offer']} 🎁"
+    )
+    phone = normalize_whatsapp_phone(client.phone)
+    if not phone:
+        return None, False
+    connection = get_default_connection()
+    # Prevent duplicate: skip if sent in the last 300 days
+    cutoff = tz.now() - timedelta(days=300)
+    if WhatsAppMessage.objects.filter(
+        client=client,
+        kind=WhatsAppMessage.Kinds.BIRTHDAY_GREETING,
+        created_at__gte=cutoff,
+    ).exists():
+        return None, False
+    msg = WhatsAppMessage(
+        connection=connection,
+        client=client,
+        kind=WhatsAppMessage.Kinds.BIRTHDAY_GREETING,
+        to_phone=phone,
+        body=body,
+        scheduled_for=tz.now(),
+    )
+    msg.save()
+    return msg, True
 
 
 def send_due_messages(*, limit=50):

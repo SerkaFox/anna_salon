@@ -2,13 +2,13 @@
 {% load static %}
 
 {% block title %}Opiniones · {{ salon_name }}{% endblock %}
-{% block meta_description %}{{ total_count }} opiniones verificadas de clientes de {{ salon_name }}. Valoración media: {{ avg_rating|floatformat:1 }} sobre 5. Google: {{ google_rating|floatformat:1 }}/5 ({{ google_count }} reseñas).{% endblock %}
+{% block meta_description %}{{ total_count }} opiniones verificadas de clientes de {{ salon_name }}. Valoración media: {{ avg_rating|floatformat:1 }} sobre 5.{% endblock %}
 
 {% block page_hero %}
 <section class="content-hero lux-container">
   <div class="lux-kicker">Reseñas verificadas</div>
   <h1>Opiniones de clientes</h1>
-  <p>{{ total_count }} reseñas &nbsp;·&nbsp; Google ⭐ {{ google_rating|floatformat:1 }} ({{ google_count }})</p>
+  <p>{{ total_count }} reseñas &nbsp;·&nbsp; ⭐ {{ avg_rating|floatformat:1 }} de media</p>
 </section>
 {% endblock %}
 
@@ -16,7 +16,7 @@
 <section class="lux-section reviews-page">
   <div class="lux-container">
 
-    <!-- Rating summary bar -->
+    <!-- Rating summary -->
     <div class="reviews-summary">
       <div class="reviews-summary__score">
         <span class="reviews-summary__big">{{ avg_rating|floatformat:1 }}</span>
@@ -38,43 +38,13 @@
         </div>
         {% endfor %}
       </div>
-    </div>
-
-    <!-- Google reviews block -->
-    {% if google_reviews %}
-    <div class="google-reviews-block">
-      <div class="google-reviews-block__header">
-        <svg class="google-g" viewBox="0 0 24 24" width="22" height="22"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-        <span class="google-reviews-block__title">Google · <strong>{{ google_rating|floatformat:1 }}</strong> ★ · {{ google_count }} reseñas</span>
-        <a class="google-reviews-block__cta" href="{{ google_review_url }}" target="_blank" rel="noopener">
-          + Dejar mi reseña en Google
+      <div class="reviews-summary__cta">
+        <a href="{{ google_review_url }}" target="_blank" rel="noopener" class="btn-review-google">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+          Dejar reseña en Google
         </a>
       </div>
-      <div class="google-reviews-grid">
-        {% for r in google_reviews %}
-        <article class="review-card review-card--google">
-          <div class="review-card__header">
-            {% if r.reviewer_photo %}
-            <img src="{{ r.reviewer_photo }}" class="review-card__avatar review-card__avatar--photo" alt="{{ r.reviewer_name }}" referrerpolicy="no-referrer">
-            {% else %}
-            <div class="review-card__avatar">{{ r.reviewer_name|first|upper }}</div>
-            {% endif %}
-            <div class="review-card__meta">
-              <strong class="review-card__name">{{ r.reviewer_name }}</strong>
-              <time class="review-card__date">{{ r.published_at|date:"d M Y" }}</time>
-            </div>
-            <svg class="google-g google-g--card" viewBox="0 0 24 24" width="16" height="16"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-          </div>
-          <div class="review-card__stars">
-            {% for i in r.stars_range %}<span class="star filled">★</span>{% endfor %}
-            {% for i in r.empty_stars_range %}<span class="star">★</span>{% endfor %}
-          </div>
-          {% if r.text %}<p class="review-card__text">{{ r.text }}</p>{% endif %}
-        </article>
-        {% endfor %}
-      </div>
     </div>
-    {% endif %}
 
     <!-- Filters -->
     <form class="reviews-filters" method="get" action="">
@@ -109,27 +79,31 @@
       {% endif %}
     </form>
 
-    <!-- Review cards grid -->
+    <!-- Unified reviews grid -->
     <div class="reviews-grid">
       {% for review in reviews %}
-      <article class="review-card">
+      <article class="review-card{% if review.source == 'google' %} review-card--google{% endif %}">
         <div class="review-card__header">
+          {% if review.photo %}
+          <img src="{{ review.photo }}" class="review-card__avatar review-card__avatar--photo" alt="{{ review.reviewer_name }}" referrerpolicy="no-referrer">
+          {% else %}
           <div class="review-card__avatar">{{ review.reviewer_name|first|upper }}</div>
+          {% endif %}
           <div class="review-card__meta">
             <strong class="review-card__name">{{ review.reviewer_name }}</strong>
-            <time class="review-card__date">{{ review.date|date:"d M Y" }}</time>
+            <time class="review-card__date">{{ review.display_date|date:"d M Y" }}</time>
           </div>
-          {% if review.verified %}
-          <span class="review-card__verified" title="Reseña verificada">✓ verificada</span>
+          {% if review.source == 'google' %}
+          <svg class="google-g google-g--card" viewBox="0 0 24 24" width="16" height="16"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+          {% else %}
+          {% if review.verified %}<span class="review-card__verified" title="Reseña verificada">✓</span>{% endif %}
           {% endif %}
         </div>
         <div class="review-card__stars">
           {% for i in review.stars_range %}<span class="star filled">★</span>{% endfor %}
           {% for i in review.empty_stars_range %}<span class="star">★</span>{% endfor %}
         </div>
-        {% if review.text %}
-        <p class="review-card__text">{{ review.text }}</p>
-        {% endif %}
+        {% if review.text %}<p class="review-card__text">{{ review.text }}</p>{% endif %}
         {% if review.services %}
         <div class="review-card__services">
           {% for svc in review.services %}
@@ -137,9 +111,6 @@
           {% endfor %}
         </div>
         {% endif %}
-        <div class="review-card__source">
-          <span>Opinión verificada</span>
-        </div>
       </article>
       {% empty %}
       <p class="reviews-empty">No hay opiniones con estos filtros.</p>
@@ -150,11 +121,11 @@
     {% if is_paginated %}
     <nav class="lux-pagination" aria-label="Páginas de opiniones">
       {% if page_obj.has_previous %}
-      <a class="lux-page-btn" href="?{% if current_sort %}sort={{ current_sort }}&{% endif %}{% if current_rating %}rating={{ current_rating }}&{% endif %}{% if current_service %}service={{ current_service }}&{% endif %}page={{ page_obj.previous_page_number }}">← Anterior</a>
+      <a class="lux-page-btn" href="?sort={{ current_sort }}{% if current_rating %}&rating={{ current_rating }}{% endif %}{% if current_service %}&service={{ current_service }}{% endif %}&page={{ page_obj.previous_page_number }}">← Anterior</a>
       {% endif %}
       <span class="lux-page-info">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       {% if page_obj.has_next %}
-      <a class="lux-page-btn" href="?{% if current_sort %}sort={{ current_sort }}&{% endif %}{% if current_rating %}rating={{ current_rating }}&{% endif %}{% if current_service %}service={{ current_service }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente →</a>
+      <a class="lux-page-btn" href="?sort={{ current_sort }}{% if current_rating %}&rating={{ current_rating }}{% endif %}{% if current_service %}&service={{ current_service }}{% endif %}&page={{ page_obj.next_page_number }}">Siguiente →</a>
       {% endif %}
     </nav>
     {% endif %}
@@ -162,3 +133,21 @@
   </div>
 </section>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.review-card__text').forEach(function(el) {
+  el.classList.add('is-clamped');
+  if (el.scrollHeight > el.clientHeight) {
+    var btn = document.createElement('button');
+    btn.className = 'review-card__readmore';
+    btn.textContent = 'Leer más';
+    btn.addEventListener('click', function() {
+      el.classList.remove('is-clamped');
+      btn.remove();
+    });
+    el.insertAdjacentElement('afterend', btn);
+  }
+});
+</script>
+{% endblock extra_js %}

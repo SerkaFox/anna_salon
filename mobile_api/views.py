@@ -1951,3 +1951,104 @@ class CalendarDayView(MobileApiMixin, APIView):
                 "employees": employee_payload,
             }
         )
+
+
+# ── WhatsApp Notification Management ─────────────────────────────────────────
+
+class NotificationTemplateListView(MobileApiMixin, APIView):
+    """
+    GET  /api/v1/notifications/          — list all templates + enabled state (admin only)
+    """
+    def get(self, request):
+        if not _mobile_admin_required(request.user):
+            return Response({"detail": "Forbidden."}, status=403)
+        from whatsapp_bot.models import WhatsAppTemplate, TEMPLATE_DEFAULTS, TEMPLATE_NAMES, TEMPLATE_VARIABLES
+        WhatsAppTemplate.ensure_defaults()
+        templates = WhatsAppTemplate.objects.all()
+        data = [
+            {
+                "kind": t.kind,
+                "name": t.name,
+                "body": t.body,
+                "enabled": t.enabled,
+                "variables": TEMPLATE_VARIABLES.get(t.kind, ""),
+                "updated_at": t.updated_at.isoformat(),
+            }
+            for t in templates
+        ]
+        return Response(data)
+
+
+class NotificationTemplateDetailView(MobileApiMixin, APIView):
+    """
+    GET   /api/v1/notifications/{kind}/        — get single template
+    PATCH /api/v1/notifications/{kind}/        — update body and/or enabled
+    POST  /api/v1/notifications/{kind}/reset/  — reset to default body
+    """
+    def _get_template(self, kind):
+        from whatsapp_bot.models import WhatsAppTemplate
+        WhatsAppTemplate.ensure_defaults()
+        try:
+            return WhatsAppTemplate.objects.get(kind=kind)
+        except WhatsAppTemplate.DoesNotExist:
+            return None
+
+    def _serialize(self, t):
+        from whatsapp_bot.models import TEMPLATE_VARIABLES
+        return {
+            "kind": t.kind,
+            "name": t.name,
+            "body": t.body,
+            "enabled": t.enabled,
+            "variables": TEMPLATE_VARIABLES.get(t.kind, ""),
+            "updated_at": t.updated_at.isoformat(),
+        }
+
+    def get(self, request, kind):
+        if not _mobile_admin_required(request.user):
+            return Response({"detail": "Forbidden."}, status=403)
+        tmpl = self._get_template(kind)
+        if not tmpl:
+            return Response({"detail": "Not found."}, status=404)
+        return Response(self._serialize(tmpl))
+
+    def patch(self, request, kind):
+        if not _mobile_admin_required(request.user):
+            return Response({"detail": "Forbidden."}, status=403)
+        tmpl = self._get_template(kind)
+        if not tmpl:
+            return Response({"detail": "Not found."}, status=404)
+        if "body" in request.data:
+            tmpl.body = str(request.data["body"])
+        if "enabled" in request.data:
+            tmpl.enabled = bool(request.data["enabled"])
+        if "name" in request.data:
+            tmpl.name = str(request.data["name"])[:120]
+        tmpl.save()
+        return Response(self._serialize(tmpl))
+
+
+class NotificationTemplateResetView(MobileApiMixin, APIView):
+    """POST /api/v1/notifications/{kind}/reset/ — restore default body."""
+    def post(self, request, kind):
+        if not _mobile_admin_required(request.user):
+            return Response({"detail": "Forbidden."}, status=403)
+        from whatsapp_bot.models import WhatsAppTemplate, TEMPLATE_DEFAULTS, TEMPLATE_NAMES
+        default_body = TEMPLATE_DEFAULTS.get(kind)
+        if not default_body:
+            return Response({"detail": "Unknown kind."}, status=404)
+        tmpl, _ = WhatsAppTemplate.objects.get_or_create(
+            kind=kind,
+            defaults={"name": TEMPLATE_NAMES.get(kind, kind), "body": default_body},
+        )
+        tmpl.body = default_body
+        tmpl.save(update_fields=["body", "updated_at"])
+        from whatsapp_bot.models import TEMPLATE_VARIABLES
+        return Response({
+            "kind": tmpl.kind,
+            "name": tmpl.name,
+            "body": tmpl.body,
+            "enabled": tmpl.enabled,
+            "variables": TEMPLATE_VARIABLES.get(kind, ""),
+            "updated_at": tmpl.updated_at.isoformat(),
+        })
