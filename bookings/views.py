@@ -2,9 +2,12 @@ import json
 import mimetypes
 from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse
 from django.http import JsonResponse
@@ -25,11 +28,16 @@ from services_app.models import Service
 
 from .forms import BookingForm, BookingPhotoForm
 from .models import Booking, BookingPhoto
+from .client_actions import booking_amount_due, booking_paid_amount, cancel_booking
 from .services import notify_waitlist_for_booking_opening
 from whatsapp_bot.services import queue_and_send
 from whatsapp_bot.models import WhatsAppMessage
 from payments.models import Payment as OnlinePayment
-from payments.stripe_service import create_checkout_session, create_pending_stripe_payment
+from payments.stripe_service import (
+    create_checkout_session,
+    create_pending_stripe_payment,
+    get_booking_deposit_amount,
+)
 from .utils import (
     DEFAULT_WORK_END_HOUR,
     DEFAULT_WORK_START_HOUR,
@@ -145,13 +153,48 @@ def booking_list(request):
             if payable_document:
                 break
         booking.payable_document = payable_document
-        booking.balance_due = payable_document.balance_due if payable_document else booking.client_price_snapshot
+        booking.balance_due = (
+            payable_document.balance_due
+            if payable_document
+            else booking_amount_due(booking)
+        )
         booking.is_fully_paid = booking.balance_due <= 0
         payment_info = _booking_payment_info(booking)
         booking.online_payment_status = payment_info["status"]
         booking.online_payment_status_label = _payment_status_label(payment_info["status"])
         booking.online_payment_paid_total = payment_info["paid_total"]
         booking.online_payment_is_paid = payment_info["is_paid"]
+
+    now = timezone.now()
+    today = timezone.localdate()
+    employee_portal = bool(get_employee_profile(request.user)) and not request.user.can_manage_staff
+    employee_today_bookings = [
+        booking
+        for booking in bookings
+        if timezone.localtime(booking.start_at).date() == today
+        and booking.status not in {
+            Booking.Statuses.DONE,
+            Booking.Statuses.CANCELLED,
+            Booking.Statuses.NO_SHOW,
+        }
+    ]
+    employee_future_bookings = [
+        booking
+        for booking in bookings
+        if booking.start_at > now
+        and timezone.localtime(booking.start_at).date() != today
+        and booking.status not in {
+            Booking.Statuses.DONE,
+            Booking.Statuses.CANCELLED,
+            Booking.Statuses.NO_SHOW,
+        }
+    ]
+    active_ids = {
+        booking.pk for booking in employee_today_bookings + employee_future_bookings
+    }
+    employee_history_bookings = [
+        booking for booking in bookings if booking.pk not in active_ids
+    ]
 
     context = {
         "active_section": "bookings",
@@ -162,6 +205,10 @@ def booking_list(request):
         "bookings_count": len(bookings),
         "status_choices": Booking.Statuses.choices,
         "source_choices": Booking.Sources.choices,
+        "employee_portal": employee_portal,
+        "employee_today_bookings": employee_today_bookings,
+        "employee_future_bookings": employee_future_bookings,
+        "employee_history_bookings": employee_history_bookings,
     }
     return render(request, "bookings/booking_list.html", context)
 
@@ -377,6 +424,8 @@ def booking_update(request, pk):
             "form": form,
             "booking": booking,
             "is_edit": True,
+            "employee_portal": bool(get_employee_profile(request.user))
+            and not request.user.can_manage_staff,
             "photo_form": photo_form,
             **_build_booking_photo_context(booking),
             "referral_clients": Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
@@ -472,6 +521,127 @@ def booking_pay(request, pk):
             "booking": booking,
             "payment_info": payment_info,
             "payment_status_label": _payment_status_label(payment_info["status"]),
+        },
+    )
+
+
+def booking_response(request, token):
+    signer = TimestampSigner(salt="booking-response")
+    try:
+        payload = signer.unsign_object(token, max_age=60 * 60 * 72)
+        booking_id = int(payload["booking"])
+        action = payload["action"]
+    except (BadSignature, SignatureExpired, KeyError, TypeError, ValueError):
+        return render(
+            request,
+            "bookings/booking_response.html",
+            {
+                "title": "Enlace no valido",
+                "message": "El enlace ha caducado o no es valido.",
+            },
+            status=400,
+        )
+    if action not in {
+        Booking.ClientResponses.ATTENDING,
+        Booking.ClientResponses.DECLINED,
+    }:
+        return render(
+            request,
+            "bookings/booking_response.html",
+            {"title": "Respuesta no valida", "message": "No se pudo registrar la respuesta."},
+            status=400,
+        )
+
+    with transaction.atomic():
+        booking = get_object_or_404(
+            Booking.objects.select_for_update()
+            .select_related("client", "employee", "service")
+            .prefetch_related("online_payments", "online_payments__refunds"),
+            pk=booking_id,
+        )
+        if action == Booking.ClientResponses.DECLINED:
+            booking.client_response = Booking.ClientResponses.DECLINED
+            booking.client_responded_at = timezone.now()
+            booking.save(update_fields=["client_response", "client_responded_at", "updated_at"])
+            if booking.status not in {
+                Booking.Statuses.CANCELLED,
+                Booking.Statuses.DONE,
+                Booking.Statuses.NO_SHOW,
+            }:
+                message, _refunds = cancel_booking(booking, force_refund=True)
+                queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CANCELLED)
+            else:
+                message = "La reserva ya estaba cerrada."
+            log_event(
+                actor=None,
+                section="booking",
+                action="client_declined",
+                instance=booking,
+                message=f"Cliente indico que no asistira a la reserva #{booking.pk}.",
+            )
+            return render(
+                request,
+                "bookings/booking_response.html",
+                {
+                    "title": "Reserva cancelada",
+                    "message": message,
+                    "booking": booking,
+                },
+            )
+
+        if booking.status in {
+            Booking.Statuses.CANCELLED,
+            Booking.Statuses.DONE,
+            Booking.Statuses.NO_SHOW,
+        }:
+            return render(
+                request,
+                "bookings/booking_response.html",
+                {
+                    "title": "Reserva cerrada",
+                    "message": "Esta reserva ya no admite confirmacion.",
+                    "booking": booking,
+                },
+            )
+        booking.client_response = Booking.ClientResponses.ATTENDING
+        booking.client_responded_at = timezone.now()
+        if booking.status == Booking.Statuses.PENDING:
+            booking.status = Booking.Statuses.CONFIRMED
+            update_fields = ["client_response", "client_responded_at", "status", "updated_at"]
+        else:
+            update_fields = ["client_response", "client_responded_at", "updated_at"]
+        booking.save(update_fields=update_fields)
+        log_event(
+            actor=None,
+            section="booking",
+            action="client_attending",
+            instance=booking,
+            message=f"Cliente confirmo asistencia a la reserva #{booking.pk}.",
+        )
+
+        deposit_due = min(
+            max(
+                get_booking_deposit_amount(booking) - booking_paid_amount(booking),
+                0,
+            ),
+            booking_amount_due(booking),
+        )
+        if deposit_due > 0 and not getattr(settings, "DEMO_MODE", False):
+            payment = create_pending_stripe_payment(
+                booking,
+                amount=deposit_due,
+                reason="booking_deposit_payment",
+            )
+            create_checkout_session(payment, request)
+            return redirect(payment.checkout_url)
+
+    return render(
+        request,
+        "bookings/booking_response.html",
+        {
+            "title": "Asistencia confirmada",
+            "message": "Gracias. Tu asistencia ha quedado confirmada.",
+            "booking": booking,
         },
     )
 
@@ -730,6 +900,12 @@ def booking_availability(request):
                     zone=zone,
                 )
 
+    employee_profile = get_employee_profile(request.user)
+    visible_services = (
+        employee_profile.services.filter(is_active=True).order_by("name")
+        if employee_profile and not request.user.can_manage_staff
+        else Service.objects.filter(is_active=True).order_by("name")
+    )
     context = {
         "active_section": "calendar",
         "selected_date": selected_date,
@@ -740,7 +916,7 @@ def booking_availability(request):
         "employee": employee,
         "zone": zone,
         "availability": availability,
-        "services": Service.objects.filter(is_active=True).order_by("name"),
+        "services": visible_services,
         "employees": scope_employees_queryset(
             Employee.objects.filter(is_active=True).order_by("first_name", "last_name"),
             request.user,

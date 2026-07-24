@@ -11,6 +11,68 @@
 {% endblock %}
 
 {% block panel_content %}
+{% if employee_portal %}
+<section class="panel-card employee-booking-search">
+  <form method="get" class="search-bar">
+    <div class="field-inline">
+      <label for="employee-booking-q">Buscar reserva</label>
+      <input class="input" type="search" name="q" id="employee-booking-q"
+             value="{{ query }}" placeholder="Cliente o servicio">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn">Buscar</button>
+      {% if query %}
+        <a href="{% url 'bookings:list' %}" class="btn btn-light">Limpiar</a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+<section class="employee-booking-section">
+  <div class="dashboard-section-head">
+    <div>
+      <h2>Reservas activas de hoy</h2>
+      <p class="muted-text">Las citas que requieren atencion ahora.</p>
+    </div>
+    <span class="dashboard-badge">{{ employee_today_bookings|length }}</span>
+  </div>
+  <div class="employee-booking-list">
+    {% for booking in employee_today_bookings %}
+      {% include "bookings/_employee_booking_card.html" %}
+    {% empty %}
+      <p class="muted-text">No hay reservas activas para hoy.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="employee-booking-section">
+  <div class="dashboard-section-head">
+    <div>
+      <h2>Proximas reservas</h2>
+      <p class="muted-text">Ordenadas por fecha y hora.</p>
+    </div>
+    <span class="dashboard-badge">{{ employee_future_bookings|length }}</span>
+  </div>
+  <div class="employee-booking-list">
+    {% for booking in employee_future_bookings %}
+      {% include "bookings/_employee_booking_card.html" %}
+    {% empty %}
+      <p class="muted-text">No hay reservas futuras.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<details class="employee-booking-history">
+  <summary>Reservas finalizadas <span>{{ employee_history_bookings|length }}</span></summary>
+  <div class="employee-booking-list">
+    {% for booking in employee_history_bookings %}
+      {% include "bookings/_employee_booking_card.html" %}
+    {% empty %}
+      <p class="muted-text">No hay historial.</p>
+    {% endfor %}
+  </div>
+</details>
+{% else %}
 <section class="panel-card">
   <form method="get" class="search-bar">
     <div class="field-inline">
@@ -152,4 +214,5 @@
     </table>
   </div>
 </section>
+{% endif %}
 {% endblock %}

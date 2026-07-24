@@ -7,17 +7,17 @@ from django.core.mail import send_mail
 from django.utils import timezone
 
 from payments.models import Payment as OnlinePayment
+from salon.preferences import get_deposit_percent
 
 from .models import Booking, BookingPrepayment, BookingWaitlistEntry
 
 
-PREPAYMENT_PERCENT = Decimal("10.00")
 logger = logging.getLogger(__name__)
 
 
 def calculate_booking_prepayment_amount(booking):
     total = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
-    amount = (Decimal(total) * PREPAYMENT_PERCENT / Decimal("100.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    amount = (Decimal(total) * get_deposit_percent() / Decimal("100.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return max(amount, Decimal("0.00"))
 
 

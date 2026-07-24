@@ -24,6 +24,11 @@ class Booking(models.Model):
         GOOGLE = "google", "Google / Maps"
         OTHER = "other", "Otro"
 
+    class ClientResponses(models.TextChoices):
+        PENDING = "pending", "Sin respuesta"
+        ATTENDING = "attending", "Asistira"
+        DECLINED = "declined", "No asistira"
+
     client = models.ForeignKey(
         "clients.Client",
         on_delete=models.PROTECT,
@@ -65,6 +70,17 @@ class Booking(models.Model):
         default=Sources.MANUAL,
     )
     notes = models.TextField("Notas", blank=True)
+    client_response = models.CharField(
+        "Respuesta del cliente",
+        max_length=20,
+        choices=ClientResponses.choices,
+        default=ClientResponses.PENDING,
+    )
+    client_responded_at = models.DateTimeField(
+        "Respondido el",
+        null=True,
+        blank=True,
+    )
 
     price_snapshot = models.DecimalField("Precio guardado", max_digits=10, decimal_places=2, default=0)
     duration_snapshot = models.PositiveIntegerField("Duración guardada (min)", default=60)

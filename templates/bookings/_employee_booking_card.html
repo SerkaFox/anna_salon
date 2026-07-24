@@ -1,0 +1,25 @@
+<article class="employee-booking-compact">
+  <div class="employee-booking-compact__time">
+    <strong>{{ booking.start_at|date:"H:i" }}</strong>
+    <span>{{ booking.start_at|date:"d/m/Y" }}</span>
+  </div>
+  <div class="employee-booking-compact__main">
+    <strong>{{ booking.service }}</strong>
+    <div class="employee-booking-compact__meta">
+      <span class="dashboard-badge">{{ booking.get_status_display }}</span>
+      {% if booking.is_fully_paid %}
+        <span class="dashboard-badge portal-payment-badge is-paid">Pagado</span>
+      {% else %}
+        <span class="dashboard-badge portal-payment-badge is-pending">
+          Pendiente {{ booking.balance_due }} €
+        </span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="employee-booking-compact__actions">
+    <a class="btn btn-light btn-small" href="{% url 'bookings:update' booking.id %}">Editar</a>
+    {% if not booking.is_fully_paid %}
+      <a class="btn btn-small" href="{% url 'booking_pay' booking.id %}">Pagar</a>
+    {% endif %}
+  </div>
+</article>

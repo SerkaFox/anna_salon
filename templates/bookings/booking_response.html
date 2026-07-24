@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block title %}Confirmacion de cita | {{ salon_name }}{% endblock %}
+{% block body_class %}login-lux-body{% endblock %}
+
+{% block body %}
+<main class="login-shell">
+  <section class="login-card">
+    <div class="login-card__header">
+      <h1>{{ title }}</h1>
+      <p>{{ message }}</p>
+    </div>
+    {% if booking %}
+      <div class="detail-grid">
+        <span>Servicio</span><strong>{{ booking.service }}</strong>
+        <span>Fecha</span><strong>{{ booking.start_at|date:"d/m/Y H:i" }}</strong>
+        <span>Especialista</span><strong>{{ booking.employee }}</strong>
+      </div>
+    {% endif %}
+    <div class="form-actions">
+      <a class="btn" href="{% url 'home' %}">Volver al sitio</a>
+    </div>
+  </section>
+</main>
+{% endblock %}

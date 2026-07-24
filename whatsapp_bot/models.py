@@ -77,12 +77,20 @@ class WhatsAppMessage(models.Model):
 
     class Statuses(models.TextChoices):
         QUEUED = "queued", "Queued"
+        SENDING = "sending", "Sending"
         SENT = "sent", "Sent"
         FAILED = "failed", "Failed"
         SKIPPED = "skipped", "Skipped"
 
     connection = models.ForeignKey(WhatsAppConnection, on_delete=models.PROTECT, related_name="messages")
     booking = models.ForeignKey("bookings.Booking", on_delete=models.CASCADE, null=True, blank=True, related_name="whatsapp_messages")
+    waitlist_entry = models.ForeignKey(
+        "bookings.BookingWaitlistEntry",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="whatsapp_messages",
+    )
     client = models.ForeignKey("clients.Client", on_delete=models.SET_NULL, null=True, blank=True, related_name="whatsapp_messages")
     kind = models.CharField(max_length=40, choices=Kinds.choices)
     to_phone = models.CharField(max_length=40)
@@ -99,6 +107,10 @@ class WhatsAppMessage(models.Model):
         ordering = ["-created_at", "-id"]
         constraints = [
             models.UniqueConstraint(fields=["booking", "kind"], name="unique_whatsapp_booking_message_kind"),
+            models.UniqueConstraint(
+                fields=["waitlist_entry", "kind"],
+                name="unique_whatsapp_waitlist_message_kind",
+            ),
         ]
 
     def __str__(self):
@@ -174,7 +186,7 @@ TEMPLATE_VARIABLES = {
     WhatsAppMessage.Kinds.BOOKING_CONFIRMATION: "{client_name} {salon_name} {date} {time} {service_name} {booking_url} {portal_url}",
     WhatsAppMessage.Kinds.BOOKING_CANCELLED: "{client_name} {salon_name} {date} {time} {service_name} {portal_url}",
     WhatsAppMessage.Kinds.BOOKING_RESCHEDULED: "{client_name} {salon_name} {date} {time} {service_name} {portal_url}",
-    WhatsAppMessage.Kinds.REMINDER_24H: "{client_name} {salon_name} {date} {time} {service_name}",
+    WhatsAppMessage.Kinds.REMINDER_24H: "{client_name} {salon_name} {date} {time} {service_name} {attend_url} {decline_url}",
     WhatsAppMessage.Kinds.REMINDER_2H: "{client_name} {salon_name} {time} {service_name}",
     WhatsAppMessage.Kinds.WELCOME_CREDENTIALS: "{client_name} {salon_name} {username} {password} {portal_url}",
     WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "{client_name} {salon_name} {offer}",

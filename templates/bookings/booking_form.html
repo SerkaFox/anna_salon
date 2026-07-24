@@ -12,6 +12,12 @@
 
 {% block panel_actions %}
   <a class="btn btn-light" href="{% url 'bookings:list' %}">← Volver</a>
+  {% if employee_portal and booking %}
+    <a class="btn btn-light"
+       href="{% url 'bookings:availability' %}?service={{ booking.service_id }}&employee={{ booking.employee_id }}&date={{ booking.start_at|date:'Y-m-d' }}">
+      Ver horarios libres
+    </a>
+  {% endif %}
   {% if is_edit and booking %}
     <a class="btn btn-light" href="{% url 'bookings:create' %}?from_booking={{ booking.id }}">+ Añadir otro servicio</a>
   {% endif %}
@@ -31,6 +37,7 @@
     {% endif %}
 
     <div class="form-grid">
+      {% if not employee_portal %}
       <div class="field">
         <label for="{{ form.client.id_for_label }}">Cliente</label>
         <div class="client-inline-select">
@@ -59,6 +66,7 @@
         {{ form.employee }}
         {{ form.employee.errors }}
       </div>
+      {% endif %}
 
       <div class="field">
         <label for="{{ form.service.id_for_label }}">Servicio</label>
@@ -66,11 +74,13 @@
         {{ form.service.errors }}
       </div>
 
+      {% if not employee_portal %}
       <div class="field">
         <label for="{{ form.zone.id_for_label }}">Zona</label>
         {{ form.zone }}
         {{ form.zone.errors }}
       </div>
+      {% endif %}
 
       <div class="field">
         <label for="{{ form.start_at.id_for_label }}">Inicio</label>
@@ -78,11 +88,13 @@
         {{ form.start_at.errors }}
       </div>
 
+      {% if not employee_portal %}
       <div class="field">
         <label for="{{ form.end_at.id_for_label }}">Fin</label>
         {{ form.end_at }}
         {{ form.end_at.errors }}
       </div>
+      {% endif %}
 
       <div class="field">
         <label for="{{ form.status.id_for_label }}">Estado</label>
@@ -90,11 +102,13 @@
         {{ form.status.errors }}
       </div>
 
+      {% if not employee_portal %}
       <div class="field">
         <label for="{{ form.source.id_for_label }}">Origen</label>
         {{ form.source }}
         {{ form.source.errors }}
       </div>
+      {% endif %}
     </div>
 
     <div class="booking-hint" id="service-duration-hint"></div>

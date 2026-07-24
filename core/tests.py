@@ -60,7 +60,7 @@ class ProgressiveWebAppTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/manifest+json")
         self.assertEqual(response.json()["display"], "standalone")
-        self.assertEqual(response.json()["start_url"], "/")
+        self.assertEqual(response.json()["start_url"], "/app-start/")
 
     def test_service_worker_has_root_scope(self):
         response = self.client.get(reverse("service_worker"))

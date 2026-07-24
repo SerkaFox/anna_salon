@@ -18,7 +18,7 @@
       {% if paid_amount > 0 %}
         <p class="muted-text">✅ <strong>Reserva confirmada.</strong> Tu fecha está reservada.</p>
       {% else %}
-        <p class="muted-text">⏳ <strong>Reserva pendiente de pago.</strong> Se confirma definitivamente al pagar al menos la señal (10%). Te recomendamos pagarla cuanto antes para asegurar tu fecha.</p>
+        <p class="muted-text">⏳ <strong>Reserva pendiente de pago.</strong> Se confirma definitivamente al pagar la señal. Te recomendamos pagarla cuanto antes para asegurar tu fecha.</p>
       {% endif %}
     {% endif %}
     <div class="detail-grid">
@@ -46,7 +46,7 @@
             <button class="btn" name="payment_mode" value="full" type="submit">Pagar el resto · {{ amount_due }} €</button>
           {% else %}
             <span>Elige cómo quieres pagar la reserva.</span>
-            <button class="btn" name="payment_mode" value="deposit" type="submit">Señal 10% · {{ deposit_amount }} €</button>
+            <button class="btn" name="payment_mode" value="deposit" type="submit">Pagar señal · {{ deposit_amount }} €</button>
             <button class="btn btn-light" name="payment_mode" value="full" type="submit">Pago completo · {{ full_amount }} €</button>
           {% endif %}
         </form>

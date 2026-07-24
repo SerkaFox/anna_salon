@@ -27,7 +27,7 @@ from bookings.utils import (
 )
 from clients.models import Client
 from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
-from accounts.permissions import get_client_profile
+from accounts.permissions import get_client_profile, get_employee_profile
 from employees.models import Employee
 from gallery.selectors import get_public_instagram_posts
 from salon.models import Zone
@@ -1036,7 +1036,7 @@ def web_app_manifest(request):
             "name": SITE_NAME,
             "short_name": SITE_NAME.split()[0],
             "description": f"Reservas y servicios de {SITE_NAME}",
-            "start_url": "/",
+            "start_url": "/app-start/",
             "scope": "/",
             "display": "standalone",
             "background_color": "#11110f",
@@ -1058,9 +1058,19 @@ def web_app_manifest(request):
     )
 
 
+def app_start(request):
+    if not request.user.is_authenticated:
+        return redirect("accounts:login")
+    if get_employee_profile(request.user) or request.user.can_manage_staff:
+        return redirect("dashboard:home")
+    if get_client_profile(request.user):
+        return redirect("clients:portal")
+    return redirect("home")
+
+
 def service_worker(request):
     script = """
-const CACHE_NAME = 'brimoon-public-v1';
+const CACHE_NAME = 'brimoon-public-v2';
 const PUBLIC_ASSETS = [
   '/',
   '/manifest.webmanifest',

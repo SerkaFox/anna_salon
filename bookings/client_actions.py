@@ -46,13 +46,13 @@ def can_client_reschedule(booking):
     return can_client_cancel(booking) and timezone.now() <= booking_refundable_until(booking)
 
 
-def cancel_booking(booking):
+def cancel_booking(booking, *, force_refund=False):
     if not can_client_cancel(booking):
         raise ValidationError("Esta reserva no se puede cancelar.")
 
     with transaction.atomic():
         booking = Booking.objects.select_for_update().get(pk=booking.pk)
-        refundable = timezone.now() <= booking_refundable_until(booking)
+        refundable = force_refund or timezone.now() <= booking_refundable_until(booking)
         refunds = []
         if refundable:
             for payment in booking.online_payments.select_for_update().filter(provider=Payment.Providers.STRIPE):

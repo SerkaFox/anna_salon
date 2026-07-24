@@ -1906,6 +1906,163 @@ html[data-theme="bosque"] .client-lux-body {
   .client-lux-body .panel-card { padding: 18px; }
 }
 
+/* Operational links must remain legible in every portal theme. */
+a.dashboard-link,
+a.client-link-pill {
+  color: #f4fff8 !important;
+  background: #225f42 !important;
+  border: 1px solid #78c99a !important;
+  text-decoration: none !important;
+  box-shadow: none;
+}
+
+.dashboard-quick-actions .btn {
+  min-height: 38px;
+}
+
+.portal-date-pill {
+  min-width: 74px;
+  min-height: 82px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(15, 54, 41, 0.88);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.portal-date-pill strong {
+  font-size: 1.65rem;
+  color: #f4dfaa;
+}
+
+.portal-slot-time {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(15, 54, 41, 0.88);
+  color: #f4fff8;
+  font-weight: 800;
+}
+
+.portal-slot-picker[hidden] {
+  display: none !important;
+}
+
+.employee-booking-section,
+.employee-booking-history {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(7, 27, 19, 0.72);
+}
+
+.employee-booking-search {
+  border-radius: 8px;
+}
+
+.employee-booking-list {
+  display: grid;
+  gap: 8px;
+}
+
+.employee-booking-compact {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(232, 255, 241, 0.07);
+}
+
+.employee-booking-compact__time {
+  display: grid;
+  gap: 2px;
+}
+
+.employee-booking-compact__time strong {
+  font-size: 1.2rem;
+}
+
+.employee-booking-compact__time span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.employee-booking-compact__main,
+.employee-booking-compact__meta,
+.employee-booking-compact__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.employee-booking-compact__main {
+  justify-content: space-between;
+}
+
+.employee-booking-history summary {
+  cursor: pointer;
+  font-weight: 800;
+  padding: 4px 0;
+}
+
+.employee-booking-history[open] summary {
+  margin-bottom: 14px;
+}
+
+.client-risk-summary {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1.3fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 54, 41, 0.82);
+}
+
+.client-risk-summary > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.client-risk-summary > div:first-child strong {
+  font-size: 1.35rem;
+}
+
+.client-risk-summary p {
+  margin: 0;
+}
+
+.client-risk-summary.is-risky {
+  border-color: rgba(239, 142, 122, 0.72);
+  background: rgba(94, 31, 29, 0.82);
+}
+
+@media (max-width: 680px) {
+  .employee-booking-compact {
+    grid-template-columns: 70px minmax(0, 1fr);
+  }
+
+  .employee-booking-compact__actions {
+    grid-column: 1 / -1;
+  }
+
+  .client-risk-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 .login-lux-body .login-shell {
   position: relative;

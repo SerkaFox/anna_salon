@@ -40,7 +40,8 @@ from employees.models import (
     EmployeeTimeBlock,
     EmployeeWeeklyShift,
 )
-from salon.models import Zone
+from salon.models import SalonSettings, Zone
+from salon.preferences import get_deposit_percent
 from services_app.models import Service
 from payments.models import Payment as OnlinePayment
 from payments.redsys import RedsysConfigurationError, build_form_fields, build_merchant_parameters, get_payment_url, sanitize_redsys_payload
@@ -1217,8 +1218,33 @@ class CashboxSummaryView(MobileApiMixin, APIView):
                     {"value": value, "label": label}
                     for value, label in ManualPayment.EntryTypes.choices
                 ],
+                "deposit_percent": f"{get_deposit_percent():.2f}",
             }
         )
+
+    def patch(self, request):
+        _mobile_admin_required(request.user)
+        try:
+            value = Decimal(str(request.data.get("deposit_percent", "")))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise serializers.ValidationError(
+                {"deposit_percent": ["Introduce un porcentaje valido."]}
+            ) from exc
+        if value < 0 or value > 100:
+            raise serializers.ValidationError(
+                {"deposit_percent": ["El porcentaje debe estar entre 0 y 100."]}
+            )
+        salon_settings = SalonSettings.load()
+        salon_settings.deposit_percent = value
+        salon_settings.save(update_fields=["deposit_percent", "updated_at"])
+        log_event(
+            actor=request.user,
+            section="salon",
+            action="deposit_percent_update",
+            instance=salon_settings,
+            message=f"Prepago actualizado al {value}%.",
+        )
+        return Response({"deposit_percent": f"{salon_settings.deposit_percent:.2f}"})
 
 
 class BookingCashDocumentView(MobileApiMixin, APIView):

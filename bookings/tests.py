@@ -1,6 +1,7 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -13,7 +14,9 @@ from clients.models import Client
 from employees.models import Employee, EmployeeScheduleOverride, EmployeeWeeklyShift
 from payments.models import Payment, PaymentRefund
 from salon.models import Zone
+from salon.models import SalonSettings
 from services_app.models import Service
+from whatsapp_bot.services import booking_response_url
 
 
 class BookingScheduleTests(TestCase):
@@ -180,6 +183,49 @@ class ClientBookingActionTests(TestCase):
         self.assertEqual(refunds, [])
         mocked_refund.assert_not_called()
         self.assertEqual(payment.status, Payment.Statuses.PAID)
+
+    @patch("payments.stripe_service.stripe.Refund.create")
+    def test_24h_decline_link_forces_refund(self, mocked_refund):
+        booking = self._booking(start_at=timezone.now() + timedelta(hours=12))
+        payment = self._paid_payment(booking)
+        mocked_refund.return_value = {"id": "re_decline", "status": "succeeded"}
+        path = urlparse(booking_response_url(booking, "declined")).path
+
+        response = self.client.get(path)
+
+        self.assertEqual(response.status_code, 200)
+        booking.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(booking.client_response, Booking.ClientResponses.DECLINED)
+        self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
+        self.assertEqual(payment.status, Payment.Statuses.REFUNDED)
+
+    @patch("payments.stripe_service.stripe.checkout.Session.create")
+    def test_24h_attending_link_redirects_to_configured_deposit(self, mocked_session):
+        booking = self._booking()
+        SalonSettings.objects.create(pk=1, deposit_percent=Decimal("20.00"))
+        mocked_session.return_value = type(
+            "Session",
+            (),
+            {
+                "id": "cs_attending",
+                "url": "https://checkout.stripe.test/attending",
+                "payment_intent": "pi_attending",
+            },
+        )()
+        path = urlparse(booking_response_url(booking, "attending")).path
+
+        response = self.client.get(path)
+
+        self.assertRedirects(
+            response,
+            "https://checkout.stripe.test/attending",
+            fetch_redirect_response=False,
+        )
+        booking.refresh_from_db()
+        payment = booking.online_payments.get()
+        self.assertEqual(booking.client_response, Booking.ClientResponses.ATTENDING)
+        self.assertEqual(payment.amount, Decimal("10.00"))
 
     def test_unpaid_booking_cancellation_works(self):
         booking = self._booking()

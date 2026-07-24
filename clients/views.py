@@ -52,6 +52,7 @@ from notifications.services import (
 from .forms import ClientForm
 from .models import Client, ClientRewardRule
 from salon.models import Zone
+from salon.preferences import get_deposit_percent
 from services_app.models import Service
 from .rewards import client_reward_progress
 from core.i18n import PUBLIC_LANGUAGE_SESSION_KEY
@@ -930,6 +931,9 @@ def client_detail(request, pk):
         default=0,
     )
 
+    from dashboard.views import _build_client_rating
+    client_rating = _build_client_rating(client, timezone.now())
+
     context = {
         "photo_comparisons": [
             {
@@ -968,6 +972,7 @@ def client_detail(request, pk):
         "available_rewards": available_rewards,
         "remaining_for_next_reward": remaining_for_next_reward,
         "rewards": rewards,
+        "client_rating": client_rating,
     }
 
     return render(request, "clients/client_detail.html", context)
@@ -1053,6 +1058,7 @@ def _client_portal_context(request, client, booking_form=None):
         "top_services": top_services,
         "booking_last_date": _portal_last_booking_date().isoformat(),
         "booking_search_days": PUBLIC_BOOKING_MAX_DAYS_AHEAD,
+        "deposit_percent": get_deposit_percent(),
     }
 
 

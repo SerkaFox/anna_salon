@@ -37,7 +37,7 @@
       <div class="dashboard-booking-card">
         <strong>
           {{ next_booking.start_at|time:"H:i" }} ·
-          <a class="dashboard-link" href="{% url 'clients:detail' next_booking.client.id %}">
+          <a class="client-link-pill" href="{% url 'clients:detail' next_booking.client.id %}">
             {{ next_booking.client }}
           </a>
         </strong>
@@ -92,11 +92,11 @@
         {% for booking in overdue_bookings %}
           <div class="dashboard-booking-card dashboard-booking-card--warn" data-overdue-booking-card data-booking-id="{{ booking.id }}">
             <strong>
-              <a class="dashboard-link" href="{% url 'bookings:update' booking.id %}">
+              <a class="client-link-pill" href="{% url 'bookings:update' booking.id %}">
                 {{ booking.start_at|date:"d/m H:i" }} - {{ booking.end_at|time:"H:i" }}
               </a>
               ·
-              <a class="dashboard-link" href="{% url 'clients:detail' booking.client.id %}">{{ booking.client }}</a>
+              <a class="client-link-pill" href="{% url 'clients:detail' booking.client.id %}">{{ booking.client }}</a>
             </strong>
             <p>{{ booking.service }} · {{ booking.employee }}</p>
             <p class="muted-text">
@@ -106,23 +106,23 @@
             <div class="dashboard-quick-actions">
               <button
                 type="button"
-                class="icon-action"
+                class="btn btn-small"
                 title="Marcar como hecha"
                 aria-label="Marcar como hecha"
                 data-status-action
                 data-status-url="{% url 'bookings:status_api' booking.id %}"
                 data-status-value="done"
-              >✓</button>
+              >Hecha</button>
               <button
                 type="button"
-                class="icon-action icon-action-danger"
+                class="btn btn-danger btn-small"
                 title="Marcar como no asistió"
                 aria-label="Marcar como no asistió"
                 data-status-action
                 data-status-url="{% url 'bookings:status_api' booking.id %}"
                 data-status-value="no_show"
-              >×</button>
-              <a class="icon-action" href="{% url 'bookings:update' booking.id %}" title="Abrir reserva" aria-label="Abrir reserva">↗</a>
+              >No asistio</button>
+              <a class="btn btn-light btn-small" href="{% url 'bookings:update' booking.id %}">Abrir</a>
             </div>
           </div>
         {% endfor %}
@@ -159,7 +159,7 @@
               <tr>
                 <td>{{ booking.start_at|time:"H:i" }}</td>
                 <td>
-                  <a class="dashboard-link" href="{% url 'clients:detail' booking.client.id %}">
+                  <a class="client-link-pill" href="{% url 'clients:detail' booking.client.id %}">
                     {{ booking.client }}
                   </a>
                 </td>
@@ -195,7 +195,7 @@
               <tr>
                 <td>{{ booking.start_at|date:"d/m H:i" }}</td>
                 <td>
-                  <a class="dashboard-link" href="{% url 'clients:detail' booking.client.id %}">
+                  <a class="client-link-pill" href="{% url 'clients:detail' booking.client.id %}">
                     {{ booking.client }}
                   </a>
                 </td>

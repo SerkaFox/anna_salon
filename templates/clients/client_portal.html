@@ -96,7 +96,7 @@
                     <span>Pendiente · {{ booking.amount_due }} €</span>
                     <button class="btn btn-small" name="payment_mode" value="full" type="submit">Pagar el resto</button>
                   {% else %}
-                    <span>Señal 10% · {{ booking.deposit_payment_amount }} €</span>
+                    <span>Señal {{ deposit_percent|floatformat:0 }}% · {{ booking.deposit_payment_amount }} €</span>
                     <button class="btn btn-small" name="payment_mode" value="deposit" type="submit">Reservar con señal</button>
                     <button class="btn btn-light btn-small" name="payment_mode" value="full" type="submit">Pagar todo · {{ booking.amount_due }} €</button>
                   {% endif %}
@@ -314,6 +314,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const selectedSummaryText = document.querySelector("[data-selected-summary-text]");
   const editSlotButton = document.querySelector("[data-edit-slot]");
   const bookingForm = document.querySelector("[data-portal-booking-form]");
+  const slotPicker = document.querySelector("[data-slot-picker]");
   const hint = document.getElementById("portal-booking-hint");
   const servicesNode = document.getElementById("portal-services-data");
   if (!serviceSelect || !employeeSelect || !zoneSelect || !startInput || !dateInput || !rangeSelect || !grid || !servicesNode) return;
@@ -405,6 +406,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (selectedSummary) selectedSummary.hidden = true;
     if (selectedSummaryText) selectedSummaryText.textContent = "";
     if (bookingForm) bookingForm.classList.remove("is-time-selected");
+    if (slotPicker) slotPicker.hidden = false;
   }
 
   function slotHour(slot) {
@@ -444,7 +446,13 @@ document.addEventListener("DOMContentLoaded", function () {
     if (selectedSummaryText) selectedSummaryText.textContent = selectedText;
     if (selectedSummary) selectedSummary.hidden = false;
     if (bookingForm) bookingForm.classList.add("is-time-selected");
+    if (slotPicker) slotPicker.hidden = true;
     setHint("", false);
+    if (submitButton) {
+      window.requestAnimationFrame(() => {
+        submitButton.scrollIntoView({behavior: "smooth", block: "center"});
+      });
+    }
   }
 
   function renderSlots(nextSlots) {
@@ -555,6 +563,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (editSlotButton) editSlotButton.addEventListener("click", function () {
     if (bookingForm) bookingForm.classList.remove("is-time-selected");
     if (selectedSummary) selectedSummary.hidden = true;
+    if (slotPicker) slotPicker.hidden = false;
     setHint(i18n.chooseTimeMaster, false);
     document.querySelector("[data-slot-picker]").scrollIntoView({behavior: "smooth", block: "start"});
   });

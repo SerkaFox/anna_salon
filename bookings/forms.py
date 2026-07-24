@@ -92,6 +92,13 @@ class BookingForm(forms.ModelForm):
             self.fields["employee"].queryset = Employee.objects.filter(pk=allowed_employee.pk)
             self.fields["employee"].initial = allowed_employee
             self.fields["employee"].disabled = True
+            self.fields["service"].queryset = allowed_employee.services.filter(
+                is_active=True
+            ).order_by("name")
+            if self.instance.pk:
+                self.fields["client"].disabled = True
+                self.fields["source"].disabled = True
+                self.fields["reward_rule"].disabled = True
 
         service = None
         client = None
@@ -129,7 +136,15 @@ class BookingForm(forms.ModelForm):
             self.fields["reward_rule"].queryset = ClientRewardRule.objects.filter(pk__in=available_ids)
 
         if service:
-            self.fields["employee"].queryset = service.employees.filter(is_active=True).order_by("first_name", "last_name")
+            employee_queryset = service.employees.filter(is_active=True)
+            if allowed_employee is not None:
+                employee_queryset = employee_queryset.filter(pk=allowed_employee.pk)
+                self.fields["service"].queryset = allowed_employee.services.filter(
+                    is_active=True
+                ).order_by("name")
+            self.fields["employee"].queryset = employee_queryset.order_by(
+                "first_name", "last_name"
+            )
 
             if service.requires_zone:
                 self.fields["zone"].queryset = service.allowed_zones.filter(is_active=True).order_by("name")

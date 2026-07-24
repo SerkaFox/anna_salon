@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.signing import TimestampSigner
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -38,6 +39,13 @@ def _portal_url():
     return f"{base}/panel/clientes/portal/"
 
 
+def booking_response_url(booking, action):
+    signer = TimestampSigner(salt="booking-response")
+    token = signer.sign_object({"booking": booking.pk, "action": action})
+    base = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
+    return f"{base}/confirmar-cita/{token}/"
+
+
 def booking_message(booking, *, kind):
     local_start = timezone.localtime(booking.start_at)
     base_url = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
@@ -49,14 +57,24 @@ def booking_message(booking, *, kind):
         "service_name": booking.service.name,
         "portal_url": _portal_url(),
         "booking_url": f"{base_url}/panel/clientes/portal/bookings/{booking.pk}/",
+        "attend_url": booking_response_url(booking, "attending"),
+        "decline_url": booking_response_url(booking, "declined"),
     }
     body = WhatsAppTemplate.get_body(kind)
     if body:
-        return body.format_map(ctx)
-    return (
-        f"Hola {ctx['client_name']}. Tu cita en {ctx['salon_name']} está confirmada para "
-        f"el {ctx['date']} a las {ctx['time']}: {ctx['service_name']}."
-    )
+        message = body.format_map(ctx)
+    else:
+        message = (
+            f"Hola {ctx['client_name']}. Tu cita en {ctx['salon_name']} esta confirmada para "
+            f"el {ctx['date']} a las {ctx['time']}: {ctx['service_name']}."
+        )
+    if kind == WhatsAppMessage.Kinds.REMINDER_24H:
+        message += (
+            "\n\nConfirma tu asistencia:\n"
+            f"✅ Voy: {ctx['attend_url']}\n"
+            f"❌ No voy: {ctx['decline_url']}"
+        )
+    return message
 
 
 def queue_booking_message(booking, *, kind, scheduled_for=None):
@@ -164,6 +182,15 @@ def queue_due_reminders(*, hours, window_minutes=15):
 
 
 def send_whatsapp_message(message):
+    claimed = WhatsAppMessage.objects.filter(
+        pk=message.pk,
+        status=WhatsAppMessage.Statuses.QUEUED,
+    ).update(status=WhatsAppMessage.Statuses.SENDING)
+    if not claimed:
+        message.refresh_from_db()
+        return message
+    message.status = WhatsAppMessage.Statuses.SENDING
+
     if not message.to_phone:
         message.status = WhatsAppMessage.Statuses.SKIPPED
         message.error = "Client has no WhatsApp phone."
@@ -209,14 +236,20 @@ def queue_and_send_waitlist_message(entry, *, kind, to_phone, context):
     body_template = WhatsAppTemplate.get_body(kind)
     if not body_template:
         return None, False
-    message = WhatsAppMessage.objects.create(
-        connection=get_default_connection(),
-        client=entry.client,
-        kind=kind,
-        to_phone=phone,
-        body=body_template.format_map(context),
-        scheduled_for=timezone.now(),
-    )
+    try:
+        with transaction.atomic():
+            message = WhatsAppMessage.objects.create(
+                connection=get_default_connection(),
+                waitlist_entry=entry,
+                client=entry.client,
+                kind=kind,
+                to_phone=phone,
+                body=body_template.format_map(context),
+                scheduled_for=timezone.now(),
+            )
+    except IntegrityError:
+        message = WhatsAppMessage.objects.get(waitlist_entry=entry, kind=kind)
+        return message, False
     send_whatsapp_message(message)
     return message, True
 

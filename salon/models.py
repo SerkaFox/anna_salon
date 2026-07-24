@@ -1,4 +1,29 @@
 from django.db import models
+from django.core.validators import MaxValueValidator, MinValueValidator
+
+
+class SalonSettings(models.Model):
+    deposit_percent = models.DecimalField(
+        "Porcentaje de prepago",
+        max_digits=5,
+        decimal_places=2,
+        default=10,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    updated_at = models.DateTimeField("Actualizado", auto_now=True)
+
+    class Meta:
+        verbose_name = "Configuracion del salon"
+        verbose_name_plural = "Configuracion del salon"
+
+    @classmethod
+    def load(cls):
+        settings_obj, _created = cls.objects.get_or_create(pk=1)
+        return settings_obj
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
 
 
 class Zone(models.Model):

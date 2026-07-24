@@ -15,6 +15,7 @@ from .services import (
     queue_booking_confirmation,
     queue_due_reminders,
     send_due_messages,
+    send_whatsapp_message,
 )
 
 
@@ -74,3 +75,9 @@ class WhatsAppBotTests(TestCase):
         message = WhatsAppMessage.objects.get(kind=WhatsAppMessage.Kinds.REMINDER_24H)
         self.assertEqual(message.status, WhatsAppMessage.Statuses.SENT)
         self.assertEqual(message.provider_message_id, "dry-run")
+        self.assertIn("Voy:", message.body)
+        self.assertIn("No voy:", message.body)
+        self.assertEqual(message.body.count("/confirmar-cita/"), 2)
+
+        send_whatsapp_message(message)
+        self.assertEqual(WhatsAppMessage.objects.count(), 1)

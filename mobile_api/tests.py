@@ -19,7 +19,7 @@ from employees.models import (
     EmployeeWeeklyShift,
 )
 from payments.models import Payment, PaymentRefund
-from salon.models import Zone
+from salon.models import SalonSettings, Zone
 from services_app.models import Service
 
 
@@ -164,6 +164,19 @@ class MobileApiMvpTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["username"], "owner")
+
+    def test_owner_can_update_deposit_percent_from_cashbox(self):
+        self._auth(self.owner_user)
+
+        response = self.api_client.patch(
+            reverse("mobile_api:cashbox"),
+            {"deposit_percent": "25"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["deposit_percent"], "25.00")
+        self.assertEqual(SalonSettings.load().deposit_percent, Decimal("25.00"))
 
     def test_list_endpoints_return_json(self):
         self._auth(self.owner_user)
@@ -757,6 +770,7 @@ class MobileApiMvpTests(TestCase):
             start_at += timedelta(days=1)
         return start_at.replace(hour=hour, minute=0, second=0, microsecond=0)
 
+    @override_settings(STRIPE_SECRET_KEY="sk_test_mock")
     def test_mobile_cancel_paid_booking_creates_refund_when_allowed(self):
         booking = self._create_booking(employee=self.employee, zone=self.zone, start_at=self._future_start())
         payment = Payment.objects.create(
@@ -775,7 +789,7 @@ class MobileApiMvpTests(TestCase):
         with patch("payments.stripe_service.stripe.Refund.create", return_value={"id": "re_mobile", "status": "succeeded"}):
             response = self.api_client.post(reverse("mobile_api:booking_cancel", args=[booking.pk]), format="json")
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 200, response.content)
         booking.refresh_from_db()
         payment.refresh_from_db()
         self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
