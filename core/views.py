@@ -1030,6 +1030,84 @@ Sitemap: {SITE_DOMAIN}{reverse('sitemap_xml')}
     return HttpResponse(content, content_type="text/plain")
 
 
+def web_app_manifest(request):
+    return JsonResponse(
+        {
+            "name": SITE_NAME,
+            "short_name": SITE_NAME.split()[0],
+            "description": f"Reservas y servicios de {SITE_NAME}",
+            "start_url": "/",
+            "scope": "/",
+            "display": "standalone",
+            "background_color": "#11110f",
+            "theme_color": "#11110f",
+            "icons": [
+                {
+                    "src": "/static/pwa/icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png",
+                },
+                {
+                    "src": "/static/pwa/icon-512.png",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                },
+            ],
+        },
+        content_type="application/manifest+json",
+    )
+
+
+def service_worker(request):
+    script = """
+const CACHE_NAME = 'brimoon-public-v1';
+const PUBLIC_ASSETS = [
+  '/',
+  '/manifest.webmanifest',
+  '/static/pwa/icon-192.png',
+  '/static/pwa/icon-512.png'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PUBLIC_ASSETS)));
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(
+      keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+    ))
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/panel/') ||
+      url.pathname.startsWith('/payments/') || url.pathname.startsWith('/accounts/')) return;
+
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok && (url.pathname === '/' || url.pathname.startsWith('/static/'))) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
+  );
+});
+""".strip()
+    response = HttpResponse(script, content_type="application/javascript")
+    response["Service-Worker-Allowed"] = "/"
+    response["Cache-Control"] = "no-cache"
+    return response
+
+
 def sitemap_xml(request):
     paths = [
         reverse("home"),

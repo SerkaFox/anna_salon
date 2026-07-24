@@ -25,6 +25,8 @@ urlpatterns = [
     path("set-language/", core_views.set_public_language, name="set_public_language"),
     path("robots.txt", core_views.robots_txt, name="robots_txt"),
     path("sitemap.xml", core_views.sitemap_xml, name="sitemap_xml"),
+    path("manifest.webmanifest", core_views.web_app_manifest, name="web_app_manifest"),
+    path("service-worker.js", core_views.service_worker, name="service_worker"),
     path("", include("accounts.urls")),
     path("api/v1/", include("mobile_api.urls")),
     path("payments/", include("payments.urls")),

@@ -1,0 +1,58 @@
+<button class="pwa-install" type="button" data-pwa-install hidden>
+  <span class="pwa-install__icon" aria-hidden="true">&#8595;</span>
+  <span>Instalar app</span>
+</button>
+
+<dialog class="pwa-ios-dialog" data-pwa-ios-dialog>
+  <form method="dialog">
+    <button class="pwa-ios-dialog__close" aria-label="Cerrar" title="Cerrar">&times;</button>
+    <h2>Instalar en iPhone</h2>
+    <p>Abre Compartir en Safari y pulsa <strong>Anadir a pantalla de inicio</strong>.</p>
+    <button class="btn-lux btn-lux-primary" value="close">Entendido</button>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  var installButton = document.querySelector('[data-pwa-install]');
+  var iosDialog = document.querySelector('[data-pwa-ios-dialog]');
+  if (!installButton) return;
+
+  var deferredPrompt = null;
+  var isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/service-worker.js');
+    });
+  }
+
+  if (isStandalone) return;
+  if (isIos) installButton.hidden = false;
+
+  window.addEventListener('beforeinstallprompt', function (event) {
+    event.preventDefault();
+    deferredPrompt = event;
+    installButton.hidden = false;
+  });
+
+  installButton.addEventListener('click', async function () {
+    if (isIos) {
+      if (iosDialog && typeof iosDialog.showModal === 'function') iosDialog.showModal();
+      return;
+    }
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    installButton.hidden = true;
+  });
+
+  window.addEventListener('appinstalled', function () {
+    installButton.hidden = true;
+    deferredPrompt = null;
+  });
+})();
+</script>

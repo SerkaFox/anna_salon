@@ -1,0 +1,9 @@
+{% load static %}
+<link rel="manifest" href="{% url 'web_app_manifest' %}">
+<meta name="theme-color" content="#11110f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="{{ salon_name }}">
+<link rel="apple-touch-icon" href="{% static 'pwa/icon-192.png' %}">
+<link rel="stylesheet" href="{% static 'css/pwa.css' %}?v=20260724">

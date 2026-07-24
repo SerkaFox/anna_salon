@@ -46,6 +46,30 @@ class PublicLegalPageTests(TestCase):
         self.assertContains(response, "desconectar")
 
 
+class ProgressiveWebAppTests(TestCase):
+    def test_home_exposes_install_metadata(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("web_app_manifest"))
+        self.assertContains(response, "data-pwa-install")
+
+    def test_manifest_is_installable(self):
+        response = self.client.get(reverse("web_app_manifest"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/manifest+json")
+        self.assertEqual(response.json()["display"], "standalone")
+        self.assertEqual(response.json()["start_url"], "/")
+
+    def test_service_worker_has_root_scope(self):
+        response = self.client.get(reverse("service_worker"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Service-Worker-Allowed"], "/")
+        self.assertContains(response, "self.addEventListener('fetch'")
+
+
 class PublicBookingTests(TestCase):
     def setUp(self):
         self.browser = DjangoClient()

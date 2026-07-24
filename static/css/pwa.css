@@ -1,0 +1,77 @@
+.pwa-install {
+  position: fixed;
+  right: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 9000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: #f2d28b;
+  color: #17150f;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  font: 700 14px/1.2 Inter, sans-serif;
+  cursor: pointer;
+}
+
+.pwa-install[hidden] {
+  display: none;
+}
+
+.pwa-install__icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.pwa-ios-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: #171714;
+  color: #fff;
+}
+
+.pwa-ios-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.68);
+}
+
+.pwa-ios-dialog form {
+  position: relative;
+  padding: 28px;
+}
+
+.pwa-ios-dialog h2 {
+  margin: 0 36px 10px 0;
+  font-size: 22px;
+}
+
+.pwa-ios-dialog p {
+  margin: 0 0 22px;
+  color: #d3d0c7;
+  line-height: 1.55;
+}
+
+.pwa-ios-dialog__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .pwa-install {
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
