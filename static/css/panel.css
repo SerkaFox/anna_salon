@@ -2049,6 +2049,68 @@ a.client-link-pill {
   background: rgba(94, 31, 29, 0.82);
 }
 
+.client-review-panel,
+.client-review-form-card {
+  display: grid;
+  gap: 18px;
+}
+
+.client-review-booking {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.client-review-booking span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.client-review-history summary {
+  cursor: pointer;
+  font-weight: 800;
+  margin-bottom: 14px;
+}
+
+.client-review-rating {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.client-review-rating > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.client-review-rating label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.client-review-google {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
 @media (max-width: 680px) {
   .employee-booking-compact {
     grid-template-columns: 70px minmax(0, 1fr);
@@ -2060,6 +2122,12 @@ a.client-link-pill {
 
   .client-risk-summary {
     grid-template-columns: 1fr;
+  }
+
+  .client-review-booking,
+  .client-review-google {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

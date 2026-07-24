@@ -2040,6 +2040,7 @@ class NotificationTemplateListView(MobileApiMixin, APIView):
                 "name": t.name,
                 "body": t.body,
                 "enabled": t.enabled,
+                "delay_minutes": t.delay_minutes,
                 "variables": TEMPLATE_VARIABLES.get(t.kind, ""),
                 "updated_at": t.updated_at.isoformat(),
             }
@@ -2069,6 +2070,7 @@ class NotificationTemplateDetailView(MobileApiMixin, APIView):
             "name": t.name,
             "body": t.body,
             "enabled": t.enabled,
+            "delay_minutes": t.delay_minutes,
             "variables": TEMPLATE_VARIABLES.get(t.kind, ""),
             "updated_at": t.updated_at.isoformat(),
         }
@@ -2089,6 +2091,18 @@ class NotificationTemplateDetailView(MobileApiMixin, APIView):
             tmpl.body = str(request.data["body"])
         if "enabled" in request.data:
             tmpl.enabled = bool(request.data["enabled"])
+        if "delay_minutes" in request.data:
+            try:
+                delay_minutes = int(request.data["delay_minutes"])
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(
+                    {"delay_minutes": ["Introduce un numero entero."]}
+                )
+            if delay_minutes < 0 or delay_minutes > 10080:
+                raise serializers.ValidationError(
+                    {"delay_minutes": ["Debe estar entre 0 y 10080 minutos."]}
+                )
+            tmpl.delay_minutes = delay_minutes
         if "name" in request.data:
             tmpl.name = str(request.data["name"])[:120]
         tmpl.save()
@@ -2099,7 +2113,12 @@ class NotificationTemplateResetView(MobileApiMixin, APIView):
     """POST /api/v1/notifications/{kind}/reset/ — restore default body."""
     def post(self, request, kind):
         _mobile_admin_required(request.user)
-        from whatsapp_bot.models import WhatsAppTemplate, TEMPLATE_DEFAULTS, TEMPLATE_NAMES
+        from whatsapp_bot.models import (
+            TEMPLATE_DEFAULTS,
+            TEMPLATE_DELAYS,
+            TEMPLATE_NAMES,
+            WhatsAppTemplate,
+        )
         default_body = TEMPLATE_DEFAULTS.get(kind)
         if not default_body:
             return Response({"detail": "Unknown kind."}, status=404)
@@ -2108,13 +2127,15 @@ class NotificationTemplateResetView(MobileApiMixin, APIView):
             defaults={"name": TEMPLATE_NAMES.get(kind, kind), "body": default_body},
         )
         tmpl.body = default_body
-        tmpl.save(update_fields=["body", "updated_at"])
+        tmpl.delay_minutes = TEMPLATE_DELAYS.get(kind, 0)
+        tmpl.save(update_fields=["body", "delay_minutes", "updated_at"])
         from whatsapp_bot.models import TEMPLATE_VARIABLES
         return Response({
             "kind": tmpl.kind,
             "name": tmpl.name,
             "body": tmpl.body,
             "enabled": tmpl.enabled,
+            "delay_minutes": tmpl.delay_minutes,
             "variables": TEMPLATE_VARIABLES.get(kind, ""),
             "updated_at": tmpl.updated_at.isoformat(),
         })

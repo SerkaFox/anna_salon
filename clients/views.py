@@ -43,6 +43,8 @@ from payments.stripe_service import (
     get_booking_deposit_amount,
     get_booking_full_amount,
 )
+from reviews.forms import ClientReviewForm
+from reviews.models import ClientReview, GoogleReview
 from notifications.services import (
     notify_booking_cancelled,
     notify_booking_confirmation,
@@ -279,6 +281,52 @@ def client_portal(request):
         request,
         "clients/client_portal.html",
         _client_portal_context(request, client, form),
+    )
+
+
+@login_required
+def client_booking_review(request, pk):
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+    booking = get_object_or_404(
+        Booking.objects.select_related("client", "service", "employee"),
+        pk=pk,
+        client=client,
+        status=Booking.Statuses.DONE,
+    )
+    review = ClientReview.objects.filter(booking=booking, client=client).first()
+    if request.method == "POST":
+        form = ClientReviewForm(request.POST, instance=review)
+        if form.is_valid():
+            review = form.save(commit=False)
+            review.booking = booking
+            review.client = client
+            review.save()
+            log_event(
+                actor=request.user,
+                section="review",
+                action="client_review",
+                instance=booking,
+                message=f"Opinion del cliente guardada para la reserva {booking.pk}.",
+            )
+            messages.success(request, "Gracias. Tu opinion se ha guardado.")
+            return redirect("clients:portal")
+    else:
+        form = ClientReviewForm(instance=review)
+    return render(
+        request,
+        "clients/client_review_form.html",
+        {
+            "client": client,
+            "booking": booking,
+            "review": review,
+            "form": form,
+            "google_review_url": (
+                getattr(settings, "GOOGLE_REVIEW_URL", "").strip()
+                or GoogleReview.review_url()
+            ),
+        },
     )
 
 
@@ -1016,6 +1064,16 @@ def _client_portal_context(request, client, booking_form=None):
         .annotate(total=Count("id"))
         .order_by("-total")[:5]
     )
+    client_reviews = list(
+        ClientReview.objects.select_related("booking", "booking__service")
+        .filter(client=client)
+        .order_by("-created_at")
+    )
+    reviewable_bookings = list(
+        done_bookings.filter(client_review__isnull=True)
+        .select_related("service", "employee")
+        .order_by("-completed_at", "-end_at")[:5]
+    )
 
     if booking_form is None:
         booking_form = BookingForm(
@@ -1056,6 +1114,12 @@ def _client_portal_context(request, client, booking_form=None):
         "photo_history": photo_history,
         "rewards": rewards,
         "top_services": top_services,
+        "client_reviews": client_reviews,
+        "reviewable_bookings": reviewable_bookings,
+        "google_review_url": (
+            getattr(settings, "GOOGLE_REVIEW_URL", "").strip()
+            or GoogleReview.review_url()
+        ),
         "booking_last_date": _portal_last_booking_date().isoformat(),
         "booking_search_days": PUBLIC_BOOKING_MAX_DAYS_AHEAD,
         "deposit_percent": get_deposit_percent(),

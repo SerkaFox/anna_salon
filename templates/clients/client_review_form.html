@@ -1,0 +1,38 @@
+{% extends "client_portal_base.html" %}
+
+{% block title %}Tu opinion | {{ salon_name }}{% endblock %}
+{% block portal_title %}Tu opinion{% endblock %}
+{% block portal_subtitle %}{{ booking.service }} · {{ booking.start_at|date:"d/m/Y" }}{% endblock %}
+
+{% block portal_content %}
+  <section class="panel-card client-review-form-card">
+    <div>
+      <h2>¿Como fue tu experiencia?</h2>
+      <p class="muted-text">La opinion se guarda dentro de tu area privada y queda vinculada a esta cita.</p>
+    </div>
+    <form method="post" class="entity-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <fieldset class="client-review-rating">
+        <legend>Valoracion</legend>
+        {{ form.rating.errors }}
+        {{ form.rating }}
+      </fieldset>
+      <div class="field">
+        <label for="{{ form.text.id_for_label }}">Comentario</label>
+        {{ form.text }}
+        {{ form.text.errors }}
+      </div>
+      <div class="portal-card-actions">
+        <button class="btn" type="submit">Guardar opinion</button>
+        <a class="btn btn-light" href="{% url 'clients:portal' %}">Volver</a>
+      </div>
+    </form>
+    {% if google_review_url %}
+      <div class="client-review-google">
+        <strong>¿Quieres publicarla tambien?</strong>
+        <a class="btn btn-light" href="{{ google_review_url }}" target="_blank" rel="noopener">Dejar reseña en Google</a>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

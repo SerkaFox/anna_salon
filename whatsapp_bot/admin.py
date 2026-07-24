@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import WhatsAppConnection, WhatsAppLoginLink, WhatsAppMessage
+from .models import (
+    WhatsAppConnection,
+    WhatsAppLoginLink,
+    WhatsAppMessage,
+    WhatsAppTemplate,
+)
 
 
 @admin.register(WhatsAppConnection)
@@ -22,3 +27,10 @@ class WhatsAppMessageAdmin(admin.ModelAdmin):
     list_filter = ("kind", "status", "connection")
     search_fields = ("to_phone", "body", "provider_message_id", "booking__client__first_name", "booking__client__last_name")
     readonly_fields = ("created_at", "updated_at", "sent_at", "provider_message_id", "error")
+
+
+@admin.register(WhatsAppTemplate)
+class WhatsAppTemplateAdmin(admin.ModelAdmin):
+    list_display = ("name", "kind", "enabled", "delay_minutes", "updated_at")
+    list_filter = ("enabled", "kind")
+    search_fields = ("name", "body")

@@ -1,6 +1,10 @@
 from django.core.management.base import BaseCommand
 
-from whatsapp_bot.services import queue_due_reminders, send_due_messages
+from whatsapp_bot.services import (
+    queue_due_reminders,
+    queue_due_review_requests,
+    send_due_messages,
+)
 
 
 class Command(BaseCommand):
@@ -20,6 +24,7 @@ class Command(BaseCommand):
             result = queue_due_reminders(hours=hours, window_minutes=options["window_minutes"])
             total_queued += len(result["queued"])
             total_skipped += len(result["skipped"])
+        total_queued += len(queue_due_review_requests())
         sent = [] if options["queue_only"] else send_due_messages(limit=options["limit"])
         self.stdout.write(
             f"queued={total_queued} skipped_existing={total_skipped} processed={len(sent)}"

@@ -1,4 +1,5 @@
 from datetime import timedelta
+import logging
 
 from django.conf import settings
 from django.core.signing import TimestampSigner
@@ -9,6 +10,8 @@ from bookings.models import Booking
 
 from . import bridge
 from .models import WhatsAppConnection, WhatsAppMessage, WhatsAppTemplate
+
+logger = logging.getLogger(__name__)
 
 
 def get_default_connection():
@@ -69,11 +72,15 @@ def booking_message(booking, *, kind):
             f"el {ctx['date']} a las {ctx['time']}: {ctx['service_name']}."
         )
     if kind == WhatsAppMessage.Kinds.REMINDER_24H:
-        message += (
-            "\n\nConfirma tu asistencia:\n"
-            f"✅ Voy: {ctx['attend_url']}\n"
-            f"❌ No voy: {ctx['decline_url']}"
-        )
+        missing_actions = []
+        if ctx["attend_url"] not in message:
+            missing_actions.append(f"✅ Voy: {ctx['attend_url']}")
+        if ctx["decline_url"] not in message:
+            missing_actions.append(f"❌ No voy: {ctx['decline_url']}")
+        if missing_actions:
+            message += "\n\nConfirma tu asistencia:\n" + "\n".join(
+                missing_actions
+            )
     return message
 
 
@@ -156,6 +163,90 @@ def queue_booking_rescheduled(booking):
     )
     message.save()
     return message, True
+
+
+def queue_review_request(booking):
+    if (
+        booking.status != Booking.Statuses.DONE
+        or not booking.completed_at
+        or not booking.client.notify_whatsapp
+    ):
+        return None, False
+    body_template = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.REVIEW_REQUEST)
+    if not body_template:
+        return None, False
+    phone = normalize_whatsapp_phone(booking.client.phone)
+    if not phone:
+        return None, False
+
+    from reviews.models import GoogleReview
+
+    local_end = timezone.localtime(booking.end_at)
+    base_url = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
+    context = {
+        "client_name": booking.client.first_name or booking.client.full_name or "hola",
+        "salon_name": _salon_name(),
+        "service_name": booking.service.name,
+        "employee_name": booking.employee.full_name,
+        "date": local_end.strftime("%d/%m/%Y"),
+        "review_url": f"{base_url}/panel/clientes/portal/bookings/{booking.pk}/review/",
+        "google_review_url": (
+            getattr(settings, "GOOGLE_REVIEW_URL", "").strip()
+            or GoogleReview.review_url()
+        ),
+    }
+    delay_minutes = (
+        WhatsAppTemplate.objects.filter(kind=WhatsAppMessage.Kinds.REVIEW_REQUEST)
+        .values_list("delay_minutes", flat=True)
+        .first()
+    )
+    if delay_minutes is None:
+        delay_minutes = 120
+    scheduled_for = max(booking.completed_at, booking.end_at) + timedelta(
+        minutes=delay_minutes
+    )
+    try:
+        with transaction.atomic():
+            message = WhatsAppMessage.objects.create(
+                connection=get_default_connection(),
+                booking=booking,
+                client=booking.client,
+                kind=WhatsAppMessage.Kinds.REVIEW_REQUEST,
+                to_phone=phone,
+                body=body_template.format_map(context),
+                scheduled_for=scheduled_for,
+            )
+    except IntegrityError:
+        return (
+            WhatsAppMessage.objects.get(
+                booking=booking,
+                kind=WhatsAppMessage.Kinds.REVIEW_REQUEST,
+            ),
+            False,
+        )
+    return message, True
+
+
+def queue_due_review_requests():
+    bookings = (
+        Booking.objects.select_related("client", "service", "employee")
+        .filter(status=Booking.Statuses.DONE, completed_at__isnull=False)
+        .exclude(whatsapp_messages__kind=WhatsAppMessage.Kinds.REVIEW_REQUEST)
+        .order_by("completed_at", "id")
+    )
+    queued = []
+    for booking in bookings:
+        try:
+            message, created = queue_review_request(booking)
+        except Exception:
+            logger.exception(
+                "Could not queue review request for booking %s.",
+                booking.pk,
+            )
+            continue
+        if created:
+            queued.append(message)
+    return queued
 
 
 def queue_due_reminders(*, hours, window_minutes=15):

@@ -9,7 +9,7 @@ from clients.models import Client
 from employees.models import Employee
 from services_app.models import Service
 
-from .models import WhatsAppMessage
+from .models import TEMPLATE_DEFAULTS, WhatsAppMessage, WhatsAppTemplate
 from .services import (
     normalize_whatsapp_phone,
     queue_booking_confirmation,
@@ -81,3 +81,48 @@ class WhatsAppBotTests(TestCase):
 
         send_whatsapp_message(message)
         self.assertEqual(WhatsAppMessage.objects.count(), 1)
+
+    def test_default_24h_template_contains_confirmation_actions_once(self):
+        booking = self._booking(timezone.now() + timedelta(hours=24, minutes=5))
+
+        message, created = queue_booking_confirmation(booking)
+        self.assertTrue(created)
+
+        reminder_body = TEMPLATE_DEFAULTS[WhatsAppMessage.Kinds.REMINDER_24H]
+        self.assertIn("{attend_url}", reminder_body)
+        self.assertIn("{decline_url}", reminder_body)
+
+    def test_done_booking_queues_delayed_review_request(self):
+        template = WhatsAppTemplate.objects.get(
+            kind=WhatsAppMessage.Kinds.REVIEW_REQUEST
+        )
+        template.body = "Privada: {review_url}\nGoogle: {google_review_url}"
+        template.delay_minutes = 30
+        template.save(update_fields=["body", "delay_minutes", "updated_at"])
+        booking = self._booking(timezone.now() - timedelta(hours=2))
+
+        booking.status = Booking.Statuses.DONE
+        booking.save(update_fields=["status"])
+        booking.refresh_from_db()
+
+        message = WhatsAppMessage.objects.get(
+            booking=booking,
+            kind=WhatsAppMessage.Kinds.REVIEW_REQUEST,
+        )
+        self.assertIsNotNone(booking.completed_at)
+        self.assertEqual(
+            message.scheduled_for,
+            max(booking.completed_at, booking.end_at)
+            + timedelta(minutes=template.delay_minutes),
+        )
+        self.assertIn("/review/", message.body)
+        self.assertIn("search.google.com", message.body)
+
+        booking.save(update_fields=["notes"])
+        self.assertEqual(
+            WhatsAppMessage.objects.filter(
+                booking=booking,
+                kind=WhatsAppMessage.Kinds.REVIEW_REQUEST,
+            ).count(),
+            1,
+        )

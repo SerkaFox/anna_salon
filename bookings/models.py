@@ -81,6 +81,11 @@ class Booking(models.Model):
         null=True,
         blank=True,
     )
+    completed_at = models.DateTimeField(
+        "Finalizada el",
+        null=True,
+        blank=True,
+    )
 
     price_snapshot = models.DecimalField("Precio guardado", max_digits=10, decimal_places=2, default=0)
     duration_snapshot = models.PositiveIntegerField("Duración guardada (min)", default=60)

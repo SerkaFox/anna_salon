@@ -73,6 +73,7 @@ class WhatsAppMessage(models.Model):
         WELCOME_CREDENTIALS = "welcome_credentials", "Welcome / login credentials"
         PAYMENT_RECEIPT = "payment_receipt", "Payment receipt"
         BIRTHDAY_GREETING = "birthday_greeting", "Birthday greeting"
+        REVIEW_REQUEST = "review_request", "Review request"
         MANUAL = "manual", "Manual"
 
     class Statuses(models.TextChoices):
@@ -139,7 +140,10 @@ TEMPLATE_DEFAULTS = {
     ),
     WhatsAppMessage.Kinds.REMINDER_24H: (
         "Hola {client_name} 👋 Te recordamos tu cita en {salon_name} mañana "
-        "{date} a las {time} para {service_name}."
+        "{date} a las {time} para {service_name}.\n\n"
+        "Confirma tu asistencia:\n"
+        "✅ Voy: {attend_url}\n"
+        "❌ No voy: {decline_url}"
     ),
     WhatsAppMessage.Kinds.REMINDER_2H: (
         "Hola {client_name} 👋 Te esperamos en {salon_name} en 2 horas, "
@@ -168,6 +172,12 @@ TEMPLATE_DEFAULTS = {
         '{date} a las {time}, {service_name} con {employee_name}.\n\n'
         'Reserva cuanto antes desde {booking_url} o contacta con el salon.'
     ),
+    WhatsAppMessage.Kinds.REVIEW_REQUEST: (
+        "Hola {client_name}. Gracias por visitarnos en {salon_name}.\n\n"
+        "Nos ayudas mucho dejando tu opinion sobre {service_name}:\n"
+        "Opinion privada en tu area personal: {review_url}\n"
+        "Resena en Google: {google_review_url}"
+    ),
 }
 
 TEMPLATE_NAMES = {
@@ -180,6 +190,7 @@ TEMPLATE_NAMES = {
     WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "Felicitación de cumpleaños",
     WhatsAppMessage.Kinds.WAITLIST_JOINED: 'Nueva persona en lista de espera',
     WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE: 'Hueco libre para lista de espera',
+    WhatsAppMessage.Kinds.REVIEW_REQUEST: "Solicitud de resena despues de la cita",
 }
 
 TEMPLATE_VARIABLES = {
@@ -192,6 +203,11 @@ TEMPLATE_VARIABLES = {
     WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "{client_name} {salon_name} {offer}",
     WhatsAppMessage.Kinds.WAITLIST_JOINED: '{client_name} {salon_name} {service_name} {date} {time_range} {phone} {email}',
     WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE: '{client_name} {salon_name} {service_name} {employee_name} {date} {time} {booking_url}',
+    WhatsAppMessage.Kinds.REVIEW_REQUEST: "{client_name} {salon_name} {service_name} {employee_name} {date} {review_url} {google_review_url}",
+}
+
+TEMPLATE_DELAYS = {
+    WhatsAppMessage.Kinds.REVIEW_REQUEST: 120,
 }
 
 
@@ -202,6 +218,7 @@ class WhatsAppTemplate(models.Model):
     name = models.CharField(max_length=120)
     body = models.TextField()
     enabled = models.BooleanField(default=True)
+    delay_minutes = models.PositiveIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -235,5 +252,9 @@ class WhatsAppTemplate(models.Model):
         for kind, body in TEMPLATE_DEFAULTS.items():
             cls.objects.get_or_create(
                 kind=kind,
-                defaults={"name": TEMPLATE_NAMES.get(kind, kind), "body": body},
+                defaults={
+                    "name": TEMPLATE_NAMES.get(kind, kind),
+                    "body": body,
+                    "delay_minutes": TEMPLATE_DELAYS.get(kind, 0),
+                },
             )

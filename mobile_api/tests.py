@@ -917,3 +917,32 @@ class MobileApiMvpTests(TestCase):
         self._auth(self.employee_user)
         response = self.api_client.get(reverse('mobile_api:waitlist'))
         self.assertEqual(response.status_code, 403)
+
+    def test_owner_can_configure_review_request_delay(self):
+        self._auth(self.owner_user)
+
+        list_response = self.api_client.get(
+            reverse("mobile_api:notification_templates")
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        review_template = next(
+            item
+            for item in list_response.json()
+            if item["kind"] == "review_request"
+        )
+        self.assertEqual(review_template["delay_minutes"], 120)
+        self.assertIn("{review_url}", review_template["body"])
+        self.assertIn("{google_review_url}", review_template["body"])
+
+        update_response = self.api_client.patch(
+            reverse(
+                "mobile_api:notification_template_detail",
+                args=["review_request"],
+            ),
+            {"delay_minutes": 45},
+            format="json",
+        )
+
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(update_response.json()["delay_minutes"], 45)

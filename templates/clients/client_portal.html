@@ -236,6 +236,49 @@
     </form>
   </section>
 
+  {% if reviewable_bookings or client_reviews %}
+    <section class="panel-card client-review-panel">
+      <div class="dashboard-section-head">
+        <div>
+          <h2>Tu opinion</h2>
+          <p class="muted-text">Solo puedes valorar servicios que figuran como realizados en tu historial.</p>
+        </div>
+        {% if google_review_url %}
+          <a class="btn btn-light btn-small" href="{{ google_review_url }}" target="_blank" rel="noopener">Reseña en Google</a>
+        {% endif %}
+      </div>
+      {% if reviewable_bookings %}
+        <div class="dashboard-stack">
+          {% for booking in reviewable_bookings %}
+            <article class="client-review-booking">
+              <div>
+                <strong>{{ booking.service }}</strong>
+                <span>{{ booking.start_at|date:"d/m/Y" }} · {{ booking.employee }}</span>
+              </div>
+              <a class="btn btn-small" href="{% url 'clients:booking_review' booking.id %}">Dejar opinion</a>
+            </article>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if client_reviews %}
+        <details class="client-review-history">
+          <summary>Mis opiniones ({{ client_reviews|length }})</summary>
+          <div class="dashboard-stack">
+            {% for review in client_reviews %}
+              <article class="client-review-booking">
+                <div>
+                  <strong>{{ review.rating }}/5 · {{ review.booking.service }}</strong>
+                  <span>{{ review.created_at|date:"d/m/Y" }}{% if review.text %} · {{ review.text|truncatechars:120 }}{% endif %}</span>
+                </div>
+                <a class="btn btn-light btn-small" href="{% url 'clients:booking_review' review.booking_id %}">Editar</a>
+              </article>
+            {% endfor %}
+          </div>
+        </details>
+      {% endif %}
+    </section>
+  {% endif %}
+
   <section class="content-grid">
     <article class="panel-card">
       <h2>{% ct "visual_history" %}</h2>
