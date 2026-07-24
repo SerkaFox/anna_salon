@@ -18,7 +18,7 @@ from rest_framework.views import APIView
 
 from accounts.permissions import can_access_booking, can_access_client, can_access_employee, get_client_profile, get_employee_profile, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
 from auditlog.services import log_event
-from bookings.models import Booking, BookingPhoto
+from bookings.models import Booking, BookingPhoto, BookingWaitlistEntry
 from bookings.client_actions import cancel_booking, change_booking_service, reschedule_booking
 from bookings.utils import (
     MOBILE_SLOT_STEP_MINUTES,
@@ -52,6 +52,7 @@ from .serializers import (
     AvailabilitySlotsQuerySerializer,
     BookingSerializer,
     BookingStatusSerializer,
+    BookingWaitlistEntrySerializer,
     BookingWriteSerializer,
     CashClosureSerializer,
     CashClosureWriteSerializer,
@@ -1955,6 +1956,48 @@ class CalendarDayView(MobileApiMixin, APIView):
 
 
 # ── WhatsApp Notification Management ─────────────────────────────────────────
+
+class WaitlistEntryListView(MobileApiMixin, APIView):
+    def get(self, request):
+        _mobile_admin_required(request.user)
+        entries = BookingWaitlistEntry.objects.select_related('client', 'service', 'employee')
+        selected_date = request.query_params.get('date')
+        if selected_date:
+            entries = entries.filter(desired_date=_parse_mobile_date(selected_date))
+        else:
+            entries = entries.filter(desired_date__gte=timezone.localdate())
+
+        status_value = (request.query_params.get('status') or '').strip()
+        if status_value == 'all':
+            pass
+        elif status_value:
+            valid_statuses = {value for value, _label in BookingWaitlistEntry.Statuses.choices}
+            if status_value not in valid_statuses:
+                raise serializers.ValidationError({'status': ['Estado invalido.']})
+            entries = entries.filter(status=status_value)
+        else:
+            entries = entries.filter(status__in=[
+                BookingWaitlistEntry.Statuses.ACTIVE,
+                BookingWaitlistEntry.Statuses.NOTIFIED,
+            ])
+        return Response(BookingWaitlistEntrySerializer(entries, many=True).data)
+
+
+class WaitlistEntryDetailView(MobileApiMixin, APIView):
+    def patch(self, request, pk):
+        _mobile_admin_required(request.user)
+        entry = generics.get_object_or_404(
+            BookingWaitlistEntry.objects.select_related('client', 'service', 'employee'),
+            pk=pk,
+        )
+        status_value = request.data.get('status')
+        valid_statuses = {value for value, _label in BookingWaitlistEntry.Statuses.choices}
+        if status_value not in valid_statuses:
+            raise serializers.ValidationError({'status': ['Estado invalido.']})
+        entry.status = status_value
+        entry.save(update_fields=['status', 'updated_at'])
+        return Response(BookingWaitlistEntrySerializer(entry).data)
+
 
 class NotificationTemplateListView(MobileApiMixin, APIView):
     """

@@ -8,7 +8,7 @@ from rest_framework import serializers
 from accounts.permissions import can_access_booking, can_access_employee, get_client_profile, get_employee_profile, is_admin_user, scope_clients_queryset
 from bookings.client_actions import booking_amount_due, booking_refundable_until, can_client_cancel, can_client_reschedule
 from bookings.forms import BookingForm
-from bookings.models import Booking
+from bookings.models import Booking, BookingWaitlistEntry
 from bookings.utils import combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
 from clients.models import Client, ClientRewardRule
 from clients.rewards import client_reward_progress
@@ -673,6 +673,7 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_end_at(self, obj):
         return _format_local_datetime(obj.end_at)
 
+
     def _payment_info(self, obj):
         if hasattr(obj, "_mobile_online_payment_info"):
             return obj._mobile_online_payment_info
@@ -724,6 +725,21 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_can_reschedule(self, obj):
         return can_client_reschedule(obj)
+
+
+class BookingWaitlistEntrySerializer(serializers.ModelSerializer):
+    service_name = serializers.CharField(source='service.name', read_only=True)
+    employee_name = serializers.CharField(source='employee.full_name', read_only=True)
+    status_label = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = BookingWaitlistEntry
+        fields = [
+            'id', 'client', 'service', 'service_name', 'employee',
+            'employee_name', 'desired_date', 'time_range', 'name', 'phone',
+            'email', 'status', 'status_label', 'source', 'notes',
+            'notified_at', 'created_at', 'updated_at',
+        ]
 
 
 class BookingWriteSerializer(serializers.Serializer):

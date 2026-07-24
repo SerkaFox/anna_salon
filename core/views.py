@@ -901,6 +901,12 @@ def public_waitlist(request):
         phone=phone,
         source=Booking.Sources.WEBSITE,
     )
+    try:
+        from whatsapp_bot.services import notify_waitlist_entry_created
+
+        notify_waitlist_entry_created(entry)
+    except Exception:
+        logger.exception('Could not send waitlist notification for entry %s', entry.pk)
     return JsonResponse({"ok": True, "message": t["public_waitlist_success"], "waitlist_id": entry.pk})
 
 

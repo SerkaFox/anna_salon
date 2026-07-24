@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -11,6 +12,7 @@ from .models import Booking, BookingPrepayment, BookingWaitlistEntry
 
 
 PREPAYMENT_PERCENT = Decimal("10.00")
+logger = logging.getLogger(__name__)
 
 
 def calculate_booking_prepayment_amount(booking):
@@ -64,6 +66,8 @@ def refresh_booking_prepayments(bookings):
 
 
 def notify_waitlist_for_booking_opening(booking):
+    from whatsapp_bot.services import notify_waitlist_slot_available
+
     entries = list(
         BookingWaitlistEntry.objects.select_related("employee", "service")
         .filter(
@@ -90,6 +94,10 @@ def notify_waitlist_for_booking_opening(booking):
         recipients = [entry.email] if entry.email else []
         if recipients:
             send_mail(client_subject, client_body, from_email, recipients, fail_silently=True)
+        try:
+            notify_waitlist_slot_available(entry, booking)
+        except Exception:
+            logger.exception('Could not send WhatsApp waitlist notification for entry %s', entry.pk)
 
         if booking.employee.email:
             master_body = (

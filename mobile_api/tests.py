@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import User
-from bookings.models import Booking
+from bookings.models import Booking, BookingWaitlistEntry
 from clients.models import Client
 from employees.models import (
     Employee,
@@ -260,6 +260,37 @@ class MobileApiMvpTests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["zone"], self.zone.pk)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(booking.client_id, self.client_obj.pk)
+        self.assertEqual(booking.employee_id, self.employee.pk)
+        self.assertEqual(booking.service_id, self.service.pk)
+        self.assertEqual(booking.zone_id, self.zone.pk)
+        self.assertEqual(booking.end_at, booking.start_at + timedelta(minutes=self.service.duration_minutes))
+
+    def test_owner_can_update_booking_via_mobile_api(self):
+        booking = self._create_booking(employee=self.employee, client=self.client_obj, service=self.service, zone=self.zone)
+        self._auth(self.owner_user)
+
+        response = self.api_client.patch(
+            reverse("mobile_api:booking_detail", args=[booking.pk]),
+            {
+                "employee": self.other_employee.pk,
+                "zone": self.other_zone.pk,
+                "start_at": "2026-04-27T12:00:00+02:00",
+                "notes": "Mover a Elena",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        booking.refresh_from_db()
+        self.assertEqual(booking.employee_id, self.other_employee.pk)
+        self.assertEqual(booking.zone_id, self.other_zone.pk)
+        self.assertEqual(booking.start_at, timezone.make_aware(datetime(2026, 4, 27, 12, 0)))
+        self.assertEqual(booking.end_at, timezone.make_aware(datetime(2026, 4, 27, 13, 0)))
+        self.assertEqual(booking.notes, "Mover a Elena")
+        self.assertEqual(response.json()["employee"], self.other_employee.pk)
+        self.assertEqual(response.json()["zone"], self.other_zone.pk)
 
     def test_check_availability_returns_available_true_or_false_with_spanish_reason(self):
         self._auth(self.owner_user)
@@ -840,3 +871,35 @@ class MobileApiMvpTests(TestCase):
 
         self.assertEqual(detail_response.status_code, 403)
         self.assertEqual(cancel_response.status_code, 403)
+
+    def test_owner_can_manage_waitlist(self):
+        desired_date = timezone.localdate() + timedelta(days=3)
+        entry = BookingWaitlistEntry.objects.create(
+            client=self.client_obj,
+            service=self.service,
+            employee=self.employee,
+            desired_date=desired_date,
+            time_range='10:00-14:00',
+            name=self.client_obj.full_name,
+            phone='+34600111222',
+        )
+        self._auth(self.owner_user)
+
+        list_response = self.api_client.get(reverse('mobile_api:waitlist'))
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.json()[0]['id'], entry.pk)
+        self.assertEqual(list_response.json()[0]['service_name'], self.service.name)
+
+        update_response = self.api_client.patch(
+            reverse('mobile_api:waitlist_detail', args=[entry.pk]),
+            {'status': BookingWaitlistEntry.Statuses.BOOKED},
+            format='json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, BookingWaitlistEntry.Statuses.BOOKED)
+
+    def test_employee_cannot_access_waitlist(self):
+        self._auth(self.employee_user)
+        response = self.api_client.get(reverse('mobile_api:waitlist'))
+        self.assertEqual(response.status_code, 403)

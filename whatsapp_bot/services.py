@@ -202,6 +202,67 @@ def queue_and_send(booking, *, kind):
     return msg, created
 
 
+def queue_and_send_waitlist_message(entry, *, kind, to_phone, context):
+    phone = normalize_whatsapp_phone(to_phone)
+    if not phone:
+        return None, False
+    body_template = WhatsAppTemplate.get_body(kind)
+    if not body_template:
+        return None, False
+    message = WhatsAppMessage.objects.create(
+        connection=get_default_connection(),
+        client=entry.client,
+        kind=kind,
+        to_phone=phone,
+        body=body_template.format_map(context),
+        scheduled_for=timezone.now(),
+    )
+    send_whatsapp_message(message)
+    return message, True
+
+
+def notify_waitlist_entry_created(entry):
+    target_phone = (
+        getattr(settings, 'WHATSAPP_WAITLIST_NOTIFICATION_PHONE', '')
+        or entry.employee.phone
+    )
+    context = {
+        'client_name': entry.name,
+        'salon_name': _salon_name(),
+        'service_name': entry.service.name,
+        'date': entry.desired_date.strftime('%d/%m/%Y'),
+        'time_range': entry.time_range or 'cualquier hora',
+        'phone': entry.phone or '-',
+        'email': entry.email or '-',
+    }
+    return queue_and_send_waitlist_message(
+        entry,
+        kind=WhatsAppMessage.Kinds.WAITLIST_JOINED,
+        to_phone=target_phone,
+        context=context,
+    )
+
+
+def notify_waitlist_slot_available(entry, booking):
+    local_start = timezone.localtime(booking.start_at)
+    base_url = getattr(settings, 'PUBLIC_BASE_URL', '').rstrip('/')
+    context = {
+        'client_name': entry.name,
+        'salon_name': _salon_name(),
+        'service_name': booking.service.name,
+        'employee_name': booking.employee.full_name,
+        'date': local_start.strftime('%d/%m/%Y'),
+        'time': local_start.strftime('%H:%M'),
+        'booking_url': f'{base_url}/reservar/',
+    }
+    return queue_and_send_waitlist_message(
+        entry,
+        kind=WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE,
+        to_phone=entry.phone,
+        context=context,
+    )
+
+
 def queue_birthday_greeting(client):
     from django.utils import timezone as tz
     ctx = {

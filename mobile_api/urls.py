@@ -48,4 +48,6 @@ urlpatterns = [
     path("notifications/", views.NotificationTemplateListView.as_view(), name="notification_templates"),
     path("notifications/<str:kind>/", views.NotificationTemplateDetailView.as_view(), name="notification_template_detail"),
     path("notifications/<str:kind>/reset/", views.NotificationTemplateResetView.as_view(), name="notification_template_reset"),
+    path('waitlist/', views.WaitlistEntryListView.as_view(), name='waitlist'),
+    path('waitlist/<int:pk>/', views.WaitlistEntryDetailView.as_view(), name='waitlist_detail'),
 ]

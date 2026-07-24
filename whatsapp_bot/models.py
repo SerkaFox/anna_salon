@@ -63,6 +63,8 @@ class WhatsAppLoginLink(models.Model):
 
 class WhatsAppMessage(models.Model):
     class Kinds(models.TextChoices):
+        WAITLIST_JOINED = 'waitlist_joined', 'Waitlist joined'
+        WAITLIST_SLOT_AVAILABLE = 'waitlist_slot_available', 'Waitlist slot available'
         BOOKING_CONFIRMATION = "booking_confirmation", "Booking confirmation"
         BOOKING_CANCELLED = "booking_cancelled", "Booking cancelled"
         BOOKING_RESCHEDULED = "booking_rescheduled", "Booking rescheduled"
@@ -144,6 +146,16 @@ TEMPLATE_DEFAULTS = {
         "Como regalo te esperamos con {offer} 🎁\n\n"
         "¡Que tengas un día maravilloso! 💅"
     ),
+    WhatsAppMessage.Kinds.WAITLIST_JOINED: (
+        'Nueva solicitud para la lista de espera de {salon_name}.\n\n'
+        'Cliente: {client_name}\nServicio: {service_name}\nFecha: {date}\n'
+        'Horario: {time_range}\nTelefono: {phone}\nEmail: {email}'
+    ),
+    WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE: (
+        'Hola {client_name}. Se ha liberado un hueco en {salon_name}:\n'
+        '{date} a las {time}, {service_name} con {employee_name}.\n\n'
+        'Reserva cuanto antes desde {booking_url} o contacta con el salon.'
+    ),
 }
 
 TEMPLATE_NAMES = {
@@ -154,6 +166,8 @@ TEMPLATE_NAMES = {
     WhatsAppMessage.Kinds.REMINDER_2H: "Recordatorio 2h antes",
     WhatsAppMessage.Kinds.WELCOME_CREDENTIALS: "Bienvenida con credenciales",
     WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "Felicitación de cumpleaños",
+    WhatsAppMessage.Kinds.WAITLIST_JOINED: 'Nueva persona en lista de espera',
+    WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE: 'Hueco libre para lista de espera',
 }
 
 TEMPLATE_VARIABLES = {
@@ -164,6 +178,8 @@ TEMPLATE_VARIABLES = {
     WhatsAppMessage.Kinds.REMINDER_2H: "{client_name} {salon_name} {time} {service_name}",
     WhatsAppMessage.Kinds.WELCOME_CREDENTIALS: "{client_name} {salon_name} {username} {password} {portal_url}",
     WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "{client_name} {salon_name} {offer}",
+    WhatsAppMessage.Kinds.WAITLIST_JOINED: '{client_name} {salon_name} {service_name} {date} {time_range} {phone} {email}',
+    WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE: '{client_name} {salon_name} {service_name} {employee_name} {date} {time} {booking_url}',
 }
 
 
