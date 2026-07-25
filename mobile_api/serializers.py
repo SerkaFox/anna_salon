@@ -22,7 +22,7 @@ from employees.models import (
     EmployeeWeeklyShift,
 )
 from payments.models import Payment as OnlinePayment
-from salon.models import Zone
+from salon.models import SalonSettings, Zone
 from services_app.models import Service
 
 User = get_user_model()
@@ -972,15 +972,24 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
         return str(obj.balance_due)
 
     def get_business(self, obj):
-        public_url = settings.PUBLIC_BASE_URL.rstrip("/")
+        salon_settings = getattr(self, "_receipt_settings", None)
+        if salon_settings is None:
+            salon_settings = SalonSettings.load()
+            self._receipt_settings = salon_settings
+        public_url = (
+            salon_settings.receipt_website or settings.PUBLIC_BASE_URL
+        ).rstrip("/")
         return {
-            "name": settings.SALON_NAME,
+            "name": salon_settings.receipt_business_name or settings.SALON_NAME,
             "legal_name": settings.SALON_LEGAL_NAME,
             "tax_id": settings.SALON_TAX_ID,
-            "address": settings.SALON_ADDRESS,
-            "phone": settings.SALON_PHONE,
-            "email": settings.SALON_EMAIL,
+            "address": salon_settings.receipt_address,
+            "phone": salon_settings.receipt_phone,
+            "email": salon_settings.receipt_email,
             "website": public_url,
+            "footer": salon_settings.receipt_footer,
+            "show_logo": salon_settings.receipt_show_logo,
+            "show_qr": salon_settings.receipt_show_qr,
         }
 
     def get_document_url(self, obj):
@@ -1052,6 +1061,27 @@ class ManualPaymentWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = ManualPayment
         fields = ["paid_at", "entry_type", "amount", "method", "reference", "notes"]
+
+
+class ManualPaymentMethodUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ManualPayment
+        fields = ["method", "reference", "notes"]
+
+
+class ReceiptTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalonSettings
+        fields = [
+            "receipt_business_name",
+            "receipt_address",
+            "receipt_phone",
+            "receipt_email",
+            "receipt_website",
+            "receipt_footer",
+            "receipt_show_logo",
+            "receipt_show_qr",
+        ]
 
 
 class CashClosureWriteSerializer(serializers.Serializer):

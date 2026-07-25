@@ -10,6 +10,45 @@ class SalonSettings(models.Model):
         default=10,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
+    receipt_business_name = models.CharField(
+        "Nombre en el recibo",
+        max_length=160,
+        default="BRIMOON Studio",
+    )
+    receipt_address = models.CharField(
+        "Direccion en el recibo",
+        max_length=255,
+        default="Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia",
+    )
+    receipt_phone = models.CharField(
+        "Telefono en el recibo",
+        max_length=40,
+        default="643996431",
+        blank=True,
+    )
+    receipt_email = models.EmailField(
+        "Email en el recibo",
+        blank=True,
+    )
+    receipt_website = models.URLField(
+        "Web en el recibo",
+        default="https://brimoon.es",
+        blank=True,
+    )
+    receipt_footer = models.CharField(
+        "Mensaje final del recibo",
+        max_length=240,
+        default="Gracias por tu visita :)",
+        blank=True,
+    )
+    receipt_show_logo = models.BooleanField(
+        "Mostrar logotipo",
+        default=True,
+    )
+    receipt_show_qr = models.BooleanField(
+        "Mostrar codigo QR",
+        default=True,
+    )
     updated_at = models.DateTimeField("Actualizado", auto_now=True)
 
     class Meta:

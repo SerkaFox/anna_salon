@@ -70,7 +70,9 @@ from .serializers import (
     FiscalDocumentLineWriteSerializer,
     FiscalDocumentSerializer,
     ManualPaymentSerializer,
+    ManualPaymentMethodUpdateSerializer,
     ManualPaymentWriteSerializer,
+    ReceiptTemplateSerializer,
     ServiceSerializer,
     ServiceWriteSerializer,
     TimeBlockSerializer,
@@ -1184,6 +1186,26 @@ class CashboxSummaryView(MobileApiMixin, APIView):
         if entry_type_value:
             payments = payments.filter(entry_type=entry_type_value)
         payments = list(payments)
+        paid_document_ids = {
+            payment.fiscal_document_id
+            for payment in payments
+            if payment.fiscal_document_id
+        }
+        paid_documents_queryset = (
+            FiscalDocument.objects.select_related(
+                "booking",
+                "booking__client",
+                "booking__service",
+            )
+            .prefetch_related("payments", "lines")
+            .filter(pk__in=paid_document_ids)
+            .order_by("-booking__start_at", "-id")
+        )
+        paid_documents = [
+            document
+            for document in paid_documents_queryset
+            if document.is_paid
+        ]
 
         totals_by_method = {
             method: str(sum((payment.signed_amount for payment in payments if payment.method == method), Decimal("0.00")))
@@ -1208,6 +1230,10 @@ class CashboxSummaryView(MobileApiMixin, APIView):
                 "totals_by_method": totals_by_method,
                 "pending_total": str(pending_total),
                 "payments": ManualPaymentSerializer(payments, many=True).data,
+                "paid_documents": FiscalDocumentSerializer(
+                    paid_documents,
+                    many=True,
+                ).data,
                 "pending_documents": FiscalDocumentSerializer(pending_documents[:50], many=True).data,
                 "closure": CashClosureSerializer(closure).data if closure else None,
                 "payment_method_choices": [
@@ -1245,6 +1271,31 @@ class CashboxSummaryView(MobileApiMixin, APIView):
             message=f"Prepago actualizado al {value}%.",
         )
         return Response({"deposit_percent": f"{salon_settings.deposit_percent:.2f}"})
+
+
+class ReceiptTemplateView(MobileApiMixin, APIView):
+    def get(self, request):
+        _mobile_admin_required(request.user)
+        return Response(ReceiptTemplateSerializer(SalonSettings.load()).data)
+
+    def patch(self, request):
+        _mobile_admin_required(request.user)
+        salon_settings = SalonSettings.load()
+        serializer = ReceiptTemplateSerializer(
+            salon_settings,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        log_event(
+            actor=request.user,
+            section="salon",
+            action="receipt_template_update",
+            instance=salon_settings,
+            message="Plantilla del recibo actualizada desde la aplicacion movil.",
+        )
+        return Response(serializer.data)
 
 
 class BookingCashDocumentView(MobileApiMixin, APIView):
@@ -1373,6 +1424,64 @@ class CashDocumentPaymentCreateView(MobileApiMixin, APIView):
         )
         document.refresh_from_db()
         return Response(FiscalDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+class CashPaymentDetailView(MobileApiMixin, APIView):
+    def patch(self, request, pk):
+        _mobile_admin_required(request.user)
+        payment = generics.get_object_or_404(
+            ManualPayment.objects.select_related(
+                "booking",
+                "booking__client",
+                "fiscal_document",
+                "fiscal_document__booking",
+                "fiscal_document__booking__client",
+                "fiscal_document__booking__employee",
+                "fiscal_document__booking__service",
+                "fiscal_document__booking__zone",
+            ),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, payment.booking):
+            raise PermissionDenied("Sin acceso a este pago.")
+        payment_date = timezone.localtime(payment.paid_at).date()
+        if _is_cashbox_closed(payment_date):
+            raise serializers.ValidationError(
+                {"payment": ["No se puede editar un pago de una caja cerrada."]}
+            )
+
+        previous_method = payment.method
+        serializer = ManualPaymentMethodUpdateSerializer(
+            payment,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        log_event(
+            actor=request.user,
+            section="payment",
+            action="method_update",
+            instance=payment,
+            message=(
+                f"Metodo de pago actualizado en {payment.fiscal_document.number}: "
+                f"{previous_method} -> {payment.method}."
+            ),
+            metadata={
+                "previous_method": previous_method,
+                "method": payment.method,
+            },
+        )
+        document = FiscalDocument.objects.select_related(
+            "booking",
+            "booking__client",
+            "booking__employee",
+            "booking__service",
+            "booking__zone",
+        ).prefetch_related("payments", "lines").get(
+            pk=payment.fiscal_document_id
+        )
+        return Response(FiscalDocumentSerializer(document).data)
 
 
 class CashDocumentShareView(MobileApiMixin, APIView):

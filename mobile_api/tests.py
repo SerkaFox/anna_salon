@@ -11,6 +11,7 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from bookings.models import Booking, BookingWaitlistEntry
 from clients.models import Client
+from documents.models import FiscalDocument, Payment as ManualPayment
 from employees.models import (
     Employee,
     EmployeeRecurringTimeBlock,
@@ -177,6 +178,71 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()["deposit_percent"], "25.00")
         self.assertEqual(SalonSettings.load().deposit_percent, Decimal("25.00"))
+
+    def test_owner_can_update_receipt_template(self):
+        self._auth(self.owner_user)
+
+        response = self.api_client.patch(
+            reverse("mobile_api:receipt_template"),
+            {
+                "receipt_address": "Calle Nueva 10, Bilbao",
+                "receipt_footer": "Gracias, hasta pronto :)",
+                "receipt_show_qr": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            response.json()["receipt_address"],
+            "Calle Nueva 10, Bilbao",
+        )
+        self.assertEqual(
+            SalonSettings.load().receipt_footer,
+            "Gracias, hasta pronto :)",
+        )
+        self.assertFalse(SalonSettings.load().receipt_show_qr)
+
+    def test_paid_document_can_be_reopened_and_payment_method_changed(self):
+        booking = self._create_booking()
+        document = FiscalDocument.objects.create(
+            booking=booking,
+            document_type=FiscalDocument.DocumentTypes.RECEIPT,
+            issue_date=self.base_start.date(),
+        )
+        payment = ManualPayment.objects.create(
+            fiscal_document=document,
+            booking=booking,
+            paid_at=self.base_start,
+            amount=Decimal("50.00"),
+            method=ManualPayment.Methods.CASH,
+        )
+        self._auth(self.owner_user)
+
+        cashbox_response = self.api_client.get(
+            reverse("mobile_api:cashbox"),
+            {"date": self.base_start.date().isoformat()},
+        )
+
+        self.assertEqual(cashbox_response.status_code, 200)
+        self.assertEqual(
+            cashbox_response.json()["paid_documents"][0]["id"],
+            document.pk,
+        )
+
+        update_response = self.api_client.patch(
+            reverse("mobile_api:cash_payment_detail", args=[payment.pk]),
+            {"method": ManualPayment.Methods.CARD},
+            format="json",
+        )
+
+        self.assertEqual(update_response.status_code, 200, update_response.content)
+        payment.refresh_from_db()
+        self.assertEqual(payment.method, ManualPayment.Methods.CARD)
+        self.assertEqual(
+            update_response.json()["payments"][0]["method"],
+            ManualPayment.Methods.CARD,
+        )
 
     def test_list_endpoints_return_json(self):
         self._auth(self.owner_user)
