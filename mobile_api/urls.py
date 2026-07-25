@@ -41,6 +41,7 @@ urlpatterns = [
     path("calendar/day/", views.CalendarDayView.as_view(), name="calendar_day"),
     path("cashbox/", views.CashboxSummaryView.as_view(), name="cashbox"),
     path("cashbox/receipt-template/", views.ReceiptTemplateView.as_view(), name="receipt_template"),
+    path("cashbox/receipt-template/reset/", views.ReceiptTemplateResetView.as_view(), name="receipt_template_reset"),
     path("cashbox/close/", views.CashboxCloseView.as_view(), name="cashbox_close"),
     path("cashbox/documents/<int:pk>/", views.CashDocumentDetailView.as_view(), name="cash_document_detail"),
     path("cashbox/documents/<int:pk>/lines/", views.CashDocumentLineCreateView.as_view(), name="cash_document_line_create"),

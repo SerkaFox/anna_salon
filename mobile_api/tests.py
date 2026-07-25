@@ -203,6 +203,50 @@ class MobileApiMvpTests(TestCase):
         )
         self.assertFalse(SalonSettings.load().receipt_show_qr)
 
+        reset_response = self.api_client.post(
+            reverse("mobile_api:receipt_template_reset"),
+            {},
+            format="json",
+        )
+
+        self.assertEqual(reset_response.status_code, 200)
+        self.assertEqual(
+            reset_response.json()["receipt_address"],
+            "Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia",
+        )
+        self.assertTrue(reset_response.json()["receipt_show_qr"])
+
+    def test_owner_closes_cashbox_with_counted_cash_difference(self):
+        booking = self._create_booking()
+        document = FiscalDocument.objects.create(
+            booking=booking,
+            document_type=FiscalDocument.DocumentTypes.RECEIPT,
+            issue_date=self.base_start.date(),
+        )
+        ManualPayment.objects.create(
+            fiscal_document=document,
+            booking=booking,
+            paid_at=self.base_start,
+            amount=Decimal("50.00"),
+            method=ManualPayment.Methods.CASH,
+        )
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:cashbox_close"),
+            {
+                "date": self.base_start.date().isoformat(),
+                "declared_cash_amount": "47.50",
+                "notes": "Faltan 2,50",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["cash_amount"], "50.00")
+        self.assertEqual(response.json()["declared_cash_amount"], "47.50")
+        self.assertEqual(response.json()["cash_difference"], "-2.50")
+
     def test_paid_document_can_be_reopened_and_payment_method_changed(self):
         booking = self._create_booking()
         document = FiscalDocument.objects.create(

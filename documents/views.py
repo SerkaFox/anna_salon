@@ -726,12 +726,15 @@ def cashbox_close(request):
         for method, _label in Payment.Methods.choices
     }
     total_amount = sum((payment.signed_amount for payment in payments), Decimal("0.00"))
+    expected_cash = totals_by_method[Payment.Methods.CASH]
 
     closure, created = CashClosure.objects.update_or_create(
         closure_date=closure_date,
         defaults={
             "total_amount": total_amount,
-            "cash_amount": totals_by_method[Payment.Methods.CASH],
+            "cash_amount": expected_cash,
+            "declared_cash_amount": expected_cash,
+            "cash_difference": Decimal("0.00"),
             "card_amount": totals_by_method[Payment.Methods.CARD],
             "bizum_amount": totals_by_method[Payment.Methods.BIZUM],
             "transfer_amount": totals_by_method[Payment.Methods.TRANSFER],

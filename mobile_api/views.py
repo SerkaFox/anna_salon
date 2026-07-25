@@ -1298,6 +1298,35 @@ class ReceiptTemplateView(MobileApiMixin, APIView):
         return Response(serializer.data)
 
 
+class ReceiptTemplateResetView(MobileApiMixin, APIView):
+    template_fields = [
+        "receipt_business_name",
+        "receipt_address",
+        "receipt_phone",
+        "receipt_email",
+        "receipt_website",
+        "receipt_footer",
+        "receipt_show_logo",
+        "receipt_show_qr",
+    ]
+
+    def post(self, request):
+        _mobile_admin_required(request.user)
+        salon_settings = SalonSettings.load()
+        for field_name in self.template_fields:
+            field = SalonSettings._meta.get_field(field_name)
+            setattr(salon_settings, field_name, field.get_default())
+        salon_settings.save(update_fields=[*self.template_fields, "updated_at"])
+        log_event(
+            actor=request.user,
+            section="salon",
+            action="receipt_template_reset",
+            instance=salon_settings,
+            message="Plantilla del recibo restablecida a sus valores iniciales.",
+        )
+        return Response(ReceiptTemplateSerializer(salon_settings).data)
+
+
 class BookingCashDocumentView(MobileApiMixin, APIView):
     def post(self, request, pk):
         _mobile_admin_required(request.user)
@@ -1623,11 +1652,18 @@ class CashboxCloseView(MobileApiMixin, APIView):
             for method, _label in ManualPayment.Methods.choices
         }
         total_amount = sum((payment.signed_amount for payment in payments), Decimal("0.00"))
+        expected_cash = totals_by_method[ManualPayment.Methods.CASH]
+        declared_cash = serializer.validated_data.get(
+            "declared_cash_amount",
+            expected_cash,
+        )
         closure, created = CashClosure.objects.update_or_create(
             closure_date=closure_date,
             defaults={
                 "total_amount": total_amount,
-                "cash_amount": totals_by_method[ManualPayment.Methods.CASH],
+                "cash_amount": expected_cash,
+                "declared_cash_amount": declared_cash,
+                "cash_difference": declared_cash - expected_cash,
                 "card_amount": totals_by_method[ManualPayment.Methods.CARD],
                 "bizum_amount": totals_by_method[ManualPayment.Methods.BIZUM],
                 "transfer_amount": totals_by_method[ManualPayment.Methods.TRANSFER],

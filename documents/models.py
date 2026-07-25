@@ -242,6 +242,18 @@ class CashClosure(models.Model):
     closure_date = models.DateField("Fecha", unique=True)
     total_amount = models.DecimalField("Total", max_digits=10, decimal_places=2, default=Decimal("0.00"))
     cash_amount = models.DecimalField("Efectivo", max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    declared_cash_amount = models.DecimalField(
+        "Efectivo contado",
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    cash_difference = models.DecimalField(
+        "Diferencia de efectivo",
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
     card_amount = models.DecimalField("Tarjeta", max_digits=10, decimal_places=2, default=Decimal("0.00"))
     bizum_amount = models.DecimalField("Bizum", max_digits=10, decimal_places=2, default=Decimal("0.00"))
     transfer_amount = models.DecimalField("Transferencia", max_digits=10, decimal_places=2, default=Decimal("0.00"))

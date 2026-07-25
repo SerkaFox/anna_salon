@@ -1008,6 +1008,8 @@ class CashClosureSerializer(serializers.ModelSerializer):
             "closure_date",
             "total_amount",
             "cash_amount",
+            "declared_cash_amount",
+            "cash_difference",
             "card_amount",
             "bizum_amount",
             "transfer_amount",
@@ -1087,6 +1089,12 @@ class ReceiptTemplateSerializer(serializers.ModelSerializer):
 class CashClosureWriteSerializer(serializers.Serializer):
     date = serializers.DateField(required=False)
     notes = serializers.CharField(required=False, allow_blank=True)
+    declared_cash_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+    )
 
     def save(self, **kwargs):
         return self._booking_form.save()
