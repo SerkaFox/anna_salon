@@ -227,6 +227,14 @@ WHATSAPP_WAITLIST_NOTIFICATION_PHONE = os.getenv('WHATSAPP_WAITLIST_NOTIFICATION
 
 DEMO_MODE = os.getenv('DEMO_MODE', 'false').lower() in {'1', 'true', 'yes', 'on'}
 SALON_NAME = os.getenv('SALON_NAME', 'BRIMOON Studio')
+SALON_LEGAL_NAME = os.getenv('SALON_LEGAL_NAME', SALON_NAME)
+SALON_TAX_ID = os.getenv('SALON_TAX_ID', '')
+SALON_ADDRESS = os.getenv(
+    'SALON_ADDRESS',
+    'Rafaela Ybarra Kalea, 2 bis, Deusto, 48014 Bilbao, Bizkaia',
+)
+SALON_PHONE = os.getenv('SALON_PHONE', '643996431')
+SALON_EMAIL = os.getenv('SALON_EMAIL', '')
 
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 GOOGLE_PLACE_ID = os.getenv('GOOGLE_PLACE_ID', '')

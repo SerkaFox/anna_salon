@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
@@ -913,8 +914,14 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source="booking.client.full_name", read_only=True)
     client_phone = serializers.CharField(source="booking.client.phone", read_only=True)
     client_email = serializers.CharField(source="booking.client.email", read_only=True)
+    client_fiscal_id = serializers.CharField(source="booking.client.fiscal_id", read_only=True)
+    client_fiscal_address = serializers.CharField(source="booking.client.fiscal_address", read_only=True)
+    client_fiscal_city = serializers.CharField(source="booking.client.fiscal_city", read_only=True)
+    client_fiscal_postcode = serializers.CharField(source="booking.client.fiscal_postcode", read_only=True)
     service_name = serializers.CharField(source="booking.service.name", read_only=True)
     booking_start_at = serializers.SerializerMethodField()
+    business = serializers.SerializerMethodField()
+    document_url = serializers.SerializerMethodField()
     payments_total = serializers.SerializerMethodField()
     balance_due = serializers.SerializerMethodField()
     is_paid = serializers.BooleanField(read_only=True)
@@ -943,8 +950,14 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
             "client_name",
             "client_phone",
             "client_email",
+            "client_fiscal_id",
+            "client_fiscal_address",
+            "client_fiscal_city",
+            "client_fiscal_postcode",
             "service_name",
             "booking_start_at",
+            "business",
+            "document_url",
             "lines",
             "payments",
         ]
@@ -957,6 +970,22 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
 
     def get_balance_due(self, obj):
         return str(obj.balance_due)
+
+    def get_business(self, obj):
+        public_url = settings.PUBLIC_BASE_URL.rstrip("/")
+        return {
+            "name": settings.SALON_NAME,
+            "legal_name": settings.SALON_LEGAL_NAME,
+            "tax_id": settings.SALON_TAX_ID,
+            "address": settings.SALON_ADDRESS,
+            "phone": settings.SALON_PHONE,
+            "email": settings.SALON_EMAIL,
+            "website": public_url,
+        }
+
+    def get_document_url(self, obj):
+        public_url = settings.PUBLIC_BASE_URL.rstrip("/")
+        return f"{public_url}/panel/documentos/{obj.pk}/print/"
 
 
 class CashClosureSerializer(serializers.ModelSerializer):
