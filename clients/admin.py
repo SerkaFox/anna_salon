@@ -5,9 +5,24 @@ from .models import Client, ClientRewardRedemption, ClientRewardRule
 
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "phone", "email", "is_active", "created_at")
-    search_fields = ("first_name", "last_name", "phone", "email")
-    list_filter = ("is_active", "created_at")
+    list_display = (
+        "full_name",
+        "phone",
+        "email",
+        "is_blacklisted",
+        "external_source",
+        "is_active",
+        "created_at",
+    )
+    search_fields = (
+        "first_name",
+        "last_name",
+        "phone",
+        "alternate_phone",
+        "email",
+        "external_id",
+    )
+    list_filter = ("is_blacklisted", "external_source", "is_active", "created_at")
 
 
 @admin.register(ClientRewardRule)

@@ -75,6 +75,7 @@ class MobileApiMvpTests(TestCase):
             is_active=True,
         )
         self.employee.services.add(self.service, self.no_zone_service)
+        self.employee.zones.add(self.zone, self.other_zone)
 
         self.other_employee = Employee.objects.create(
             user=self.other_employee_user,
@@ -84,6 +85,7 @@ class MobileApiMvpTests(TestCase):
             is_active=True,
         )
         self.other_employee.services.add(self.service)
+        self.other_employee.zones.add(self.zone, self.other_zone)
 
         self.unsupported_service = Service.objects.create(
             name="Maquillaje",
@@ -247,6 +249,55 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(response.json()["declared_cash_amount"], "47.50")
         self.assertEqual(response.json()["cash_difference"], "-2.50")
 
+    def test_cashbox_filters_payment_methods_across_date_range(self):
+        booking = self._create_booking()
+        document = FiscalDocument.objects.create(
+            booking=booking,
+            document_type=FiscalDocument.DocumentTypes.RECEIPT,
+            issue_date=self.base_start.date(),
+        )
+        ManualPayment.objects.create(
+            fiscal_document=document,
+            booking=booking,
+            paid_at=self.base_start,
+            amount=Decimal("20.00"),
+            method=ManualPayment.Methods.CASH,
+        )
+        ManualPayment.objects.create(
+            fiscal_document=document,
+            booking=booking,
+            paid_at=self.base_start + timedelta(days=1),
+            amount=Decimal("30.00"),
+            method=ManualPayment.Methods.CARD,
+        )
+        self._auth(self.owner_user)
+
+        response = self.api_client.get(
+            reverse("mobile_api:cashbox"),
+            {
+                "date_from": self.base_start.date().isoformat(),
+                "date_to": (self.base_start.date() + timedelta(days=1)).isoformat(),
+                "method": "cash,card",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["is_range"])
+        self.assertEqual(response.json()["payments_total"], "50.00")
+        self.assertEqual(response.json()["totals_by_method"]["cash"], "20.00")
+        self.assertEqual(response.json()["totals_by_method"]["card"], "30.00")
+
+        cash_only = self.api_client.get(
+            reverse("mobile_api:cashbox"),
+            {
+                "date_from": self.base_start.date().isoformat(),
+                "date_to": (self.base_start.date() + timedelta(days=1)).isoformat(),
+                "method": "cash",
+            },
+        )
+        self.assertEqual(cash_only.status_code, 200, cash_only.content)
+        self.assertEqual(cash_only.json()["payments_total"], "20.00")
+
     def test_paid_document_can_be_reopened_and_payment_method_changed(self):
         booking = self._create_booking()
         document = FiscalDocument.objects.create(
@@ -389,6 +440,19 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(booking.service_id, self.service.pk)
         self.assertEqual(booking.zone_id, self.zone.pk)
         self.assertEqual(booking.end_at, booking.start_at + timedelta(minutes=self.service.duration_minutes))
+
+    def test_booking_auto_zone_is_limited_to_employee_zones(self):
+        self.employee.zones.set([self.other_zone])
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(zone=None),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["zone"], self.other_zone.pk)
 
     def test_owner_can_update_booking_via_mobile_api(self):
         booking = self._create_booking(employee=self.employee, client=self.client_obj, service=self.service, zone=self.zone)

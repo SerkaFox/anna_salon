@@ -686,7 +686,7 @@ class EmployeeListView(MobileApiMixin, generics.ListAPIView):
     def get_queryset(self):
         return (
             _mobile_employees_queryset(Employee.objects.filter(is_active=True), self.request.user)
-            .prefetch_related("services")
+            .prefetch_related("services", "zones")
             .order_by("first_name", "last_name")
         )
 
@@ -707,7 +707,7 @@ class EmployeeListView(MobileApiMixin, generics.ListAPIView):
 class EmployeeDetailView(MobileApiMixin, APIView):
     def get_object(self, request, pk):
         employee = generics.get_object_or_404(
-            Employee.objects.select_related("user").prefetch_related("services"),
+            Employee.objects.select_related("user").prefetch_related("services", "zones"),
             pk=pk,
         )
         if not can_access_employee(request.user, employee):
@@ -1172,7 +1172,34 @@ class CashboxSummaryView(MobileApiMixin, APIView):
     def get(self, request):
         _mobile_admin_required(request.user)
         selected_date = _parse_mobile_date(request.query_params.get("date"))
-        method_value = (request.query_params.get("method") or "").strip()
+        date_from_value = request.query_params.get("date_from")
+        date_to_value = request.query_params.get("date_to")
+        date_from = (
+            _parse_mobile_date(date_from_value)
+            if date_from_value
+            else selected_date
+        )
+        date_to = (
+            _parse_mobile_date(date_to_value)
+            if date_to_value
+            else selected_date
+        )
+        if date_from > date_to:
+            raise serializers.ValidationError(
+                {"date_from": ["La fecha inicial no puede ser posterior a la final."]}
+            )
+        if (date_to - date_from).days > 366:
+            raise serializers.ValidationError(
+                {"date_to": ["El rango máximo de caja es de 367 días."]}
+            )
+        method_values = [
+            value.strip()
+            for value in (request.query_params.get("method") or "").split(",")
+            if value.strip()
+        ]
+        valid_methods = {value for value, _label in ManualPayment.Methods.choices}
+        if any(value not in valid_methods for value in method_values):
+            raise serializers.ValidationError({"method": ["Método de pago inválido."]})
         entry_type_value = (request.query_params.get("entry_type") or "").strip()
 
         payments = ManualPayment.objects.select_related(
@@ -1180,9 +1207,9 @@ class CashboxSummaryView(MobileApiMixin, APIView):
             "booking__client",
             "booking__service",
             "fiscal_document",
-        ).filter(paid_at__date=selected_date)
-        if method_value:
-            payments = payments.filter(method=method_value)
+        ).filter(paid_at__date__range=(date_from, date_to))
+        if method_values:
+            payments = payments.filter(method__in=method_values)
         if entry_type_value:
             payments = payments.filter(entry_type=entry_type_value)
         payments = list(payments)
@@ -1220,11 +1247,18 @@ class CashboxSummaryView(MobileApiMixin, APIView):
         ).prefetch_related("payments", "lines")
         pending_documents = _pending_documents(pending_documents)
         pending_total = sum((document.balance_due for document in pending_documents), Decimal("0.00"))
-        closure = CashClosure.objects.filter(closure_date=selected_date).select_related("closed_by").first()
+        closure = None
+        if date_from == date_to:
+            closure = CashClosure.objects.filter(
+                closure_date=selected_date
+            ).select_related("closed_by").first()
 
         return Response(
             {
                 "date": selected_date.isoformat(),
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "is_range": date_from != date_to,
                 "payments_total": str(payments_total),
                 "payments_count": len(payments),
                 "totals_by_method": totals_by_method,
@@ -1744,9 +1778,9 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
                             data["zone"].pk
                             if data.get("zone")
                             else (
-                                find_available_zone(data["service"], slot["start_at"], slot["end_at"], exclude_booking_id=booking.pk if booking else None).pk
+                                find_available_zone(data["service"], slot["start_at"], slot["end_at"], exclude_booking_id=booking.pk if booking else None, employee=data["employee"]).pk
                                 if data["service"].requires_zone
-                                and find_available_zone(data["service"], slot["start_at"], slot["end_at"], exclude_booking_id=booking.pk if booking else None)
+                                and find_available_zone(data["service"], slot["start_at"], slot["end_at"], exclude_booking_id=booking.pk if booking else None, employee=data["employee"])
                                 else None
                             )
                         ),
@@ -1767,7 +1801,7 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
     def _team_slots(self, request, data, booking):
         service = data["service"]
         employees = _mobile_employees_queryset(
-            Employee.objects.filter(is_active=True).prefetch_related("services"),
+            Employee.objects.filter(is_active=True).prefetch_related("services", "zones"),
             request.user,
         ).filter(services=service).order_by("first_name", "last_name")
         slot_map = {}
@@ -1794,7 +1828,13 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
                 key = _format_api_datetime(slot["start_at"])
                 zone = data.get("zone")
                 if zone is None and service.requires_zone:
-                    zone = find_available_zone(service, slot["start_at"], slot["end_at"], exclude_booking_id=booking.pk if booking else None)
+                    zone = find_available_zone(
+                        service,
+                        slot["start_at"],
+                        slot["end_at"],
+                        exclude_booking_id=booking.pk if booking else None,
+                        employee=employee,
+                    )
                 item = slot_map.setdefault(
                     key,
                     {

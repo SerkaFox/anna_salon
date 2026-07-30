@@ -239,7 +239,13 @@ def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking
         return False
 
     if service.requires_zone and zone is None:
-        return find_available_zone(service, start_at, end_at, exclude_booking_id=exclude_booking_id) is not None
+        return find_available_zone(
+            service,
+            start_at,
+            end_at,
+            exclude_booking_id=exclude_booking_id,
+            employee=employee,
+        ) is not None
 
     if service.requires_zone and zone:
         zone_conflict = qs.filter(
@@ -254,13 +260,22 @@ def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking
     return True
 
 
-def find_available_zone(service, start_at, end_at, exclude_booking_id=None):
+def find_available_zone(
+    service,
+    start_at,
+    end_at,
+    exclude_booking_id=None,
+    employee=None,
+):
     if not service.requires_zone:
         return None
     booking_qs = Booking.objects.exclude(status=Booking.Statuses.CANCELLED)
     if exclude_booking_id:
         booking_qs = booking_qs.exclude(pk=exclude_booking_id)
-    for zone in service.allowed_zones.filter(is_active=True).order_by("name", "pk"):
+    zones = service.allowed_zones.filter(is_active=True)
+    if employee is not None:
+        zones = zones.filter(employees=employee)
+    for zone in zones.order_by("name", "pk"):
         conflict = booking_qs.filter(
             zone=zone,
             start_at__lt=end_at,
@@ -380,7 +395,13 @@ def build_available_slots_for_day(date_obj, employee, service, zone=None, exclud
             continue
 
         if service.requires_zone and zone is None:
-            if find_available_zone(service, current, slot_end, exclude_booking_id=exclude_booking_id) is None:
+            if find_available_zone(
+                service,
+                current,
+                slot_end,
+                exclude_booking_id=exclude_booking_id,
+                employee=employee,
+            ) is None:
                 current += step
                 continue
 

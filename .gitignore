@@ -20,5 +20,6 @@ staticfiles/
 node_modules/
 whatsapp_bridge/sessions/
 whatsapp_bridge/.wwebjs_*/
+clients/data/*.json
 
 .DS_Store

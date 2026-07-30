@@ -76,9 +76,22 @@ class ClientSerializer(serializers.ModelSerializer):
             "last_name",
             "full_name",
             "phone",
+            "alternate_phone",
             "email",
+            "address",
+            "postcode",
             "birth_date",
+            "gender",
             "notes",
+            "how_we_met",
+            "external_source",
+            "external_id",
+            "booking_count",
+            "last_appointment_at",
+            "acquisition_date",
+            "average_expense_amount_cents",
+            "appointments_frequency",
+            "is_blacklisted",
             "is_active",
             "created_at",
             "updated_at",
@@ -137,9 +150,15 @@ class ClientWriteSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "phone",
+            "alternate_phone",
             "email",
+            "address",
+            "postcode",
             "birth_date",
+            "gender",
             "notes",
+            "how_we_met",
+            "is_blacklisted",
             "referred_by",
             "username",
             "password",
@@ -212,6 +231,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     service_ids = serializers.PrimaryKeyRelatedField(source="services", many=True, read_only=True)
     service_names = serializers.SerializerMethodField()
+    zone_ids = serializers.PrimaryKeyRelatedField(source="zones", many=True, read_only=True)
+    zone_names = serializers.SerializerMethodField()
     username = serializers.CharField(source="user.username", read_only=True, allow_null=True)
 
     class Meta:
@@ -227,6 +248,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "commission_percent",
             "service_ids",
             "service_names",
+            "zone_ids",
+            "zone_names",
             "username",
             "notes",
             "is_active",
@@ -236,6 +259,9 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     def get_service_names(self, obj):
         return [service.name for service in obj.services.all()]
+
+    def get_zone_names(self, obj):
+        return [zone.name for zone in obj.zones.all()]
 
 
 class EmployeeWriteSerializer(serializers.ModelSerializer):
@@ -255,6 +281,11 @@ class EmployeeWriteSerializer(serializers.ModelSerializer):
         many=True,
         required=False,
     )
+    zones = serializers.PrimaryKeyRelatedField(
+        queryset=Zone.objects.filter(is_active=True),
+        many=True,
+        required=False,
+    )
 
     class Meta:
         model = Employee
@@ -264,6 +295,7 @@ class EmployeeWriteSerializer(serializers.ModelSerializer):
             "phone",
             "email",
             "services",
+            "zones",
             "calendar_color",
             "commission_percent",
             "is_active",
@@ -815,11 +847,18 @@ class BookingWriteSerializer(serializers.Serializer):
                 values["start_at"],
                 values["end_at"],
                 exclude_booking_id=instance.pk if instance else None,
+                employee=employee,
             )
             if values["zone"] is None:
                 raise serializers.ValidationError(
                     {"zone": ["No hay zona libre para este horario."]}
                 )
+        elif service.requires_zone and not employee.zones.filter(
+            pk=values["zone"].pk
+        ).exists():
+            raise serializers.ValidationError(
+                {"zone": ["Este empleado no trabaja en la zona seleccionada."]}
+            )
 
         form_data = {
             "client": values["client"].pk,
@@ -1126,6 +1165,8 @@ class AvailabilityCheckSerializer(serializers.Serializer):
         if service.requires_zone:
             if zone and not service.allowed_zones.filter(pk=zone.pk).exists():
                 raise serializers.ValidationError({"zone": ["La zona seleccionada no está permitida para este servicio."]})
+            if zone and not employee.zones.filter(pk=zone.pk).exists():
+                raise serializers.ValidationError({"zone": ["Este empleado no trabaja en la zona seleccionada."]})
         else:
             zone = None
 
@@ -1137,7 +1178,13 @@ class AvailabilityCheckSerializer(serializers.Serializer):
             raise serializers.ValidationError({"non_field_errors": ["Ese horario no está disponible para el empleado o la zona."]})
 
         if service.requires_zone and zone is None:
-            zone = find_available_zone(service, start_at, end_at, exclude_booking_id=exclude_booking_id)
+            zone = find_available_zone(
+                service,
+                start_at,
+                end_at,
+                exclude_booking_id=exclude_booking_id,
+                employee=employee,
+            )
             if zone is None:
                 raise serializers.ValidationError({"zone": ["No hay zona libre para este horario."]})
 

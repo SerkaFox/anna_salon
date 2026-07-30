@@ -34,6 +34,12 @@ class Employee(models.Model):
         related_name="employees",
         verbose_name="Servicios que realiza",
     )
+    zones = models.ManyToManyField(
+        "salon.Zone",
+        blank=True,
+        related_name="employees",
+        verbose_name="Zonas en las que trabaja",
+    )
     calendar_color = models.CharField("Color calendario", max_length=20, default="#c75c8b")
     commission_percent = models.DecimalField(
         "Porcentaje del empleado",
