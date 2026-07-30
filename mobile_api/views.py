@@ -6,7 +6,8 @@ import secrets
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db.models.deletion import ProtectedError
-from django.db.models import Count
+from django.db.models import Count, DecimalField, Q, Sum
+from django.db.models.functions import Coalesce
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -466,9 +467,49 @@ class ClientListView(MobileApiMixin, generics.ListCreateAPIView):
     serializer_class = ClientSerializer
 
     def get_queryset(self):
-        queryset = Client.objects.filter(is_active=True)
+        queryset = Client.objects.filter(is_active=True).annotate(
+            completed_bookings_count=Count(
+                "bookings",
+                filter=Q(bookings__status=Booking.Statuses.DONE),
+            ),
+            completed_bookings_spent=Coalesce(
+                Sum(
+                    "bookings__client_price_snapshot",
+                    filter=Q(bookings__status=Booking.Statuses.DONE),
+                ),
+                Decimal("0"),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+        )
         if not _is_mobile_employee_user(self.request.user):
             queryset = scope_clients_queryset(queryset, self.request.user)
+
+        client_filter = self.request.query_params.get("filter", "").strip()
+        if client_filter == "blacklisted":
+            queryset = queryset.filter(is_blacklisted=True)
+        elif client_filter == "online":
+            queryset = queryset.filter(
+                Q(user__isnull=False)
+                | Q(
+                    how_we_met__in=[
+                        "treatwell_official_channel",
+                        "uala_official_channel",
+                        "venue_website",
+                        "internet",
+                    ]
+                )
+            )
+
+        ordering = self.request.query_params.get("ordering", "name").strip()
+        if ordering == "orders":
+            return queryset.order_by("-booking_count", "first_name", "last_name")
+        if ordering == "spent":
+            return queryset.order_by(
+                "-average_expense_amount_cents",
+                "-booking_count",
+                "first_name",
+                "last_name",
+            )
         return queryset.order_by("first_name", "last_name")
 
     def create(self, request, *args, **kwargs):

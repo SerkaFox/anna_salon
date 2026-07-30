@@ -353,6 +353,40 @@ class MobileApiMvpTests(TestCase):
             self.assertEqual(response["Content-Type"], "application/json")
             self.assertIsInstance(response.json(), list)
 
+    def test_clients_can_be_filtered_and_include_orders_spent_and_online(self):
+        self.client_obj.booking_count = 4
+        self.client_obj.average_expense_amount_cents = 2500
+        self.client_obj.is_blacklisted = True
+        self.client_obj.how_we_met = "treatwell_official_channel"
+        self.client_obj.save()
+        self._create_booking(
+            client=self.client_obj,
+            status=Booking.Statuses.DONE,
+        )
+        self._auth(self.owner_user)
+
+        response = self.api_client.get(
+            reverse("mobile_api:clients"),
+            {"filter": "blacklisted"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(len(response.json()), 1)
+        client = response.json()[0]
+        self.assertEqual(client["id"], self.client_obj.pk)
+        self.assertEqual(client["total_orders"], 5)
+        self.assertEqual(client["total_spent"], "150.00")
+        self.assertTrue(client["is_online_client"])
+
+        online_response = self.api_client.get(
+            reverse("mobile_api:clients"),
+            {"filter": "online"},
+        )
+        self.assertEqual(
+            [item["id"] for item in online_response.json()],
+            [self.client_obj.pk],
+        )
+
     def test_owner_can_see_all_bookings(self):
         own_booking = self._create_booking(employee=self.employee, client=self.client_obj)
         other_booking = self._create_booking(

@@ -67,6 +67,9 @@ class ClientSerializer(serializers.ModelSerializer):
     referred_by_name = serializers.CharField(source="referred_by.full_name", read_only=True, allow_null=True)
     username = serializers.CharField(source="user.username", read_only=True, allow_null=True)
     avatar_url = serializers.SerializerMethodField()
+    total_orders = serializers.SerializerMethodField()
+    total_spent = serializers.SerializerMethodField()
+    is_online_client = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
@@ -87,6 +90,9 @@ class ClientSerializer(serializers.ModelSerializer):
             "external_source",
             "external_id",
             "booking_count",
+            "total_orders",
+            "total_spent",
+            "is_online_client",
             "last_appointment_at",
             "acquisition_date",
             "average_expense_amount_cents",
@@ -106,6 +112,29 @@ class ClientSerializer(serializers.ModelSerializer):
         if not obj.avatar:
             return None
         return f"/api/v1/clients/{obj.pk}/avatar/"
+
+    def get_total_orders(self, obj):
+        return obj.booking_count + getattr(obj, "completed_bookings_count", 0)
+
+    def get_total_spent(self, obj):
+        imported = (
+            Decimal(obj.average_expense_amount_cents) * obj.booking_count
+            / Decimal("100")
+        )
+        completed = getattr(obj, "completed_bookings_spent", None) or Decimal("0")
+        return str((imported + completed).quantize(Decimal("0.01")))
+
+    def get_is_online_client(self, obj):
+        return bool(
+            obj.user_id
+            or obj.how_we_met
+            in {
+                "treatwell_official_channel",
+                "uala_official_channel",
+                "venue_website",
+                "internet",
+            }
+        )
 
 
 class ClientRewardRuleSerializer(serializers.ModelSerializer):

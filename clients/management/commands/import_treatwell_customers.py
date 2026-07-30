@@ -57,6 +57,29 @@ def _name_key(value):
     return re.sub(r"\s+", " ", _text(value)).casefold()
 
 
+def _phone_digits(value):
+    return re.sub(r"\D", "", _text(value))
+
+
+def _looks_like_phone(value):
+    text = _text(value)
+    digits = _phone_digits(text)
+    return bool(re.fullmatch(r"[+\d\s()./-]+", text)) and 7 <= len(digits) <= 15
+
+
+def _repair_swapped_contact_fields(first_name, phone):
+    """Treatwell occasionally exports the phone in firstname and the name in phone."""
+    if not _looks_like_phone(first_name):
+        return first_name, phone
+
+    exported_phone = first_name
+    if phone and not _looks_like_phone(phone) and not _phone_digits(phone):
+        return phone, exported_phone
+
+    # A numeric or empty phone column is not a usable client name.
+    return "Cliente Treatwell", exported_phone
+
+
 def _json_value(value):
     if isinstance(value, (date, datetime)):
         return value.isoformat()
@@ -206,6 +229,7 @@ class Command(BaseCommand):
         first_name = _text(row.get("firstname"))
         last_name = _text(row.get("lastname"))
         phone = _text(row.get("phonenumber"))
+        first_name, phone = _repair_swapped_contact_fields(first_name, phone)
         email = _text(row.get("email"))
         if not first_name and not last_name:
             first_name = phone or email or "Cliente Treatwell"
