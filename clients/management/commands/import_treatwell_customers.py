@@ -165,7 +165,7 @@ class Command(BaseCommand):
         from accounts.models import User
         from bookings.models import Booking
         from documents.models import FiscalDocument
-        from payments.models import Payment as OnlinePayment
+        from payments.models import Payment as OnlinePayment, PaymentRefund
 
         client_ids = list(Client.objects.values_list("pk", flat=True))
         if not client_ids:
@@ -175,7 +175,9 @@ class Command(BaseCommand):
         )
         bookings = Booking.objects.filter(client_id__in=client_ids)
         FiscalDocument.objects.filter(booking__in=bookings).delete()
-        OnlinePayment.objects.filter(booking__in=bookings).delete()
+        online_payments = OnlinePayment.objects.filter(booking__in=bookings)
+        PaymentRefund.objects.filter(payment__in=online_payments).delete()
+        online_payments.delete()
         bookings.delete()
         deleted, _details = Client.objects.filter(pk__in=client_ids).delete()
         User.objects.filter(
