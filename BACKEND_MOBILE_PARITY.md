@@ -6,6 +6,8 @@ Este documento marca que debe tener el panel web para quedar alineado con la app
 
 La app mobile ya tiene una version mas completa del producto: roles, calendario, clientes, empleados, servicios, zonas, premios, fotos, portal cliente y validaciones de reservas. El backend web ya tiene muchas piezas, pero algunas pantallas todavia muestran datos antiguos o no usan toda la logica nueva.
 
+Actualizado el 31/07/2026: el panel web ya incluye filtros de clientes (lista negra, online, reservas e ingresos), bloqueo online desde la ficha, caja por rangos de fechas y metodos de pago, y asignacion de varias zonas a cada empleado.
+
 ## 1. Clientes
 
 Mobile ya tiene:

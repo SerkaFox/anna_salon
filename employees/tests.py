@@ -9,12 +9,18 @@ from accounts.models import User
 from bookings.models import Booking
 from clients.models import Client
 from employees.models import Employee
+from employees.forms import EmployeeForm
+from salon.models import Zone
 from services_app.models import Service
 
 
 class EmployeeListAnalyticsTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="owner", password="testpass123")
+        self.user = User.objects.create_user(
+            username="owner",
+            password="testpass123",
+            role=User.ROLE_OWNER,
+        )
         self.client.force_login(self.user)
 
         self.service_cut = Service.objects.create(
@@ -151,3 +157,25 @@ class EmployeeListAnalyticsTests(TestCase):
         self.assertEqual(employees[1].pk, self.employee_lia.pk)
         self.assertEqual(employees[0].clients_rank, 1)
         self.assertEqual(employees[0].revenue_rank, 1)
+
+    def test_employee_form_saves_multiple_zones(self):
+        zone_one = Zone.objects.create(name="Cabina 1")
+        zone_two = Zone.objects.create(name="Cabina 2")
+        form = EmployeeForm(
+            {
+                "first_name": "Marta",
+                "last_name": "Lopez",
+                "phone": "",
+                "email": "",
+                "services": [self.service_cut.pk],
+                "zones": [zone_one.pk, zone_two.pk],
+                "calendar_color": "#c75c8b",
+                "commission_percent": "40.00",
+                "is_active": "on",
+                "notes": "",
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        employee = form.save()
+        self.assertEqual(set(employee.zones.values_list("pk", flat=True)), {zone_one.pk, zone_two.pk})

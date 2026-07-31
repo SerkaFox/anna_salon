@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.forms import BaseInlineFormSet, inlineformset_factory
 
 from services_app.models import Service
+from salon.models import Zone
 
 from .models import Employee, EmployeeScheduleOverride, EmployeeTimeBlock, EmployeeWeeklyShift, Weekday
 
@@ -24,6 +25,13 @@ class EmployeeForm(forms.ModelForm):
         required=False,
         widget=forms.SelectMultiple(attrs={"class": "input", "size": "8"}),
     )
+    zones = forms.ModelMultipleChoiceField(
+        label="Zonas en las que trabaja",
+        queryset=Zone.objects.filter(is_active=True).order_by("name"),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(),
+        help_text="Marca una o varias zonas. Se asignarán automáticamente al crear reservas.",
+    )
 
     class Meta:
         model = Employee
@@ -34,6 +42,7 @@ class EmployeeForm(forms.ModelForm):
             "phone",
             "email",
             "services",
+            "zones",
             "calendar_color",
             "commission_percent",
             "is_active",

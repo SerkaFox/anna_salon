@@ -87,6 +87,13 @@
     </div>
 
     <div class="field">
+      <label>Zonas en las que trabaja</label>
+      <p class="muted-text">Marca todas las zonas válidas. La reserva elegirá automáticamente una zona libre entre ellas.</p>
+      {{ form.zones }}
+      {{ form.zones.errors }}
+    </div>
+
+    <div class="field">
       <label for="{{ form.notes.id_for_label }}">Notas</label>
       {{ form.notes }}
       {{ form.notes.errors }}

@@ -197,6 +197,7 @@ class ClientWriteSerializer(serializers.ModelSerializer):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request and not is_admin_user(request.user):
+            self.fields.pop("is_blacklisted", None)
             self.fields["referred_by"].queryset = scope_clients_queryset(
                 Client.objects.filter(is_active=True),
                 request.user,
@@ -837,6 +838,10 @@ class BookingWriteSerializer(serializers.Serializer):
                 values[field] = None
 
         if client_profile:
+            if client_profile.is_blacklisted:
+                raise serializers.ValidationError(
+                    {"client": ["Este cliente no puede crear reservas online."]}
+                )
             values["client"] = client_profile
             values["status"] = Booking.Statuses.PENDING
             values["source"] = Booking.Sources.WEBSITE

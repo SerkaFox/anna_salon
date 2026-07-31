@@ -65,6 +65,17 @@
     {{ form.referred_by.errors }}
 </div>
 
+      {% if form.is_blacklisted %}
+        <div class="field field-checkbox">
+          <label for="{{ form.is_blacklisted.id_for_label }}">Lista negra</label>
+          <div class="checkbox-row">
+            {{ form.is_blacklisted }}
+            <span>Bloquear cliente para reservas online</span>
+          </div>
+          {{ form.is_blacklisted.errors }}
+        </div>
+      {% endif %}
+
       <div class="field field-checkbox">
         <label for="{{ form.is_active.id_for_label }}">Cliente activo</label>
         <div class="checkbox-row">

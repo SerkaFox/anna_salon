@@ -3,7 +3,7 @@
 {% block title %}Clientes | {{ salon_name }}{% endblock %}
 
 {% block panel_title %}Clientes{% endblock %}
-{% block panel_subtitle %}Base de clientes del salón. Total: {{ clients_count }}{% endblock %}
+{% block panel_subtitle %}Base de clientes del salón. Resultados: {{ clients_count }}{% endblock %}
 
 {% block panel_actions %}
   <a class="btn" href="{% url 'clients:create' %}">+ Nuevo cliente</a>
@@ -12,14 +12,18 @@
 {% block panel_content %}
 <section class="panel-card">
   <form method="get" class="search-bar">
-    <input
-      type="text"
-      name="q"
-      value="{{ query }}"
-      class="input"
-      placeholder="Buscar por nombre, teléfono o email"
-    >
-    <button type="submit" class="btn">Buscar</button>
+    <input type="text" name="q" value="{{ query }}" class="input" placeholder="Buscar por nombre, teléfono o email">
+    <select class="input" name="filter" aria-label="Filtrar clientes">
+      <option value="all" {% if client_filter == "all" %}selected{% endif %}>Todos</option>
+      <option value="blacklisted" {% if client_filter == "blacklisted" %}selected{% endif %}>Lista negra</option>
+      <option value="online" {% if client_filter == "online" %}selected{% endif %}>Clientes online</option>
+    </select>
+    <select class="input" name="sort" aria-label="Ordenar clientes">
+      <option value="name" {% if sort == "name" %}selected{% endif %}>Por nombre</option>
+      <option value="orders" {% if sort == "orders" %}selected{% endif %}>Por reservas</option>
+      <option value="spent" {% if sort == "spent" %}selected{% endif %}>Por dinero aportado</option>
+    </select>
+    <button type="submit" class="btn">Aplicar</button>
     <a href="{% url 'clients:list' %}" class="btn btn-light">Limpiar</a>
   </form>
 </section>
@@ -33,43 +37,44 @@
             <th>Nombre</th>
             <th>Teléfono</th>
             <th>Email</th>
+            <th>Estado</th>
+            <th>Reservas</th>
+            <th>Aportado</th>
             <th>Activo</th>
             <th>Creado</th>
             <th></th>
           </tr>
         </thead>
-			<tbody>
-			  {% for client in clients %}
-				<tr>
-				  <td data-label="Nombre">
-					<a href="{% url 'clients:detail' client.pk %}">
-					  {{ client.full_name }}
-					</a>
-				  </td>
-				  <td data-label="Teléfono">{{ client.phone|default:"—" }}</td>
-				  <td data-label="Email">{{ client.email|default:"—" }}</td>
-				  <td data-label="Activo">
-					{% if client.is_active %}
-					  <span class="status-pill is-active">Sí</span>
-					{% else %}
-					  <span class="status-pill is-inactive">No</span>
-					{% endif %}
-				  </td>
-				  <td data-label="Creado">{{ client.created_at|date:"d/m/Y H:i" }}</td>
-				  <td data-label="Acciones" class="actions-cell actions-inline">
-					<a class="btn btn-light btn-small" href="{% url 'clients:update' client.pk %}">Editar</a>
-					<a class="btn btn-danger btn-small" href="{% url 'clients:delete' client.pk %}">Eliminar</a>
-				  </td>
-				</tr>
-			  {% endfor %}
-			</tbody>
+        <tbody>
+          {% for client in clients %}
+            <tr>
+              <td data-label="Nombre"><a href="{% url 'clients:detail' client.pk %}">{{ client.full_name }}</a></td>
+              <td data-label="Teléfono">{{ client.phone|default:"—" }}</td>
+              <td data-label="Email">{{ client.email|default:"—" }}</td>
+              <td data-label="Estado">
+                {% if client.is_blacklisted %}<span class="status-pill is-inactive">Lista negra</span>{% endif %}
+                {% if client.is_online_client %}<span class="status-pill is-active">Online</span>{% endif %}
+              </td>
+              <td data-label="Reservas">{{ client.total_orders }}</td>
+              <td data-label="Aportado"><strong>{{ client.total_spent|floatformat:2 }} €</strong></td>
+              <td data-label="Activo">
+                {% if client.is_active %}<span class="status-pill is-active">Sí</span>{% else %}<span class="status-pill is-inactive">No</span>{% endif %}
+              </td>
+              <td data-label="Creado">{{ client.created_at|date:"d/m/Y H:i" }}</td>
+              <td data-label="Acciones" class="actions-cell actions-inline">
+                <a class="btn btn-light btn-small" href="{% url 'clients:update' client.pk %}">Editar</a>
+                <a class="btn btn-danger btn-small" href="{% url 'clients:delete' client.pk %}">Eliminar</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
       </table>
     </div>
   {% else %}
     <div class="empty-state">
-      <h2>No hay clientes todavía</h2>
-      <p>Empieza creando la primera ficha de cliente.</p>
-      <a class="btn" href="{% url 'clients:create' %}">Crear cliente</a>
+      <h2>No hay clientes para estos filtros</h2>
+      <p>Prueba otra búsqueda o limpia los filtros.</p>
+      <a class="btn btn-light" href="{% url 'clients:list' %}">Limpiar filtros</a>
     </div>
   {% endif %}
 </section>

@@ -41,6 +41,7 @@ class ClientForm(forms.ModelForm):
         if not self.can_manage_credentials:
             self.fields.pop("username", None)
             self.fields.pop("password", None)
+            self.fields.pop("is_blacklisted", None)
 
     def clean_username(self):
         username = (self.cleaned_data.get("username") or "").strip()
@@ -111,6 +112,7 @@ class ClientForm(forms.ModelForm):
             "birth_date",
             "referred_by",
             "notes",
+            "is_blacklisted",
             "is_active",
             "username",
             "password",
@@ -127,6 +129,7 @@ class ClientForm(forms.ModelForm):
             "birth_date": forms.DateInput(attrs={"class": "input", "type": "date"}),
             "referred_by": forms.Select(attrs={"class": "input"}),
             "notes": forms.Textarea(attrs={"class": "textarea", "rows": 5}),
+            "is_blacklisted": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "is_active": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 

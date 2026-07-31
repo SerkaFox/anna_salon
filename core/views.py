@@ -808,6 +808,12 @@ def public_booking(request):
         client = get_client_profile(authenticated_user)
         if not client:
             return _public_booking_error_response(request, values, {"__all__": [t["public_booking_error_no_client_profile"]]})
+        if client.is_blacklisted:
+            return _public_booking_error_response(
+                request,
+                values,
+                {"__all__": ["Este cliente no puede crear reservas online. Contacta con el salón."]},
+            )
         try:
             booking = _build_public_booking_form(client, service, employee, zone, start_at, end_at)
         except PublicBookingError as exc:

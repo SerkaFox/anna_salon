@@ -8,21 +8,26 @@
 {% block panel_actions %}
   <a class="btn btn-light" href="{% url 'documents:list' %}">Documentos</a>
   <a class="btn btn-light" href="{% url 'documents:unpaid' %}">Pendientes</a>
-  <a class="btn btn-light" href="{% url 'documents:cashbox_print' %}?date={{ selected_date|date:'Y-m-d' }}" target="_blank" rel="noopener">Imprimir cierre</a>
-  <a class="btn btn-light" href="{% url 'documents:cashbox_export_csv' %}?date={{ selected_date|date:'Y-m-d' }}{% if method_value %}&method={{ method_value }}{% endif %}{% if entry_type_value %}&entry_type={{ entry_type_value }}{% endif %}">Exportar CSV</a>
+  {% if not is_range %}<a class="btn btn-light" href="{% url 'documents:cashbox_print' %}?date={{ selected_date|date:'Y-m-d' }}" target="_blank" rel="noopener">Imprimir cierre</a>{% endif %}
+  <a class="btn btn-light" href="{% url 'documents:cashbox_export_csv' %}?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}{% if method_value %}&method={{ method_value }}{% endif %}{% if entry_type_value %}&entry_type={{ entry_type_value }}{% endif %}">Exportar CSV</a>
 {% endblock %}
 
 {% block panel_content %}
 <section class="panel-card">
   <form method="get" class="search-bar">
     <div class="field-inline">
-      <label for="date">Fecha</label>
-      <input class="input" type="date" id="date" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+      <label for="date_from">Desde</label>
+      <input class="input" type="date" id="date_from" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+    </div>
+    <div class="field-inline">
+      <label for="date_to">Hasta</label>
+      <input class="input" type="date" id="date_to" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
     </div>
     <div class="field-inline">
       <label for="method">Método</label>
       <select class="input" id="method" name="method">
         <option value="">Todos</option>
+        <option value="cash_card" {% if method_value == "cash_card" %}selected{% endif %}>Efectivo + tarjeta</option>
         {% for value, label in payment_method_choices %}
           <option value="{{ value }}" {% if method_value == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
@@ -40,6 +45,8 @@
     <div class="form-actions">
       <button type="submit" class="btn">Ver caja</button>
       <a href="{% url 'documents:cashbox' %}" class="btn btn-light">Hoy</a>
+      <a href="{% url 'documents:cashbox' %}?period=3" class="btn btn-light">3 días</a>
+      <a href="{% url 'documents:cashbox' %}?period=7" class="btn btn-light">7 días</a>
     </div>
   </form>
 </section>
@@ -78,6 +85,7 @@
   </article>
 </section>
 
+{% if not is_range %}
 <section class="panel-card">
   <div class="dashboard-section-head">
     <div>
@@ -100,6 +108,7 @@
     </div>
   </form>
 </section>
+{% endif %}
 
 <section class="content-grid">
   <article class="panel-card">
@@ -108,6 +117,7 @@
       <table class="data-table">
         <thead>
           <tr>
+            {% if is_range %}<th>Fecha</th>{% endif %}
             <th>Hora</th>
             <th>Cliente</th>
             <th>Documento</th>
@@ -120,6 +130,7 @@
         <tbody>
           {% for payment in payments %}
             <tr>
+              {% if is_range %}<td>{{ payment.paid_at|date:"d/m/Y" }}</td>{% endif %}
               <td>{{ payment.paid_at|date:"H:i" }}</td>
               <td>{{ payment.booking.client }}</td>
               <td><a href="{% url 'documents:detail' payment.fiscal_document.id %}">{{ payment.fiscal_document.number }}</a></td>

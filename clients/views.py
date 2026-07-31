@@ -7,7 +7,8 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -185,8 +186,25 @@ def client_list(request):
         return redirect("clients:portal")
 
     query = request.GET.get("q", "").strip()
+    client_filter = request.GET.get("filter", "all").strip()
+    sort = request.GET.get("sort", "name").strip()
 
-    clients = scope_clients_queryset(Client.objects.all(), request.user)
+    clients = scope_clients_queryset(
+        Client.objects.select_related("user").annotate(
+            completed_bookings_count=Count(
+                "bookings",
+                filter=Q(bookings__status=Booking.Statuses.DONE),
+            ),
+            completed_bookings_spent=Coalesce(
+                Sum(
+                    "bookings__client_price_snapshot",
+                    filter=Q(bookings__status=Booking.Statuses.DONE),
+                ),
+                Decimal("0.00"),
+            ),
+        ),
+        request.user,
+    )
 
     if query:
         clients = clients.filter(
@@ -196,12 +214,48 @@ def client_list(request):
             Q(email__icontains=query)
         )
 
+    online_sources = {
+        "treatwell_official_channel",
+        "uala_official_channel",
+        "venue_website",
+        "internet",
+    }
+    if client_filter == "blacklisted":
+        clients = clients.filter(is_blacklisted=True)
+    elif client_filter == "online":
+        clients = clients.filter(
+            Q(user__isnull=False) | Q(how_we_met__in=online_sources)
+        )
+
+    clients = list(clients)
+    for client in clients:
+        client.total_orders = client.booking_count + client.completed_bookings_count
+        imported_spent = (
+            Decimal(client.average_expense_amount_cents)
+            * client.booking_count
+            / Decimal("100")
+        )
+        client.total_spent = imported_spent + client.completed_bookings_spent
+        client.is_online_client = bool(
+            client.user_id or client.how_we_met in online_sources
+        )
+
+    if sort == "orders":
+        clients.sort(key=lambda item: (-item.total_orders, item.full_name.casefold()))
+    elif sort == "spent":
+        clients.sort(key=lambda item: (-item.total_spent, item.full_name.casefold()))
+    else:
+        sort = "name"
+        clients.sort(key=lambda item: item.full_name.casefold())
+
     context = {
         "active_section": "clients",
         "page_title": "Clientes",
         "clients": clients,
         "query": query,
-        "clients_count": clients.count(),
+        "clients_count": len(clients),
+        "client_filter": client_filter,
+        "sort": sort,
     }
     return render(request, "clients/client_list.html", context)
 
@@ -248,6 +302,13 @@ def client_portal(request):
                 message=f"Avatar actualizado desde portal cliente: {client.full_name}.",
             )
             messages.success(request, "Avatar actualizado.")
+            return redirect("clients:portal")
+
+        if client.is_blacklisted:
+            messages.error(
+                request,
+                "Tu cuenta no puede crear reservas online. Contacta con el salón.",
+            )
             return redirect("clients:portal")
 
         data = request.POST.copy()

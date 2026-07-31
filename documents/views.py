@@ -1,4 +1,5 @@
 import csv
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib import messages
@@ -46,6 +47,31 @@ def _parse_cashbox_date(request):
         except ValueError:
             return timezone.localdate()
     return timezone.localdate()
+
+
+def _parse_cashbox_range(request):
+    today = timezone.localdate()
+    period = request.GET.get("period", "").strip()
+    if period in {"3", "7"}:
+        days = int(period)
+        return today - timedelta(days=days - 1), today
+
+    date_from_raw = request.GET.get("date_from", "").strip()
+    date_to_raw = request.GET.get("date_to", "").strip()
+    if not date_from_raw and not date_to_raw:
+        selected_date = _parse_cashbox_date(request)
+        return selected_date, selected_date
+
+    try:
+        date_from = timezone.datetime.strptime(date_from_raw, "%Y-%m-%d").date()
+        date_to = timezone.datetime.strptime(date_to_raw, "%Y-%m-%d").date()
+    except ValueError:
+        return today, today
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+    if (date_to - date_from).days > 366:
+        date_from = date_to - timedelta(days=366)
+    return date_from, date_to
 
 
 def _get_or_create_payment_document(booking):
@@ -525,7 +551,9 @@ def booking_quick_payment(request, booking_pk):
 @login_required
 @admin_required
 def cashbox(request):
-    selected_date = _parse_cashbox_date(request)
+    date_from, date_to = _parse_cashbox_range(request)
+    selected_date = date_to
+    is_range = date_from != date_to
     method_value = request.GET.get("method", "").strip()
     entry_type_value = request.GET.get("entry_type", "").strip()
 
@@ -534,15 +562,19 @@ def cashbox(request):
         "booking__client",
         "booking__service",
         "fiscal_document",
-    ).filter(paid_at__date=selected_date)
+    ).filter(paid_at__date__range=(date_from, date_to))
 
-    if method_value:
+    if method_value == "cash_card":
+        payments = payments.filter(method__in=[Payment.Methods.CASH, Payment.Methods.CARD])
+    elif method_value:
         payments = payments.filter(method=method_value)
 
     if entry_type_value:
         payments = payments.filter(entry_type=entry_type_value)
 
-    closure = CashClosure.objects.filter(closure_date=selected_date).select_related("closed_by").first()
+    closure = None
+    if not is_range:
+        closure = CashClosure.objects.filter(closure_date=selected_date).select_related("closed_by").first()
     payments_list = list(payments)
     payments_total = sum((payment.signed_amount for payment in payments_list), Decimal("0.00"))
     totals_by_method = {
@@ -565,6 +597,9 @@ def cashbox(request):
         {
             "active_section": "cashbox",
             "selected_date": selected_date,
+            "date_from": date_from,
+            "date_to": date_to,
+            "is_range": is_range,
             "payments": payments_list,
             "payments_count": len(payments_list),
             "payments_total": payments_total,
@@ -762,7 +797,8 @@ def cashbox_close(request):
 @login_required
 @admin_required
 def cashbox_export_csv(request):
-    selected_date = _parse_cashbox_date(request)
+    date_from, date_to = _parse_cashbox_range(request)
+    selected_date = date_to
     method_value = request.GET.get("method", "").strip()
     entry_type_value = request.GET.get("entry_type", "").strip()
 
@@ -771,16 +807,20 @@ def cashbox_export_csv(request):
         "booking__client",
         "booking__service",
         "fiscal_document",
-    ).filter(paid_at__date=selected_date)
+    ).filter(paid_at__date__range=(date_from, date_to))
 
-    if method_value:
+    if method_value == "cash_card":
+        payments = payments.filter(method__in=[Payment.Methods.CASH, Payment.Methods.CARD])
+    elif method_value:
         payments = payments.filter(method=method_value)
 
     if entry_type_value:
         payments = payments.filter(entry_type=entry_type_value)
 
     response = HttpResponse(content_type="text/csv; charset=utf-8")
-    response["Content-Disposition"] = f'attachment; filename="anna_cashbox_{selected_date:%Y%m%d}.csv"'
+    response["Content-Disposition"] = (
+        f'attachment; filename="anna_cashbox_{date_from:%Y%m%d}_{date_to:%Y%m%d}.csv"'
+    )
     response.write("\ufeff")
 
     writer = csv.writer(response)
