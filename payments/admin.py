@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Payment, PaymentRefund
+from .models import Payment, PaymentRefund, StripePayoutRequest
 
 
 @admin.register(Payment)
@@ -44,3 +44,15 @@ class PaymentRefundAdmin(admin.ModelAdmin):
         "stripe_refund_id",
     )
     readonly_fields = ("created_at", "refunded_at")
+
+
+@admin.register(StripePayoutRequest)
+class StripePayoutRequestAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "requested_by", "amount", "currency", "method", "status", "stripe_payout_id")
+    list_filter = ("method", "status", "created_at")
+    search_fields = ("stripe_payout_id", "requested_by__username")
+    readonly_fields = (
+        "idempotency_key", "requested_by", "amount", "currency", "method",
+        "destination", "stripe_payout_id", "status", "arrival_date", "error",
+        "created_at", "updated_at",
+    )

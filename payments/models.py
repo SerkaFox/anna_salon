@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import models
+from django.conf import settings
 
 
 class Payment(models.Model):
@@ -117,3 +118,39 @@ class PaymentRefund(models.Model):
 
     def __str__(self):
         return f"{self.payment_id} · {self.amount} EUR · {self.get_status_display()}"
+
+
+class StripePayoutRequest(models.Model):
+    class Methods(models.TextChoices):
+        STANDARD = "standard", "Estándar"
+        INSTANT = "instant", "Instantánea"
+
+    class Statuses(models.TextChoices):
+        PROCESSING = "processing", "Procesando"
+        PENDING = "pending", "Pendiente"
+        PAID = "paid", "Pagada"
+        FAILED = "failed", "Fallida"
+        CANCELLED = "cancelled", "Cancelada"
+
+    idempotency_key = models.UUIDField(unique=True, editable=False)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="stripe_payout_requests",
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default="eur")
+    method = models.CharField(max_length=20, choices=Methods.choices)
+    destination = models.CharField(max_length=255, blank=True)
+    stripe_payout_id = models.CharField(max_length=255, blank=True, db_index=True)
+    status = models.CharField(max_length=20, choices=Statuses.choices, default=Statuses.PROCESSING)
+    arrival_date = models.DateField(null=True, blank=True)
+    error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.amount} {self.currency.upper()} · {self.get_status_display()}"

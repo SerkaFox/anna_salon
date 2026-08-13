@@ -40,6 +40,7 @@ urlpatterns = [
     path("time-blocks/<str:pk>/", views.TimeBlockDetailView.as_view(), name="time_block_detail"),
     path("calendar/day/", views.CalendarDayView.as_view(), name="calendar_day"),
     path("cashbox/", views.CashboxSummaryView.as_view(), name="cashbox"),
+    path("cashbox/stripe/payout/", views.StripePayoutView.as_view(), name="stripe_payout"),
     path("cashbox/receipt-template/", views.ReceiptTemplateView.as_view(), name="receipt_template"),
     path("cashbox/receipt-template/reset/", views.ReceiptTemplateResetView.as_view(), name="receipt_template_reset"),
     path("cashbox/close/", views.CashboxCloseView.as_view(), name="cashbox_close"),

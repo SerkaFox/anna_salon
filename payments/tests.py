@@ -14,13 +14,93 @@ from accounts.models import User
 from bookings.models import Booking
 from clients.models import Client
 from employees.models import Employee
-from payments.models import Payment
+from payments.models import Payment, StripePayoutRequest
+from payments.account_service import get_stripe_account_summary, request_stripe_payout
 from payments.redsys import build_form_fields, decode_merchant_parameters, encode_merchant_parameters, sign_merchant_parameters, verify_signature
 from salon.models import Zone
 from services_app.models import Service
 
 
 TEST_REDSYS_SECRET_KEY = base64.b64encode(b"0123456789abcdef01234567").decode("ascii")
+
+
+@override_settings(STRIPE_SECRET_KEY="sk_test_safe")
+class StripeAccountAdminTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="anna-admin",
+            password="testpass123",
+            role=User.ROLE_ADMIN,
+        )
+
+    @patch("payments.account_service.stripe.Account.list_external_accounts")
+    @patch("payments.account_service.stripe.Account.retrieve")
+    @patch("payments.account_service.stripe.Balance.retrieve")
+    def test_account_summary_exposes_balance_and_masked_destination(self, balance_retrieve, account_retrieve, external_accounts):
+        balance_retrieve.return_value = SimpleNamespace(
+            livemode=True,
+            available=[SimpleNamespace(amount=12550, currency="eur", source_types={"card": 12550})],
+            pending=[SimpleNamespace(amount=2100, currency="eur", source_types={"card": 2100})],
+            instant_available=[SimpleNamespace(amount=5000, currency="eur", source_types={"card": 5000})],
+        )
+        schedule = SimpleNamespace(interval="weekly", weekly_anchor="monday", monthly_anchor=None)
+        account_retrieve.return_value = SimpleNamespace(
+            id="acct_test",
+            country="ES",
+            default_currency="eur",
+            payouts_enabled=True,
+            settings=SimpleNamespace(payouts=SimpleNamespace(schedule=schedule)),
+        )
+        external_accounts.return_value = SimpleNamespace(data=[SimpleNamespace(
+            id="ba_test",
+            object="bank_account",
+            last4="1234",
+            currency="eur",
+            default_for_currency=True,
+            available_payout_methods=["standard"],
+        )])
+
+        summary = get_stripe_account_summary()
+
+        self.assertEqual(summary["available_amount"], "125.50")
+        self.assertEqual(summary["pending_amount"], "21.00")
+        self.assertEqual(summary["instant_available_amount"], "50.00")
+        self.assertEqual(summary["destinations"][0]["label"], "Cuenta bancaria terminada en 1234")
+        self.assertNotIn("account_number", summary["destinations"][0])
+
+    @patch("payments.account_service.stripe.Payout.create")
+    @patch("payments.account_service.stripe.Balance.retrieve")
+    def test_payout_request_is_idempotent(self, balance_retrieve, payout_create):
+        balance_retrieve.return_value = SimpleNamespace(
+            available=[SimpleNamespace(amount=10000, currency="eur")],
+            instant_available=[],
+        )
+        payout_create.return_value = SimpleNamespace(
+            id="po_test",
+            status="pending",
+            amount=5000,
+            currency="eur",
+            method="standard",
+            arrival_date=None,
+        )
+        request_id = "c31a76b9-b229-42b0-97f4-88e7474ea29d"
+
+        first, first_created = request_stripe_payout(
+            user=self.user,
+            amount="50.00",
+            idempotency_key=request_id,
+        )
+        second, second_created = request_stripe_payout(
+            user=self.user,
+            amount="50.00",
+            idempotency_key=request_id,
+        )
+
+        self.assertTrue(first_created)
+        self.assertFalse(second_created)
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(StripePayoutRequest.objects.count(), 1)
+        payout_create.assert_called_once()
 
 
 @override_settings(

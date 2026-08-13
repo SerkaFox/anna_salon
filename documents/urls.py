@@ -10,6 +10,7 @@ urlpatterns = [
     path("pendientes/", views.unpaid_documents, name="unpaid"),
     path("caja/", views.cashbox, name="cashbox"),
     path("caja/cerrar/", views.cashbox_close, name="cashbox_close"),
+    path("caja/stripe/retirar/", views.stripe_payout, name="stripe_payout"),
     path("caja/export/csv/", views.cashbox_export_csv, name="cashbox_export_csv"),
     path("caja/print/", views.cashbox_print, name="cashbox_print"),
     path("export/csv/", views.document_export_csv, name="export_csv"),

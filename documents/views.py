@@ -1,10 +1,11 @@
 import csv
+import uuid
 from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -15,6 +16,8 @@ from django.views.decorators.http import require_POST
 from accounts.permissions import admin_required, can_access_booking, get_client_profile, is_admin_user
 from auditlog.services import log_event
 from bookings.models import Booking
+from payments.account_service import get_stripe_account_summary, request_stripe_payout
+from payments.models import StripePayoutRequest
 
 from .forms import FiscalDocumentLineForm, PaymentForm
 from .models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment
@@ -590,6 +593,8 @@ def cashbox(request):
     pending_documents = _pending_documents(pending_documents)
     pending_total = sum((document.balance_due for document in pending_documents), Decimal("0.00"))
     recent_closures = CashClosure.objects.select_related("closed_by")[:10]
+    stripe_summary = get_stripe_account_summary()
+    stripe_payouts = StripePayoutRequest.objects.select_related("requested_by")[:10]
 
     return render(
         request,
@@ -612,8 +617,57 @@ def cashbox(request):
             "method_value": method_value,
             "entry_type_value": entry_type_value,
             "recent_closures": recent_closures,
+            "stripe_summary": stripe_summary,
+            "stripe_payouts": stripe_payouts,
+            "stripe_payout_request_id": uuid.uuid4(),
         },
     )
+
+
+@login_required
+@require_POST
+@admin_required
+def stripe_payout(request):
+    if not request.user.check_password(request.POST.get("current_password") or ""):
+        messages.error(request, "Contraseña incorrecta. No se ha solicitado ninguna retirada.")
+        return redirect("documents:cashbox")
+    try:
+        request_id = uuid.UUID(request.POST.get("request_id") or "")
+    except (ValueError, TypeError, AttributeError):
+        messages.error(request, "Solicitud de retirada no válida. Recarga la página.")
+        return redirect("documents:cashbox")
+    method = (request.POST.get("payout_method") or "standard").strip()
+    destination = (request.POST.get("destination") or "").strip()
+    summary = get_stripe_account_summary()
+    allowed_destinations = {item["id"] for item in summary.get("destinations", [])}
+    if destination and destination not in allowed_destinations:
+        messages.error(request, "La cuenta de destino no está autorizada en Stripe.")
+        return redirect("documents:cashbox")
+    try:
+        payout, created = request_stripe_payout(
+            user=request.user,
+            amount=request.POST.get("amount"),
+            currency="eur",
+            method=method,
+            destination=destination,
+            idempotency_key=request_id,
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("documents:cashbox")
+    except Exception:
+        messages.error(request, "No se ha podido solicitar la retirada. Inténtalo de nuevo o revisa Stripe.")
+        return redirect("documents:cashbox")
+    log_event(
+        actor=request.user,
+        section="stripe",
+        action="payout_create" if created else "payout_repeated",
+        instance=payout,
+        message=f"Retirada Stripe solicitada: {payout.amount} {payout.currency.upper()}.",
+        metadata={"method": payout.method, "status": payout.status},
+    )
+    messages.success(request, f"Retirada solicitada: {payout.amount} EUR · {payout.get_status_display()}.")
+    return redirect("documents:cashbox")
 
 
 @login_required

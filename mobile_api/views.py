@@ -2,8 +2,10 @@ from datetime import datetime, time
 from decimal import Decimal, InvalidOperation
 import re
 import secrets
+import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, DecimalField, Q, Sum
@@ -44,7 +46,8 @@ from employees.models import (
 from salon.models import SalonSettings, Zone
 from salon.preferences import get_deposit_percent
 from services_app.models import Service
-from payments.models import Payment as OnlinePayment
+from payments.models import Payment as OnlinePayment, StripePayoutRequest
+from payments.account_service import get_stripe_account_summary, request_stripe_payout
 from payments.redsys import RedsysConfigurationError, build_form_fields, build_merchant_parameters, get_payment_url, sanitize_redsys_payload
 from payments.stripe_service import create_checkout_session, create_pending_stripe_payment
 
@@ -1327,6 +1330,21 @@ class CashboxSummaryView(MobileApiMixin, APIView):
                     for value, label in ManualPayment.EntryTypes.choices
                 ],
                 "deposit_percent": f"{get_deposit_percent():.2f}",
+                "stripe": get_stripe_account_summary(),
+                "stripe_payouts": [
+                    {
+                        "id": payout.pk,
+                        "amount": str(payout.amount),
+                        "currency": payout.currency,
+                        "method": payout.method,
+                        "method_label": payout.get_method_display(),
+                        "status": payout.status,
+                        "status_label": payout.get_status_display(),
+                        "arrival_date": payout.arrival_date.isoformat() if payout.arrival_date else None,
+                        "created_at": _format_local_datetime(payout.created_at),
+                    }
+                    for payout in StripePayoutRequest.objects.select_related("requested_by")[:10]
+                ],
             }
         )
 
@@ -1353,6 +1371,57 @@ class CashboxSummaryView(MobileApiMixin, APIView):
             message=f"Prepago actualizado al {value}%.",
         )
         return Response({"deposit_percent": f"{salon_settings.deposit_percent:.2f}"})
+
+
+class StripePayoutView(MobileApiMixin, APIView):
+    def post(self, request):
+        _mobile_admin_required(request.user)
+        if not request.user.check_password(request.data.get("current_password") or ""):
+            raise serializers.ValidationError({"current_password": ["Contraseña incorrecta."]})
+        try:
+            request_id = uuid.UUID(str(request.data.get("request_id") or ""))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise serializers.ValidationError({"request_id": ["Solicitud no válida."]}) from exc
+        destination = str(request.data.get("destination") or "").strip()
+        summary = get_stripe_account_summary()
+        allowed_destinations = {item["id"] for item in summary.get("destinations", [])}
+        if destination and destination not in allowed_destinations:
+            raise serializers.ValidationError({"destination": ["Destino no autorizado en Stripe."]})
+        try:
+            payout, created = request_stripe_payout(
+                user=request.user,
+                amount=request.data.get("amount"),
+                currency="eur",
+                method=str(request.data.get("method") or "standard"),
+                destination=destination,
+                idempotency_key=request_id,
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"amount": exc.messages}) from exc
+        except Exception as exc:
+            raise serializers.ValidationError(
+                {"amount": ["No se ha podido solicitar la retirada. Revisa Stripe."]}
+            ) from exc
+        log_event(
+            actor=request.user,
+            section="stripe",
+            action="payout_create" if created else "payout_repeated",
+            instance=payout,
+            message=f"Retirada Stripe solicitada desde la app: {payout.amount} EUR.",
+            metadata={"method": payout.method, "status": payout.status},
+        )
+        return Response(
+            {
+                "id": payout.pk,
+                "amount": str(payout.amount),
+                "currency": payout.currency,
+                "method": payout.method,
+                "status": payout.status,
+                "status_label": payout.get_status_display(),
+                "created": created,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
 
 class ReceiptTemplateView(MobileApiMixin, APIView):

@@ -14,6 +14,84 @@
 
 {% block panel_content %}
 <section class="panel-card">
+  <div class="dashboard-section-head">
+    <div>
+      <h2>Saldo Stripe</h2>
+      <p class="muted-text">Fondos online de la cuenta de Anna. Los datos se leen directamente de Stripe.</p>
+    </div>
+    {% if stripe_summary.livemode %}<span class="badge">Cuenta real</span>{% else %}<span class="badge">Pruebas</span>{% endif %}
+  </div>
+  {% if stripe_summary.error %}
+    <div class="form-errors">{{ stripe_summary.error }}</div>
+  {% else %}
+    <div class="stats-grid">
+      <article class="stat-card">
+        <span class="stat-label">Disponible para retirar</span>
+        <strong class="stat-value">{{ stripe_summary.available_amount }} €</strong>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">Pendiente de Stripe</span>
+        <strong class="stat-value">{{ stripe_summary.pending_amount }} €</strong>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">Disponible al instante</span>
+        <strong class="stat-value">{{ stripe_summary.instant_available_amount }} €</strong>
+      </article>
+    </div>
+    <p class="muted-text">
+      Las retiradas estándar se envían al IBAN predeterminado configurado en Stripe.
+      {% if stripe_summary.schedule.interval %}Pago automático actual: {{ stripe_summary.schedule.interval }}.{% endif %}
+    </p>
+    {% if stripe_summary.destinations %}
+      <p class="muted-text">Destino:
+        {% for destination in stripe_summary.destinations %}{{ destination.label }}{% if not forloop.last %}, {% endif %}{% endfor %}
+      </p>
+    {% elif stripe_summary.destinations_restricted %}
+      <p class="muted-text">El destino está protegido por Stripe y no se muestran sus datos. Se usará la cuenta predeterminada.</p>
+    {% endif %}
+    <form method="post" action="{% url 'documents:stripe_payout' %}" class="entity-form" onsubmit="return confirm('¿Confirmas esta retirada real desde Stripe?');">
+      {% csrf_token %}
+      <input type="hidden" name="request_id" value="{{ stripe_payout_request_id }}">
+      <div class="form-grid">
+        <div class="field">
+          <label for="stripe-payout-amount">Importe EUR</label>
+          <input class="input" id="stripe-payout-amount" name="amount" type="number" min="0.40" max="{{ stripe_summary.available_amount }}" step="0.01" value="{{ stripe_summary.available_amount }}" required>
+        </div>
+        <div class="field">
+          <label for="stripe-payout-method">Método</label>
+          <select class="input" id="stripe-payout-method" name="payout_method">
+            <option value="standard">Estándar al IBAN configurado</option>
+            {% if stripe_summary.can_instant_payout %}<option value="instant">Instantánea a tarjeta/cuenta apta</option>{% endif %}
+          </select>
+        </div>
+        {% if stripe_summary.destinations %}
+        <div class="field">
+          <label for="stripe-payout-destination">Destino</label>
+          <select class="input" id="stripe-payout-destination" name="destination">
+            <option value="">Predeterminado de Stripe</option>
+            {% for destination in stripe_summary.destinations %}<option value="{{ destination.id }}">{{ destination.label }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <div class="field">
+          <label for="stripe-current-password">Contraseña de Anna</label>
+          <input class="input" id="stripe-current-password" name="current_password" type="password" autocomplete="current-password" required>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="submit" {% if not stripe_summary.can_payout %}disabled{% endif %}>Retirar fondos de Stripe</button>
+      </div>
+    </form>
+    {% if stripe_payouts %}
+      <h3>Últimas retiradas solicitadas</h3>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>Fecha</th><th>Importe</th><th>Método</th><th>Estado</th></tr></thead><tbody>
+      {% for payout in stripe_payouts %}<tr><td>{{ payout.created_at|date:"d/m/Y H:i" }}</td><td>{{ payout.amount }} €</td><td>{{ payout.get_method_display }}</td><td>{{ payout.get_status_display }}</td></tr>{% endfor %}
+      </tbody></table></div>
+    {% endif %}
+  {% endif %}
+</section>
+
+<section class="panel-card">
   <form method="get" class="search-bar">
     <div class="field-inline">
       <label for="date_from">Desde</label>
