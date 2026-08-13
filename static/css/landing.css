@@ -939,11 +939,13 @@ img { max-width: 100%; }
     padding: 18px;
     border: 1px solid var(--line);
     border-radius: 22px;
-    background: rgba(5, 11, 18, 0.92);
+    z-index: 101;
+    background: #071018;
     box-shadow: var(--shadow);
     backdrop-filter: blur(22px);
     flex-direction: column;
     align-items: stretch;
+    pointer-events: auto;
   }
   .lux-nav__links.is-open { display: flex; }
   .lux-nav__links .btn-lux { width: 100%; }
@@ -1007,6 +1009,7 @@ img { max-width: 100%; }
   pointer-events: none;
 }
 .lux-page-header > * { position: relative; z-index: 1; }
+.lux-page-header > .lux-nav { z-index: 100; }
 .content-hero {
   padding: 84px 0 54px;
   animation: heroReveal 0.95s cubic-bezier(0.2, 0.78, 0.26, 1) both;
