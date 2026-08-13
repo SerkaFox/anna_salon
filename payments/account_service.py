@@ -14,14 +14,23 @@ def _money(cents):
 
 
 def _amounts(items):
-    return [
-        {
-            "amount": str(_money(item.amount)),
-            "currency": item.currency.lower(),
-            "source_types": dict(getattr(item, "source_types", {}) or {}),
-        }
-        for item in (items or [])
-    ]
+    result = []
+    for item in items or []:
+        source_types = getattr(item, "source_types", {}) or {}
+        if hasattr(source_types, "to_dict"):
+            source_types = source_types.to_dict()
+        elif hasattr(source_types, "items"):
+            source_types = dict(source_types.items())
+        else:
+            source_types = {}
+        result.append(
+            {
+                "amount": str(_money(item.amount)),
+                "currency": item.currency.lower(),
+                "source_types": source_types,
+            }
+        )
+    return result
 
 
 def _currency_amount(items, currency):

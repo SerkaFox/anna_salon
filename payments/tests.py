@@ -39,7 +39,11 @@ class StripeAccountAdminTests(TestCase):
     def test_account_summary_exposes_balance_and_masked_destination(self, balance_retrieve, account_retrieve, external_accounts):
         balance_retrieve.return_value = SimpleNamespace(
             livemode=True,
-            available=[SimpleNamespace(amount=12550, currency="eur", source_types={"card": 12550})],
+            available=[SimpleNamespace(
+                amount=12550,
+                currency="eur",
+                source_types=stripe.StripeObject.construct_from({"card": 12550}, "sk_test_safe"),
+            )],
             pending=[SimpleNamespace(amount=2100, currency="eur", source_types={"card": 2100})],
             instant_available=[SimpleNamespace(amount=5000, currency="eur", source_types={"card": 5000})],
         )
