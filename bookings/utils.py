@@ -505,8 +505,13 @@ def service_calendar_color(service_id):
 def booking_payment_summary(booking):
     total_amount = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
 
-    online_payments = [payment for payment in booking.online_payments.all() if payment.status == payment.Statuses.PAID]
-    online_paid = sum((payment.amount for payment in online_payments), Decimal("0.00"))
+    all_online_payments = list(booking.online_payments.all())
+    paid_statuses = {"paid", "partially_paid", "partially_refunded", "refund_pending"}
+    online_payments = [payment for payment in all_online_payments if payment.status in paid_statuses]
+    online_paid = sum(
+        (max(payment.amount - payment.amount_refunded, Decimal("0.00")) for payment in online_payments),
+        Decimal("0.00"),
+    )
 
     manual_payments = list(booking.payments.all())
     manual_paid = sum((payment.signed_amount for payment in manual_payments), Decimal("0.00"))
@@ -523,18 +528,27 @@ def booking_payment_summary(booking):
             methods.add(payment.get_method_display().lower())
     method_suffix = f" ({', '.join(sorted(methods))})" if methods and paid_amount > Decimal("0.00") else ""
 
+    has_refund = any(
+        payment.status in {"refunded", "partially_refunded", "refund_pending"}
+        or payment.amount_refunded > Decimal("0.00")
+        for payment in all_online_payments
+    ) or any(payment.entry_type == payment.EntryTypes.REFUND for payment in manual_payments)
+
     if total_amount <= Decimal("0.00"):
-        label, status_class = "", ""
+        state, label, status_class = "paid", "Pagado completo", "is-paid"
     elif due_amount <= Decimal("0.00"):
-        label, status_class = f"Pagado completo{method_suffix}", "is-paid"
+        state, label, status_class = "paid", f"Pagado completo{method_suffix}", "is-paid"
     elif prepayment and paid_amount > Decimal("0.00") and paid_amount == online_paid:
-        label, status_class = f"Señal pagada{method_suffix} · quedan {due_amount} €", "is-partial"
+        state, label, status_class = "deposit", f"Pagado con señal{method_suffix} · quedan {due_amount} €", "is-partial"
     elif paid_amount > Decimal("0.00"):
-        label, status_class = f"Pagado {paid_amount} €{method_suffix} · quedan {due_amount} €", "is-partial"
+        state, label, status_class = "deposit", f"Pago parcial {paid_amount} €{method_suffix} · quedan {due_amount} €", "is-partial"
+    elif has_refund:
+        state, label, status_class = "refunded", "Devuelto", "is-refunded"
     else:
-        label, status_class = f"Sin pago · {due_amount} € pendiente", "is-unpaid"
+        state, label, status_class = "unpaid", f"Sin pagar · {due_amount} € pendiente", "is-unpaid"
 
     return {
+        "state": state,
         "total_amount": total_amount,
         "paid_amount": paid_amount,
         "due_amount": due_amount,

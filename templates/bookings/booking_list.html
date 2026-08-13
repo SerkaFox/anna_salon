@@ -119,7 +119,7 @@
           <th>Zona</th>
           <th>Estado</th>
           <th>Origen</th>
-          <th>Pago online</th>
+          <th>Pago</th>
           <th>Cliente €</th>
           <th>Empleado €</th>
           <th>Salón €</th>
@@ -140,9 +140,9 @@
             <td>{{ booking.get_status_display }}</td>
             <td>{{ booking.get_source_display }}</td>
             <td>
-              {{ booking.online_payment_status_label }}
-              {% if booking.online_payment_paid_total %}
-                <div class="muted-text">{{ booking.online_payment_paid_total }} €</div>
+              {{ booking.payment_state_label }}
+              {% if booking.payment_paid_total %}
+                <div class="muted-text">Recibido: {{ booking.payment_paid_total }} €</div>
               {% endif %}
             </td>
             <td>

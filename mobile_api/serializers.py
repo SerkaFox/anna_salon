@@ -10,7 +10,7 @@ from accounts.permissions import can_access_booking, can_access_employee, get_cl
 from bookings.client_actions import booking_amount_due, booking_refundable_until, can_client_cancel, can_client_reschedule
 from bookings.forms import BookingForm
 from bookings.models import Booking, BookingWaitlistEntry
-from bookings.utils import combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
+from bookings.utils import booking_payment_summary, combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
 from clients.models import Client, ClientRewardRule
 from clients.rewards import client_reward_progress
 from documents.models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment as ManualPayment
@@ -677,6 +677,9 @@ class BookingSerializer(serializers.ModelSerializer):
     online_payment_paid_total = serializers.SerializerMethodField()
     online_payment_remaining_amount = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
+    payment_state = serializers.SerializerMethodField()
+    payment_state_label = serializers.SerializerMethodField()
+    payment_total_amount = serializers.SerializerMethodField()
     paid_amount = serializers.SerializerMethodField()
     latest_payment_id = serializers.SerializerMethodField()
     can_pay = serializers.SerializerMethodField()
@@ -715,6 +718,9 @@ class BookingSerializer(serializers.ModelSerializer):
             "online_payment_paid_total",
             "online_payment_remaining_amount",
             "payment_status",
+            "payment_state",
+            "payment_state_label",
+            "payment_total_amount",
             "paid_amount",
             "latest_payment_id",
             "can_pay",
@@ -741,13 +747,17 @@ class BookingSerializer(serializers.ModelSerializer):
         if hasattr(obj, "_mobile_online_payment_info"):
             return obj._mobile_online_payment_info
         payments = list(getattr(obj, "_prefetched_objects_cache", {}).get("online_payments", obj.online_payments.all()))
-        paid_total = sum((payment.amount for payment in payments if payment.status == OnlinePayment.Statuses.PAID), 0)
-        total_amount = obj.client_price_snapshot or obj.price_snapshot or 0
+        summary = booking_payment_summary(obj)
+        paid_total = summary["paid_amount"]
+        total_amount = summary["total_amount"]
         latest_payment = payments[0] if payments else None
         obj._mobile_online_payment_info = {
             "status": latest_payment.status if latest_payment else "",
             "paid_total": paid_total,
             "remaining_amount": max(total_amount - paid_total, 0),
+            "state": summary["state"],
+            "state_label": summary["label"],
+            "total_amount": total_amount,
             "latest_payment_id": latest_payment.pk if latest_payment else None,
             "can_pay": total_amount > paid_total and obj.status not in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW},
         }
@@ -764,6 +774,15 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_payment_status(self, obj):
         return self._payment_info(obj)["status"]
+
+    def get_payment_state(self, obj):
+        return self._payment_info(obj)["state"]
+
+    def get_payment_state_label(self, obj):
+        return self._payment_info(obj)["state_label"]
+
+    def get_payment_total_amount(self, obj):
+        return str(self._payment_info(obj)["total_amount"])
 
     def get_paid_amount(self, obj):
         return str(self._payment_info(obj)["paid_total"])

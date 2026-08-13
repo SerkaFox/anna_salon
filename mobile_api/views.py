@@ -1001,7 +1001,9 @@ class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
     serializer_class = BookingSerializer
 
     def get_queryset(self):
-        queryset = Booking.objects.select_related("client", "employee", "service", "zone")
+        queryset = Booking.objects.select_related("client", "employee", "service", "zone").prefetch_related(
+            "online_payments", "payments", "prepayment"
+        )
         return _mobile_bookings_queryset(queryset, self.request.user).order_by("start_at", "pk")
 
     def list(self, request, *args, **kwargs):
@@ -1027,7 +1029,12 @@ class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
 
 class BookingDetailView(MobileApiMixin, APIView):
     def get_object(self, request, pk):
-        booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
+        booking = generics.get_object_or_404(
+            Booking.objects.select_related("client", "employee", "service", "zone").prefetch_related(
+                "online_payments", "payments", "prepayment"
+            ),
+            pk=pk,
+        )
         if not _mobile_can_access_booking(request.user, booking):
             raise PermissionDenied("Sin acceso a esta reserva.")
         return booking

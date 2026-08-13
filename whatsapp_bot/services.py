@@ -7,6 +7,8 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from bookings.models import Booking
+from bookings.client_actions import cancel_booking
+from bookings.utils import booking_payment_summary
 
 from . import bridge
 from .models import WhatsAppConnection, WhatsAppMessage, WhatsAppTemplate
@@ -49,7 +51,7 @@ def booking_response_url(booking, action):
     return f"{base}/confirmar-cita/{token}/"
 
 
-def booking_message(booking, *, kind):
+def booking_message(booking, *, kind, extra_context=None):
     local_start = timezone.localtime(booking.start_at)
     base_url = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
     ctx = {
@@ -63,6 +65,7 @@ def booking_message(booking, *, kind):
         "attend_url": booking_response_url(booking, "attending"),
         "decline_url": booking_response_url(booking, "declined"),
     }
+    ctx.update(extra_context or {})
     body = WhatsAppTemplate.get_body(kind)
     if body:
         message = body.format_map(ctx)
@@ -84,7 +87,7 @@ def booking_message(booking, *, kind):
     return message
 
 
-def queue_booking_message(booking, *, kind, scheduled_for=None):
+def queue_booking_message(booking, *, kind, scheduled_for=None, extra_context=None):
     connection = get_default_connection()
     phone = normalize_whatsapp_phone(booking.client.phone)
     message = WhatsAppMessage(
@@ -93,7 +96,7 @@ def queue_booking_message(booking, *, kind, scheduled_for=None):
         client=booking.client,
         kind=kind,
         to_phone=phone,
-        body=booking_message(booking, kind=kind),
+        body=booking_message(booking, kind=kind, extra_context=extra_context),
         scheduled_for=scheduled_for or timezone.now(),
     )
     try:
@@ -270,6 +273,69 @@ def queue_due_reminders(*, hours, window_minutes=15):
         else:
             skipped.append(message)
     return {"queued": queued, "skipped": skipped}
+
+
+def process_unanswered_24h_reminders(*, timeout_minutes=15):
+    """Cancel bookings whose delivered 24h reminder was left unanswered."""
+    cutoff = timezone.now() - timedelta(minutes=timeout_minutes)
+    candidates = list(
+        WhatsAppMessage.objects.filter(
+            kind=WhatsAppMessage.Kinds.REMINDER_24H,
+            status=WhatsAppMessage.Statuses.SENT,
+            sent_at__lte=cutoff,
+            booking__client_response=Booking.ClientResponses.PENDING,
+        )
+        .exclude(
+            booking__status__in={
+                Booking.Statuses.CANCELLED,
+                Booking.Statuses.DONE,
+                Booking.Statuses.NO_SHOW,
+            }
+        )
+        .select_related("booking__client", "booking__service")
+        .order_by("sent_at", "id")
+    )
+    cancelled = []
+    failed = []
+    for reminder in candidates:
+        try:
+            with transaction.atomic():
+                booking = (
+                    Booking.objects.select_for_update()
+                    .select_related("client", "service")
+                    .prefetch_related("online_payments", "payments", "prepayment")
+                    .get(pk=reminder.booking_id)
+                )
+                if (
+                    booking.client_response != Booking.ClientResponses.PENDING
+                    or booking.status in {
+                        Booking.Statuses.CANCELLED,
+                        Booking.Statuses.DONE,
+                        Booking.Statuses.NO_SHOW,
+                    }
+                ):
+                    continue
+                paid_before = booking_payment_summary(booking)["paid_amount"]
+                _message, refunds = cancel_booking(booking, force_refund=True)
+                if refunds:
+                    refund_message = "La devolución del importe pagado ha sido solicitada."
+                elif paid_before > 0:
+                    refund_message = "El salón revisará el pago para completar la devolución."
+                else:
+                    refund_message = "No había ningún pago que devolver."
+                timeout_message, _created = queue_booking_message(
+                    booking,
+                    kind=WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED,
+                    extra_context={"refund_message": refund_message},
+                )
+                cancelled.append((booking, timeout_message))
+        except Exception as exc:
+            logger.exception(
+                "Could not auto-cancel booking %s after unanswered reminder.",
+                reminder.booking_id,
+            )
+            failed.append((reminder.booking_id, str(exc)))
+    return {"cancelled": cancelled, "failed": failed}
 
 
 def send_whatsapp_message(message):

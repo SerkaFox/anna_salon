@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -8,10 +9,13 @@ from bookings.models import Booking
 from clients.models import Client
 from employees.models import Employee
 from services_app.models import Service
+from payments.models import Payment
 
 from .models import TEMPLATE_DEFAULTS, WhatsAppMessage, WhatsAppTemplate
 from .services import (
     normalize_whatsapp_phone,
+    process_unanswered_24h_reminders,
+    queue_booking_message,
     queue_booking_confirmation,
     queue_due_reminders,
     send_due_messages,
@@ -81,6 +85,64 @@ class WhatsAppBotTests(TestCase):
 
         send_whatsapp_message(message)
         self.assertEqual(WhatsAppMessage.objects.count(), 1)
+
+    @patch("bookings.client_actions.create_refund")
+    def test_unanswered_24h_reminder_cancels_and_requests_refund(self, create_refund):
+        booking = self._booking(timezone.now() + timedelta(hours=23))
+        Payment.objects.create(
+            booking=booking,
+            amount=Decimal("10.00"),
+            order_number="timeout-refund-1",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            stripe_payment_intent_id="pi_timeout_test",
+        )
+        message, _created = queue_booking_message(
+            booking, kind=WhatsAppMessage.Kinds.REMINDER_24H
+        )
+        send_whatsapp_message(message)
+        WhatsAppMessage.objects.filter(pk=message.pk).update(
+            sent_at=timezone.now() - timedelta(minutes=16)
+        )
+        create_refund.return_value = object()
+
+        result = process_unanswered_24h_reminders(timeout_minutes=15)
+        send_due_messages()
+
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
+        self.assertEqual(len(result["cancelled"]), 1)
+        create_refund.assert_called_once()
+        timeout_message = WhatsAppMessage.objects.get(
+            booking=booking,
+            kind=WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED,
+        )
+        self.assertEqual(timeout_message.status, WhatsAppMessage.Statuses.SENT)
+        self.assertIn("devolución", timeout_message.body)
+
+        second = process_unanswered_24h_reminders(timeout_minutes=15)
+        self.assertEqual(len(second["cancelled"]), 0)
+        create_refund.assert_called_once()
+
+    def test_answered_24h_reminder_is_not_cancelled(self):
+        booking = self._booking(timezone.now() + timedelta(hours=23))
+        booking.client_response = Booking.ClientResponses.ATTENDING
+        booking.client_responded_at = timezone.now()
+        booking.save(update_fields=["client_response", "client_responded_at"])
+        message, _created = queue_booking_message(
+            booking, kind=WhatsAppMessage.Kinds.REMINDER_24H
+        )
+        send_whatsapp_message(message)
+        WhatsAppMessage.objects.filter(pk=message.pk).update(
+            sent_at=timezone.now() - timedelta(minutes=16)
+        )
+
+        result = process_unanswered_24h_reminders(timeout_minutes=15)
+
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
+        self.assertEqual(len(result["cancelled"]), 0)
 
     def test_default_24h_template_contains_confirmation_actions_once(self):
         booking = self._booking(timezone.now() + timedelta(hours=24, minutes=5))

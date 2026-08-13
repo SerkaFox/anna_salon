@@ -3,6 +3,7 @@ from django.core.management.base import BaseCommand
 from whatsapp_bot.services import (
     queue_due_reminders,
     queue_due_review_requests,
+    process_unanswered_24h_reminders,
     send_due_messages,
 )
 
@@ -15,6 +16,7 @@ class Command(BaseCommand):
         parser.add_argument("--window-minutes", type=int, default=15)
         parser.add_argument("--limit", type=int, default=50)
         parser.add_argument("--queue-only", action="store_true")
+        parser.add_argument("--response-timeout-minutes", type=int, default=15)
 
     def handle(self, *args, **options):
         hours_values = options["hours"] or [24, 2]
@@ -25,7 +27,12 @@ class Command(BaseCommand):
             total_queued += len(result["queued"])
             total_skipped += len(result["skipped"])
         total_queued += len(queue_due_review_requests())
+        timeout_result = process_unanswered_24h_reminders(
+            timeout_minutes=options["response_timeout_minutes"]
+        )
         sent = [] if options["queue_only"] else send_due_messages(limit=options["limit"])
         self.stdout.write(
-            f"queued={total_queued} skipped_existing={total_skipped} processed={len(sent)}"
+            f"queued={total_queued} skipped_existing={total_skipped} "
+            f"auto_cancelled={len(timeout_result['cancelled'])} "
+            f"auto_cancel_failed={len(timeout_result['failed'])} processed={len(sent)}"
         )

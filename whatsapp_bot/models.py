@@ -70,6 +70,7 @@ class WhatsAppMessage(models.Model):
         BOOKING_RESCHEDULED = "booking_rescheduled", "Booking rescheduled"
         REMINDER_24H = "reminder_24h", "Reminder 24h"
         REMINDER_2H = "reminder_2h", "Reminder 2h"
+        REMINDER_TIMEOUT_CANCELLED = "reminder_timeout_cancelled", "Reminder timeout cancellation"
         WELCOME_CREDENTIALS = "welcome_credentials", "Welcome / login credentials"
         PAYMENT_RECEIPT = "payment_receipt", "Payment receipt"
         BIRTHDAY_GREETING = "birthday_greeting", "Birthday greeting"
@@ -172,6 +173,11 @@ TEMPLATE_DEFAULTS = {
         '{date} a las {time}, {service_name} con {employee_name}.\n\n'
         'Reserva cuanto antes desde {booking_url} o contacta con el salon.'
     ),
+    WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED: (
+        "Hola {client_name}. Como no recibimos respuesta en 15 minutos, tu cita en "
+        "{salon_name} del {date} a las {time} ({service_name}) se ha cancelado "
+        "automáticamente. {refund_message}"
+    ),
     WhatsAppMessage.Kinds.REVIEW_REQUEST: (
         "Hola {client_name}. Gracias por visitarnos en {salon_name}.\n\n"
         "Nos ayudas mucho dejando tu opinion sobre {service_name}:\n"
@@ -186,6 +192,7 @@ TEMPLATE_NAMES = {
     WhatsAppMessage.Kinds.BOOKING_RESCHEDULED: "Reagendamiento de cita",
     WhatsAppMessage.Kinds.REMINDER_24H: "Recordatorio 24h antes",
     WhatsAppMessage.Kinds.REMINDER_2H: "Recordatorio 2h antes",
+    WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED: "Cancelación automática sin respuesta",
     WhatsAppMessage.Kinds.WELCOME_CREDENTIALS: "Bienvenida con credenciales",
     WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "Felicitación de cumpleaños",
     WhatsAppMessage.Kinds.WAITLIST_JOINED: 'Nueva persona en lista de espera',
@@ -199,6 +206,7 @@ TEMPLATE_VARIABLES = {
     WhatsAppMessage.Kinds.BOOKING_RESCHEDULED: "{client_name} {salon_name} {date} {time} {service_name} {portal_url}",
     WhatsAppMessage.Kinds.REMINDER_24H: "{client_name} {salon_name} {date} {time} {service_name} {attend_url} {decline_url}",
     WhatsAppMessage.Kinds.REMINDER_2H: "{client_name} {salon_name} {time} {service_name}",
+    WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED: "{client_name} {salon_name} {date} {time} {service_name} {refund_message}",
     WhatsAppMessage.Kinds.WELCOME_CREDENTIALS: "{client_name} {salon_name} {username} {password} {portal_url}",
     WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "{client_name} {salon_name} {offer}",
     WhatsAppMessage.Kinds.WAITLIST_JOINED: '{client_name} {salon_name} {service_name} {date} {time_range} {phone} {email}',

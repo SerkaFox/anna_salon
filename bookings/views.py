@@ -44,6 +44,7 @@ from .utils import (
     build_calendar_hour_lines,
     build_time_block_layout_data,
     booking_layout_data,
+    booking_payment_summary,
     fits_employee_schedule,
     get_bookings_for_day,
     get_employee_schedule,
@@ -121,7 +122,7 @@ def booking_list(request):
     bookings = scope_bookings_queryset(
         Booking.objects.select_related(
         "client", "employee", "service", "zone"
-    ).prefetch_related("fiscal_documents__payments").all(),
+    ).prefetch_related("fiscal_documents__payments", "online_payments", "payments", "prepayment").all(),
         request.user,
     )
 
@@ -159,11 +160,10 @@ def booking_list(request):
             else booking_amount_due(booking)
         )
         booking.is_fully_paid = booking.balance_due <= 0
-        payment_info = _booking_payment_info(booking)
-        booking.online_payment_status = payment_info["status"]
-        booking.online_payment_status_label = _payment_status_label(payment_info["status"])
-        booking.online_payment_paid_total = payment_info["paid_total"]
-        booking.online_payment_is_paid = payment_info["is_paid"]
+        payment_summary = booking_payment_summary(booking)
+        booking.payment_state = payment_summary["state"]
+        booking.payment_state_label = payment_summary["label"]
+        booking.payment_paid_total = payment_summary["paid_amount"]
 
     now = timezone.now()
     today = timezone.localdate()
