@@ -128,9 +128,13 @@ class TreatwellClient:
 
 
 def normalize_appointment(stub, detail):
-    appointment = detail.get("appointment") or stub
+    detailed = detail.get("appointment") or {}
+    appointment = {**stub, **detailed}
     customer = detail.get("customer") or {}
-    service_data = appointment.get("data") or {}
+    # Deleted/cancelled details sometimes contain an empty data object while the
+    # calendar stub still has the employee and treatment snapshot.
+    service_data = {**(stub.get("data") or {}), **(detailed.get("data") or {})}
+    appointment["data"] = service_data
     treatment = service_data.get("staff_member_treatment") or {}
     staff = service_data.get("staff_member") or {}
 

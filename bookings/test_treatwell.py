@@ -8,7 +8,10 @@ from decimal import Decimal
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
-from bookings.management.commands.import_treatwell_bookings import Command as ImportCommand
+from bookings.management.commands.import_treatwell_bookings import (
+    Command as ImportCommand,
+    Resolver,
+)
 from bookings.management.commands.export_treatwell_bookings import Command
 from bookings.models import Booking
 from bookings.treatwell import normalize_appointment
@@ -76,6 +79,24 @@ class TreatwellNormalizationTests(SimpleTestCase):
 
         self.assertEqual(list(result), ["1"])
 
+    def test_deleted_detail_keeps_calendar_snapshot(self):
+        result = normalize_appointment(
+            {
+                "id": 9,
+                "state": "deleted",
+                "time": "2026-08-15T10:00:00+02:00",
+                "data": {
+                    "staff_member": {"first_name": "Ana", "last_name": "B"},
+                    "staff_member_treatment": {"name": "Manicura", "duration": 30, "price": 10},
+                },
+            },
+            {"appointment": {"id": 9, "state": "deleted", "data": {}}},
+        )
+
+        self.assertEqual(result["employee"]["full_name"], "Ana B")
+        self.assertEqual(result["service"]["name"], "Manicura")
+        self.assertEqual(result["status"], "cancelled")
+
 
 class TreatwellImportTests(TestCase):
     def test_save_is_idempotent_and_creates_treatwell_payment(self):
@@ -112,3 +133,18 @@ class TreatwellImportTests(TestCase):
         payment = Payment.objects.get()
         self.assertEqual(payment.provider, Payment.Providers.TREATWELL)
         self.assertEqual(payment.amount, Decimal("2.00"))
+
+    def test_resolver_uses_staff_surname_and_service_alias(self):
+        Employee.objects.create(first_name="Hanna", last_name="Briukhovets")
+        expected_service = Service.objects.create(name="Relleno de gel")
+        resolver = Resolver()
+
+        employee, employee_match = resolver.employee(
+            {"first_name": "ANNA", "last_name": "Briukhovets-Flippo"}
+        )
+        service, service_match = resolver.service({"name": "Relleno de Acrygel"})
+
+        self.assertEqual(employee.full_name, "Hanna Briukhovets")
+        self.assertEqual(employee_match, "last_name")
+        self.assertEqual(service, expected_service)
+        self.assertEqual(service_match, "alias")

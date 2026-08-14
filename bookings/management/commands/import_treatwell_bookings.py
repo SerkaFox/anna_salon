@@ -16,6 +16,20 @@ from payments.models import Payment
 from services_app.models import Service
 
 
+SERVICE_ALIASES = {
+    "relleno de acrygel": "Relleno de gel",
+    "extensiones de pestanas 2d": "Extensiones de pestañas clásicas (2D)",
+    "extensiones de pestanas 2d 7d volumen ruso": "Extensiones de pestañas volumen ruso",
+    "extensiones de pestanas ojo de gato": "extenciones de pestañas OJO DE GATO",
+    "retirar acrilico gel": "Retirar gel",
+    "manicura completa esmaltado normal": "Manicura rusa con esmaltado normal",
+    "primera puesta extensiones polygel cortas simples solo un color": "Primera Puesta Extensiones de Gel (Cortas) – Color Liso",
+    "primera puesta extensiones polygel cortas francesa": "Primera Puesta Extensiones de Gel (Cortas) - francesa",
+    "primera puesta extensiones polygel cortas decorasion fino": "Primera Puesta Extensiones de Gel (Cortas)- Decorasion fino",
+    "primera puesta extensiones polygel cortas con decoracion en todos los dedos": "Extensiones de Gel (Largura Media) con Decoración",
+}
+
+
 def _key(value):
     text = unicodedata.normalize("NFKD", str(value or ""))
     text = "".join(character for character in text if not unicodedata.combining(character))
@@ -51,6 +65,15 @@ class Resolver:
         self.services = list(Service.objects.all())
 
     def client(self, data):
+        treatwell_id = str(data.get("treatwell_id") or "")
+        if treatwell_id:
+            matches = [
+                item
+                for item in self.clients
+                if item.external_source == "treatwell" and item.external_id == treatwell_id
+            ]
+            if len(matches) == 1:
+                return matches[0], "treatwell_id"
         phone = _phone_key(data.get("phone"))
         if phone:
             matches = [
@@ -82,6 +105,16 @@ class Resolver:
         matches = [item for item in self.employees if first_name and _key(item.first_name) == first_name]
         if len(matches) == 1:
             return matches[0], "first_name"
+        last_tokens = {
+            token for token in _key(data.get("last_name")).split() if len(token) >= 4
+        }
+        matches = [
+            item
+            for item in self.employees
+            if last_tokens.intersection(_key(item.last_name).split())
+        ]
+        if len(matches) == 1:
+            return matches[0], "last_name"
         return None, "unmatched"
 
     def service(self, data):
@@ -89,6 +122,11 @@ class Resolver:
         matches = [item for item in self.services if _key(item.name) == name]
         if len(matches) == 1:
             return matches[0], "name"
+        alias = SERVICE_ALIASES.get(name)
+        if alias:
+            matches = [item for item in self.services if _key(item.name) == _key(alias)]
+            if len(matches) == 1:
+                return matches[0], "alias"
         return None, "unmatched"
 
 
@@ -186,6 +224,14 @@ class Command(BaseCommand):
         employee_percent = employee.commission_percent
         employee_amount = (price * employee_percent / Decimal("100")).quantize(Decimal("0.01"))
         zone = Command._zone(employee, service)
+        treatwell_client_id = str((row.get("client") or {}).get("treatwell_id") or "")
+        if (
+            treatwell_client_id
+            and client.external_source == "treatwell"
+            and (not client.external_id or client.external_id.startswith("csv-"))
+        ):
+            client.external_id = treatwell_client_id
+            client.save(update_fields=["external_id", "updated_at"])
         booking, created = Booking.objects.update_or_create(
             external_source="treatwell",
             external_id=str(row["external_id"]),
