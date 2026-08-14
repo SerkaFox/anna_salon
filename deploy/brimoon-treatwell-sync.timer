@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Treatwell booking synchronization every five hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=5h
+Persistent=true
+RandomizedDelaySec=5min
+Unit=brimoon-treatwell-sync.service
+
+[Install]
+WantedBy=timers.target

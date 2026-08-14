@@ -1,0 +1,14 @@
+[Unit]
+Description=Synchronize Treatwell bookings into Brimoon
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=seradmin
+Group=www-data
+WorkingDirectory=/home/seradmin/anna
+ExecStart=/home/seradmin/anna/venv/bin/python manage.py sync_treatwell_bookings --apply --workers 4
+Nice=10
+TimeoutStartSec=4h
+
