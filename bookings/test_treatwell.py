@@ -177,6 +177,22 @@ class TreatwellImportTests(TestCase):
         self.assertEqual(Client.objects.count(), 1)
         self.assertEqual(first.external_id, "customer-77")
 
+    def test_resolver_creates_inactive_historical_employee_and_service(self):
+        resolver = Resolver()
+
+        employee = resolver.create_employee(
+            {"first_name": "Old", "last_name": "Master"}, active=False
+        )
+        service = resolver.create_service(
+            {"name": "Old Treatment", "duration_minutes": 75, "price": "21.50"},
+            active=False,
+        )
+
+        self.assertFalse(employee.is_active)
+        self.assertFalse(service.is_active)
+        self.assertEqual(service.duration_minutes, 75)
+        self.assertEqual(service.price, Decimal("21.50"))
+
     def test_duration_repair_converts_seconds_and_is_idempotent(self):
         client = Client.objects.create(first_name="Repair")
         employee = Employee.objects.create(first_name="Ana")

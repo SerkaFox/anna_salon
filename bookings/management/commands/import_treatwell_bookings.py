@@ -167,6 +167,26 @@ class Resolver:
             return matches[0], "last_name"
         return None, "unmatched"
 
+    def create_employee(self, data, *, active=False):
+        first_name = str(data.get("first_name") or "").strip()
+        last_name = str(data.get("last_name") or "").strip()
+        full_name = str(data.get("full_name") or "").strip()
+        if not first_name and full_name:
+            first_name, _, last_name = full_name.partition(" ")
+        if not first_name:
+            return None
+        employee, _created = Employee.objects.get_or_create(
+            first_name=first_name,
+            last_name=last_name,
+            defaults={
+                "is_active": active,
+                "notes": "Importado automaticamente desde el historial de Treatwell.",
+            },
+        )
+        if employee not in self.employees:
+            self.employees.append(employee)
+        return employee
+
     def service(self, data):
         name = _key(data.get("name"))
         matches = [item for item in self.services if _key(item.name) == name]
@@ -178,6 +198,26 @@ class Resolver:
             if len(matches) == 1:
                 return matches[0], "alias"
         return None, "unmatched"
+
+    def create_service(self, data, *, active=False):
+        name = str(data.get("name") or "").strip()
+        if not name:
+            return None
+        duration = max(1, int(data.get("duration_minutes") or 60))
+        price = _decimal(data.get("price"))
+        service, _created = Service.objects.get_or_create(
+            name=name,
+            defaults={
+                "category": Service.Categories.OTHER,
+                "duration_minutes": duration,
+                "price": price,
+                "is_active": active,
+                "description": "Importado automaticamente desde el historial de Treatwell.",
+            },
+        )
+        if service not in self.services:
+            self.services.append(service)
+        return service
 
 
 class Command(BaseCommand):

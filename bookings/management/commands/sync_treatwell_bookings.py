@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils import timezone
 
 from bookings.management.commands.import_treatwell_bookings import (
     Command as ImportCommand,
@@ -81,6 +82,8 @@ class Command(BaseCommand):
             "updated": 0,
             "payments_created": 0,
             "clients_created": 0,
+            "employees_created": 0,
+            "services_created": 0,
             "unmatched": [],
             "errors": [],
         }
@@ -96,10 +99,12 @@ class Command(BaseCommand):
                 try:
                     detail = future.result()
                     row = normalize_appointment(stub, detail)
-                    resolved, client_created = self._resolve(
+                    resolved, created_entities = self._resolve(
                         row, resolver, create_client=options["apply"]
                     )
-                    report["clients_created"] += int(client_created)
+                    report["clients_created"] += int(created_entities["client"])
+                    report["employees_created"] += int(created_entities["employee"])
+                    report["services_created"] += int(created_entities["service"])
                     if resolved is None:
                         report["unmatched"].append(self._unmatched(row, resolver))
                         continue
@@ -147,17 +152,24 @@ class Command(BaseCommand):
     @staticmethod
     def _resolve(row, resolver, *, create_client=False):
         client, _client_match = resolver.client(row.get("client") or {})
-        client_created = False
+        created = {"client": False, "employee": False, "service": False}
         if client is None and create_client:
             client = resolver.create_client(row.get("client") or {})
-            client_created = client is not None
+            created["client"] = client is not None
         employee, _employee_match = resolver.employee(row.get("employee") or {})
         service, _service_match = resolver.service(row.get("service") or {})
         start_at = _datetime(row.get("start_at"))
         end_at = _datetime(row.get("end_at"))
+        is_future = bool(start_at and timezone.localtime(start_at).date() >= date.today())
+        if employee is None and create_client:
+            employee = resolver.create_employee(row.get("employee") or {}, active=is_future)
+            created["employee"] = employee is not None
+        if service is None and create_client:
+            service = resolver.create_service(row.get("service") or {}, active=is_future)
+            created["service"] = service is not None
         if None in {client, employee, service, start_at, end_at}:
-            return None, client_created
-        return (client, employee, service, start_at, end_at), client_created
+            return None, created
+        return (client, employee, service, start_at, end_at), created
 
     @staticmethod
     def _unmatched(row, resolver):

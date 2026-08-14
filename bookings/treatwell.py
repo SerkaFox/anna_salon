@@ -183,6 +183,8 @@ def normalize_appointment(stub, detail):
             "treatwell_id": _string_or_empty(service_data.get("treatment_id")),
             "venue_treatment_id": _string_or_empty(treatment.get("venue_treatment_id")),
             "name": treatment.get("name") or treatment.get("short_name") or "",
+            "duration_minutes": duration,
+            "price": price,
         },
         "start_at": start_at.isoformat() if start_at else "",
         "end_at": end_at.isoformat() if end_at else "",
