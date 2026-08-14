@@ -161,6 +161,7 @@ class Command(BaseCommand):
         return {
             "external_id": row.get("external_id"),
             "start_at": row.get("start_at"),
+            "treatwell_status": row.get("treatwell_status"),
             "missing": missing,
             "client": (row.get("client") or {}).get("full_name", ""),
             "employee": (row.get("employee") or {}).get("full_name", ""),

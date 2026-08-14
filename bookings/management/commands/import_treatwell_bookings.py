@@ -1,6 +1,7 @@
 import json
 import re
 import unicodedata
+from difflib import SequenceMatcher
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -27,6 +28,9 @@ SERVICE_ALIASES = {
     "primera puesta extensiones polygel cortas francesa": "Primera Puesta Extensiones de Gel (Cortas) - francesa",
     "primera puesta extensiones polygel cortas decorasion fino": "Primera Puesta Extensiones de Gel (Cortas)- Decorasion fino",
     "primera puesta extensiones polygel cortas con decoracion en todos los dedos": "Extensiones de Gel (Largura Media) con Decoración",
+    "extensiones pestanas pelo a pelo 3d": "Extensiones de pestañas clásicas (2D)",
+    "semipermanente francesa en manos": "Manicura Francesa Semi Permanente",
+    "tinte de cejas": "Definición, depilación y lifting de cejas 🥰",
 }
 
 
@@ -93,6 +97,26 @@ class Resolver:
             matches = [item for item in self.clients if _key(item.full_name) == name]
             if len(matches) == 1:
                 return matches[0], "name"
+            name_tokens = sorted(name.split())
+            matches = [
+                item for item in self.clients if sorted(_key(item.full_name).split()) == name_tokens
+            ]
+            if len(matches) == 1:
+                return matches[0], "name_tokens"
+            scored = sorted(
+                (
+                    SequenceMatcher(None, name, _key(item.full_name)).ratio(),
+                    item.pk,
+                    item,
+                )
+                for item in self.clients
+                if item.full_name
+            )
+            if scored:
+                best_score, _best_pk, best = scored[-1]
+                second_score = scored[-2][0] if len(scored) > 1 else 0
+                if best_score >= 0.90 and best_score - second_score >= 0.08:
+                    return best, "unique_fuzzy_name"
         return None, "unmatched"
 
     def employee(self, data):

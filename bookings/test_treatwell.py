@@ -148,3 +148,13 @@ class TreatwellImportTests(TestCase):
         self.assertEqual(employee_match, "last_name")
         self.assertEqual(service, expected_service)
         self.assertEqual(service_match, "alias")
+
+    def test_resolver_accepts_only_clear_unique_fuzzy_client_name(self):
+        expected = Client.objects.create(first_name="Alejandra", last_name="Gonzalez")
+        Client.objects.create(first_name="Maria", last_name="Lopez")
+        resolver = Resolver()
+
+        client, match = resolver.client({"full_name": "Alejandra Gonzales"})
+
+        self.assertEqual(client, expected)
+        self.assertEqual(match, "unique_fuzzy_name")
