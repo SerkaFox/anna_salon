@@ -21,6 +21,7 @@ class Booking(models.Model):
         REBOOKING = "rebooking", "Cliente recurrente"
         REFERRAL = "referral", "Recomendación"
         EMPLOYEE = "employee", "Empleado"
+        TREATWELL = "treatwell", "Treatwell"
         GOOGLE = "google", "Google / Maps"
         OTHER = "other", "Otro"
 
@@ -87,6 +88,10 @@ class Booking(models.Model):
         blank=True,
     )
 
+    external_source = models.CharField("Origen externo", max_length=40, blank=True)
+    external_id = models.CharField("ID externo", max_length=120, blank=True)
+    external_updated_at = models.DateTimeField("Actualizado en origen", null=True, blank=True)
+
     price_snapshot = models.DecimalField("Precio guardado", max_digits=10, decimal_places=2, default=0)
     duration_snapshot = models.PositiveIntegerField("Duración guardada (min)", default=60)
 
@@ -114,6 +119,13 @@ class Booking(models.Model):
         ordering = ["-start_at"]
         verbose_name = "Reserva"
         verbose_name_plural = "Reservas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["external_source", "external_id"],
+                condition=~models.Q(external_id=""),
+                name="unique_booking_external_reference",
+            )
+        ]
 
     def __str__(self):
         return f"{self.client} · {self.service} · {self.start_at:%d/%m/%Y %H:%M}"

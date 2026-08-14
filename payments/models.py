@@ -8,6 +8,7 @@ class Payment(models.Model):
     class Providers(models.TextChoices):
         REDSYS = "redsys", "Redsys"
         STRIPE = "stripe", "Stripe"
+        TREATWELL = "treatwell", "Treatwell"
 
     class Methods(models.TextChoices):
         CARD = "card", "Tarjeta"

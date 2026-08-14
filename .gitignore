@@ -21,5 +21,7 @@ node_modules/
 whatsapp_bridge/sessions/
 whatsapp_bridge/.wwebjs_*/
 clients/data/*.json
+bookings/data/*.json
+bookings/data/*.jsonl
 
 .DS_Store
