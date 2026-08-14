@@ -158,3 +158,20 @@ class TreatwellImportTests(TestCase):
 
         self.assertEqual(client, expected)
         self.assertEqual(match, "unique_fuzzy_name")
+
+    def test_resolver_creates_new_treatwell_client_idempotently(self):
+        resolver = Resolver()
+        data = {
+            "treatwell_id": "customer-77",
+            "first_name": "Nueva",
+            "last_name": "Cliente",
+            "phone": "+34111222333",
+            "email": "nueva@example.com",
+        }
+
+        first = resolver.create_client(data)
+        second = resolver.create_client(data)
+
+        self.assertEqual(first, second)
+        self.assertEqual(Client.objects.count(), 1)
+        self.assertEqual(first.external_id, "customer-77")

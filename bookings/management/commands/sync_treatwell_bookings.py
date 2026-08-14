@@ -73,6 +73,7 @@ class Command(BaseCommand):
             "created": 0,
             "updated": 0,
             "payments_created": 0,
+            "clients_created": 0,
             "unmatched": [],
             "errors": [],
         }
@@ -88,7 +89,10 @@ class Command(BaseCommand):
                 try:
                     detail = future.result()
                     row = normalize_appointment(stub, detail)
-                    resolved = self._resolve(row, resolver)
+                    resolved, client_created = self._resolve(
+                        row, resolver, create_client=options["apply"]
+                    )
+                    report["clients_created"] += int(client_created)
                     if resolved is None:
                         report["unmatched"].append(self._unmatched(row, resolver))
                         continue
@@ -134,15 +138,19 @@ class Command(BaseCommand):
         return result
 
     @staticmethod
-    def _resolve(row, resolver):
+    def _resolve(row, resolver, *, create_client=False):
         client, _client_match = resolver.client(row.get("client") or {})
+        client_created = False
+        if client is None and create_client:
+            client = resolver.create_client(row.get("client") or {})
+            client_created = client is not None
         employee, _employee_match = resolver.employee(row.get("employee") or {})
         service, _service_match = resolver.service(row.get("service") or {})
         start_at = _datetime(row.get("start_at"))
         end_at = _datetime(row.get("end_at"))
         if None in {client, employee, service, start_at, end_at}:
-            return None
-        return client, employee, service, start_at, end_at
+            return None, client_created
+        return (client, employee, service, start_at, end_at), client_created
 
     @staticmethod
     def _unmatched(row, resolver):

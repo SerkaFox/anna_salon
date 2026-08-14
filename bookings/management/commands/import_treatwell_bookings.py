@@ -119,6 +119,32 @@ class Resolver:
                     return best, "unique_fuzzy_name"
         return None, "unmatched"
 
+    def create_client(self, data):
+        treatwell_id = str(data.get("treatwell_id") or "")
+        full_name = str(data.get("full_name") or "").strip()
+        first_name = str(data.get("first_name") or "").strip()
+        last_name = str(data.get("last_name") or "").strip()
+        if not first_name and full_name:
+            first_name, _, last_name = full_name.partition(" ")
+        phone = str(data.get("phone") or "").strip()
+        email = str(data.get("email") or "").strip()
+        if not treatwell_id or not any((first_name, last_name, phone, email)):
+            return None
+        client, _created = Client.objects.get_or_create(
+            external_source="treatwell",
+            external_id=treatwell_id,
+            defaults={
+                "first_name": first_name or phone or email or "Cliente Treatwell",
+                "last_name": last_name,
+                "phone": phone,
+                "email": email,
+                "is_active": True,
+            },
+        )
+        if client not in self.clients:
+            self.clients.append(client)
+        return client
+
     def employee(self, data):
         name = _key(data.get("full_name") or f'{data.get("first_name", "")} {data.get("last_name", "")}')
         matches = [item for item in self.employees if _key(item.full_name) == name]
