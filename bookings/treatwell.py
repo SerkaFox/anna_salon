@@ -139,12 +139,13 @@ def normalize_appointment(stub, detail):
     staff = service_data.get("staff_member") or {}
 
     start_at = _parse_datetime(appointment.get("time") or appointment.get("time_no_tz"))
-    duration = _positive_int(
+    duration_seconds = _positive_int(
         appointment.get("custom_duration")
         or treatment.get("duration")
         or treatment.get("total_duration"),
-        default=60,
+        default=3600,
     )
+    duration = max(1, (duration_seconds + 59) // 60)
     end_at = start_at + timedelta(minutes=duration) if start_at else None
     price = _money(service_data.get("custom_price"))
     if price is None:

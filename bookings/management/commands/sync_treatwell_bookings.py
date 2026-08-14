@@ -29,6 +29,7 @@ class Command(BaseCommand):
         parser.add_argument("--chunk-days", type=int, default=31)
         parser.add_argument("--workers", type=int, default=4)
         parser.add_argument("--apply", action="store_true")
+        parser.add_argument("--force", action="store_true")
         parser.add_argument(
             "--report",
             type=Path,
@@ -61,7 +62,13 @@ class Command(BaseCommand):
         for appointment_id, stub in stubs.items():
             remote_updated = _datetime(stub.get("updated_at"))
             local_updated = known.get(appointment_id)
-            if appointment_id not in known or local_updated is None or remote_updated is None or remote_updated > local_updated:
+            if (
+                options["force"]
+                or appointment_id not in known
+                or local_updated is None
+                or remote_updated is None
+                or remote_updated > local_updated
+            ):
                 pending[appointment_id] = stub
 
         report = {

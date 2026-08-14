@@ -12,6 +12,7 @@ from bookings.management.commands.import_treatwell_bookings import (
     Command as ImportCommand,
     Resolver,
 )
+from bookings.management.commands.repair_treatwell_durations import Command as RepairCommand
 from bookings.management.commands.export_treatwell_bookings import Command
 from bookings.models import Booking
 from bookings.treatwell import normalize_appointment
@@ -40,7 +41,7 @@ class TreatwellNormalizationTests(SimpleTestCase):
                     "staff_member": {"first_name": "Ana", "last_name": "Lopez"},
                     "staff_member_treatment": {
                         "name": "Manicura",
-                        "duration": 45,
+                        "duration": 2700,
                         "price": 15,
                         "venue_treatment_id": 44,
                     },
@@ -87,7 +88,7 @@ class TreatwellNormalizationTests(SimpleTestCase):
                 "time": "2026-08-15T10:00:00+02:00",
                 "data": {
                     "staff_member": {"first_name": "Ana", "last_name": "B"},
-                    "staff_member_treatment": {"name": "Manicura", "duration": 30, "price": 10},
+                    "staff_member_treatment": {"name": "Manicura", "duration": 1800, "price": 10},
                 },
             },
             {"appointment": {"id": 9, "state": "deleted", "data": {}}},
@@ -175,3 +176,26 @@ class TreatwellImportTests(TestCase):
         self.assertEqual(first, second)
         self.assertEqual(Client.objects.count(), 1)
         self.assertEqual(first.external_id, "customer-77")
+
+    def test_duration_repair_converts_seconds_and_is_idempotent(self):
+        client = Client.objects.create(first_name="Repair")
+        employee = Employee.objects.create(first_name="Ana")
+        service = Service.objects.create(name="Pedicura", duration_minutes=60)
+        start_at = timezone.now()
+        booking = Booking.objects.create(
+            client=client,
+            employee=employee,
+            service=service,
+            start_at=start_at,
+            end_at=start_at + timedelta(minutes=3600),
+            duration_snapshot=3600,
+            external_source="treatwell",
+            external_id="repair-1",
+        )
+
+        RepairCommand().handle(apply=True)
+        RepairCommand().handle(apply=True)
+
+        booking.refresh_from_db()
+        self.assertEqual(booking.duration_snapshot, 60)
+        self.assertEqual(booking.end_at, start_at + timedelta(minutes=60))
