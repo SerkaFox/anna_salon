@@ -5,8 +5,27 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from accounts.permissions import admin_required
 
-from .forms import ZoneForm
-from .models import Zone
+from .forms import DepositSettingsForm, ZoneForm
+from .models import SalonSettings, Zone
+
+
+@login_required
+@admin_required
+def deposit_settings(request):
+    salon_settings = SalonSettings.load()
+    if request.method == "POST":
+        form = DepositSettingsForm(request.POST, instance=salon_settings)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Ajustes de prepago guardados.")
+            return redirect("salon:deposit_settings")
+    else:
+        form = DepositSettingsForm(instance=salon_settings)
+    return render(
+        request,
+        "salon/deposit_settings.html",
+        {"form": form, "settings": salon_settings, "active_section": "deposit_settings"},
+    )
 
 
 @login_required

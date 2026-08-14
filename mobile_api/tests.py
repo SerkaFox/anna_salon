@@ -181,6 +181,27 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(response.json()["deposit_percent"], "25.00")
         self.assertEqual(SalonSettings.load().deposit_percent, Decimal("25.00"))
 
+    def test_owner_can_update_global_deposit_settings(self):
+        self._auth(self.owner_user)
+        response = self.api_client.patch(
+            reverse("mobile_api:deposit_settings"),
+            {
+                "percent": "10",
+                "minimum_amount": "2",
+                "rounding": SalonSettings.DepositRounding.UP_TO_EURO,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["percent"], "10.00")
+        self.assertEqual(response.json()["minimum_amount"], "2.00")
+        salon_settings = SalonSettings.load()
+        self.assertEqual(salon_settings.deposit_minimum_amount, Decimal("2.00"))
+        self.assertEqual(
+            salon_settings.deposit_rounding,
+            SalonSettings.DepositRounding.UP_TO_EURO,
+        )
+
     def test_owner_can_update_receipt_template(self):
         self._auth(self.owner_user)
 

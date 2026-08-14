@@ -1373,6 +1373,74 @@ class CashboxSummaryView(MobileApiMixin, APIView):
         return Response({"deposit_percent": f"{salon_settings.deposit_percent:.2f}"})
 
 
+def _deposit_settings_payload(salon_settings):
+    return {
+        "percent": f"{salon_settings.deposit_percent:.2f}",
+        "minimum_amount": f"{salon_settings.deposit_minimum_amount:.2f}",
+        "rounding": salon_settings.deposit_rounding,
+        "rounding_choices": [
+            {"value": value, "label": label}
+            for value, label in SalonSettings.DepositRounding.choices
+        ],
+    }
+
+
+class DepositSettingsView(MobileApiMixin, APIView):
+    def get(self, request):
+        _mobile_admin_required(request.user)
+        return Response(_deposit_settings_payload(SalonSettings.load()))
+
+    def patch(self, request):
+        _mobile_admin_required(request.user)
+        try:
+            percent = Decimal(str(request.data.get("percent", "")).replace(",", "."))
+            minimum_amount = Decimal(
+                str(request.data.get("minimum_amount", "")).replace(",", ".")
+            )
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise serializers.ValidationError(
+                {"detail": ["Introduce importes válidos para el prepago."]}
+            ) from exc
+        rounding = str(request.data.get("rounding") or "")
+        if percent < 0 or percent > 100:
+            raise serializers.ValidationError(
+                {"percent": ["El porcentaje debe estar entre 0 y 100."]}
+            )
+        if minimum_amount < 0:
+            raise serializers.ValidationError(
+                {"minimum_amount": ["El mínimo no puede ser negativo."]}
+            )
+        if rounding not in SalonSettings.DepositRounding.values:
+            raise serializers.ValidationError({"rounding": ["Redondeo no válido."]})
+        salon_settings = SalonSettings.load()
+        salon_settings.deposit_percent = percent
+        salon_settings.deposit_minimum_amount = minimum_amount
+        salon_settings.deposit_rounding = rounding
+        try:
+            salon_settings.full_clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+        salon_settings.save(
+            update_fields=[
+                "deposit_percent",
+                "deposit_minimum_amount",
+                "deposit_rounding",
+                "updated_at",
+            ]
+        )
+        log_event(
+            actor=request.user,
+            section="salon",
+            action="deposit_settings_update",
+            instance=salon_settings,
+            message=(
+                f"Prepago actualizado: {percent}% · mínimo {minimum_amount} EUR · "
+                f"redondeo {rounding}."
+            ),
+        )
+        return Response(_deposit_settings_payload(salon_settings))
+
+
 class StripePayoutView(MobileApiMixin, APIView):
     def post(self, request):
         _mobile_admin_required(request.user)

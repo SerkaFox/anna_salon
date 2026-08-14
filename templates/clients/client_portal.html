@@ -96,7 +96,7 @@
                     <span>Pendiente · {{ booking.amount_due }} €</span>
                     <button class="btn btn-small" name="payment_mode" value="full" type="submit">Pagar el resto</button>
                   {% else %}
-                    <span>Señal {{ deposit_percent|floatformat:0 }}% · {{ booking.deposit_payment_amount }} €</span>
+                    <span>Señal requerida · {{ booking.deposit_payment_amount }} €</span>
                     <button class="btn btn-small" name="payment_mode" value="deposit" type="submit">Reservar con señal</button>
                     <button class="btn btn-light btn-small" name="payment_mode" value="full" type="submit">Pagar todo · {{ booking.amount_due }} €</button>
                   {% endif %}

@@ -3,12 +3,29 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 
 
 class SalonSettings(models.Model):
+    class DepositRounding(models.TextChoices):
+        NONE = "none", "Sin redondeo"
+        UP_TO_EURO = "up_to_euro", "Redondear hacia arriba al euro"
+
     deposit_percent = models.DecimalField(
         "Porcentaje de prepago",
         max_digits=5,
         decimal_places=2,
         default=10,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    deposit_minimum_amount = models.DecimalField(
+        "Importe mínimo de prepago",
+        max_digits=10,
+        decimal_places=2,
+        default=2,
+        validators=[MinValueValidator(0)],
+    )
+    deposit_rounding = models.CharField(
+        "Redondeo del prepago",
+        max_length=20,
+        choices=DepositRounding.choices,
+        default=DepositRounding.UP_TO_EURO,
     )
     receipt_business_name = models.CharField(
         "Nombre en el recibo",

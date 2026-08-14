@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
-from salon.preferences import get_deposit_percent
+from salon.preferences import calculate_deposit_amount
 
 from bookings.models import Booking
 from bookings.services import create_booking_prepayment
@@ -39,9 +39,7 @@ def get_booking_deposit_amount(booking):
     if fixed_amount is not None:
         return fixed_amount
     total = Decimal(booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00"))
-    percent = get_deposit_percent()
-    amount = total * percent / Decimal("100")
-    return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return calculate_deposit_amount(total)
 
 
 def get_booking_full_amount(booking):

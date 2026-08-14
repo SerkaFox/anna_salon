@@ -1,0 +1,46 @@
+{% extends "panel_base.html" %}
+
+{% block title %}Ajustes de prepago | {{ salon_name }}{% endblock %}
+{% block panel_title %}Ajustes de prepago{% endblock %}
+{% block panel_subtitle %}Una regla global para todas las reservas y servicios.{% endblock %}
+
+{% block panel_content %}
+<section class="panel-card">
+  <form method="post" class="entity-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ form.deposit_percent.id_for_label }}">Porcentaje de prepago</label>
+        {{ form.deposit_percent }}
+        {{ form.deposit_percent.errors }}
+        <small class="muted-text">Por ejemplo, 10% del precio final de la reserva.</small>
+      </div>
+      <div class="field">
+        <label for="{{ form.deposit_minimum_amount.id_for_label }}">Mínimo en euros</label>
+        {{ form.deposit_minimum_amount }}
+        {{ form.deposit_minimum_amount.errors }}
+        <small class="muted-text">Si el porcentaje da menos, se cobrará este mínimo.</small>
+      </div>
+      <div class="field">
+        <label for="{{ form.deposit_rounding.id_for_label }}">Redondeo</label>
+        {{ form.deposit_rounding }}
+        {{ form.deposit_rounding.errors }}
+        <small class="muted-text">Al redondear hacia arriba, 1,20 € se convierte en 2 €.</small>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">Guardar ajustes</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel-card">
+  <h2>Ejemplo con la configuración actual</h2>
+  <p class="muted-text">
+    Se calcula el {{ settings.deposit_percent|floatformat:2 }}% del precio final,
+    con un mínimo de {{ settings.deposit_minimum_amount|floatformat:2 }} €.
+    La señal nunca supera el precio completo de la reserva.
+  </p>
+</section>
+{% endblock %}
