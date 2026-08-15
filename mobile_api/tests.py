@@ -160,6 +160,12 @@ class MobileApiMvpTests(TestCase):
             response = self.api_client.get(url)
             self.assertIn(response.status_code, {401, 403})
 
+        response = self.api_client.get(
+            reverse("mobile_api:me"),
+            HTTP_ACCEPT_LANGUAGE="ru",
+        )
+        self.assertEqual(response.json(), {"detail": ["Необходимо войти в приложение."]})
+
     def test_authenticated_user_can_access_me(self):
         self._auth(self.owner_user)
 
