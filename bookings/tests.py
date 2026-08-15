@@ -95,6 +95,33 @@ class BookingScheduleTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("no trabaja", str(form.non_field_errors()).lower())
 
+    def test_cancelled_booking_does_not_block_same_employee_or_zone(self):
+        start_at = timezone.make_aware(datetime(2026, 4, 20, 10, 0))
+        end_at = start_at + timedelta(hours=1)
+        Booking.objects.create(
+            client=self.client_obj,
+            employee=self.employee,
+            service=self.service,
+            zone=self.zone,
+            start_at=start_at,
+            end_at=end_at,
+            status=Booking.Statuses.CANCELLED,
+        )
+
+        form = BookingForm(data={
+            "client": self.client_obj.pk,
+            "employee": self.employee.pk,
+            "service": self.service.pk,
+            "zone": self.zone.pk,
+            "start_at": start_at.strftime("%Y-%m-%dT%H:%M"),
+            "end_at": end_at.strftime("%Y-%m-%dT%H:%M"),
+            "status": Booking.Statuses.CONFIRMED,
+            "source": Booking.Sources.MANUAL,
+            "notes": "",
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
 
 @override_settings(BOOKING_FREE_CANCEL_HOURS=24, STRIPE_SECRET_KEY="sk_test_mock", STRIPE_CURRENCY="eur")
 class ClientBookingActionTests(TestCase):

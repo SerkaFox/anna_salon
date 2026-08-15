@@ -232,7 +232,9 @@ class BookingForm(forms.ModelForm):
                 cleaned_data["zone"] = None
 
         if employee and start_at and end_at:
-            employee_overlap = Booking.objects.filter(
+            employee_overlap = Booking.objects.exclude(
+                status=Booking.Statuses.CANCELLED,
+            ).filter(
                 employee=employee,
                 start_at__lt=end_at,
                 end_at__gt=start_at,
@@ -244,7 +246,9 @@ class BookingForm(forms.ModelForm):
                 raise ValidationError("El empleado ya tiene una reserva en ese horario.")
 
         if zone and start_at and end_at:
-            zone_overlap = Booking.objects.filter(
+            zone_overlap = Booking.objects.exclude(
+                status=Booking.Statuses.CANCELLED,
+            ).filter(
                 zone=zone,
                 start_at__lt=end_at,
                 end_at__gt=start_at,
