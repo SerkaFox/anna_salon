@@ -4,6 +4,7 @@ from whatsapp_bot.services import (
     queue_due_reminders,
     queue_due_review_requests,
     process_unanswered_24h_reminders,
+    process_expired_prepayment_requests,
     send_due_messages,
 )
 
@@ -30,9 +31,12 @@ class Command(BaseCommand):
         timeout_result = process_unanswered_24h_reminders(
             timeout_minutes=options["response_timeout_minutes"]
         )
+        prepayment_result = process_expired_prepayment_requests()
         sent = [] if options["queue_only"] else send_due_messages(limit=options["limit"])
         self.stdout.write(
             f"queued={total_queued} skipped_existing={total_skipped} "
             f"auto_cancelled={len(timeout_result['cancelled'])} "
             f"auto_cancel_failed={len(timeout_result['failed'])} processed={len(sent)}"
+            f" prepayment_cancelled={len(prepayment_result['cancelled'])}"
+            f" prepayment_failed={len(prepayment_result['failed'])}"
         )

@@ -49,7 +49,13 @@ from services_app.models import Service
 from payments.models import Payment as OnlinePayment, StripePayoutRequest
 from payments.account_service import get_stripe_account_summary, request_stripe_payout
 from payments.redsys import RedsysConfigurationError, build_form_fields, build_merchant_parameters, get_payment_url, sanitize_redsys_payload
-from payments.stripe_service import create_checkout_session, create_pending_stripe_payment
+from payments.stripe_service import (
+    create_checkout_session,
+    create_pending_stripe_payment,
+    expire_booking_prepayment,
+    request_booking_prepayment,
+)
+from whatsapp_bot.models import WhatsAppMessage
 
 from .permissions import IsAuthenticatedMobileUser
 from .serializers import (
@@ -1020,6 +1026,8 @@ class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
         serializer = BookingWriteSerializer(data=_normalize_id_aliases(request.data), context={"request": request})
         serializer.is_valid(raise_exception=True)
         booking = serializer.save()
+        if booking.prepayment_policy == Booking.PrepaymentPolicies.REQUIRED:
+            request_booking_prepayment(booking, request)
         log_event(
             actor=request.user,
             section="booking",
@@ -1028,6 +1036,43 @@ class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
             message=f"Reserva creada desde API móvil para {booking.client}.",
         )
         return Response(BookingSerializer(booking, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class BookingPrepaymentView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        booking = generics.get_object_or_404(
+            Booking.objects.select_related("client", "employee", "service", "zone").prefetch_related("online_payments"),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        required = serializers.BooleanField().run_validation(request.data.get("required"))
+        if required:
+            booking.whatsapp_messages.filter(
+                kind__in=[
+                    WhatsAppMessage.Kinds.PREPAYMENT_REQUEST,
+                    WhatsAppMessage.Kinds.PREPAYMENT_TIMEOUT_CANCELLED,
+                ]
+            ).delete()
+            request_booking_prepayment(booking, request)
+        else:
+            expire_booking_prepayment(booking)
+            booking.prepayment_policy = Booking.PrepaymentPolicies.EXEMPT
+            booking.prepayment_requested_at = None
+            booking.prepayment_deadline_at = None
+            if booking.status == Booking.Statuses.PENDING:
+                booking.status = Booking.Statuses.CONFIRMED
+            booking.save(
+                update_fields=[
+                    "prepayment_policy",
+                    "prepayment_requested_at",
+                    "prepayment_deadline_at",
+                    "status",
+                    "updated_at",
+                ]
+            )
+        booking.refresh_from_db()
+        return Response(BookingSerializer(booking, context={"request": request}).data)
 
 
 class BookingDetailView(MobileApiMixin, APIView):

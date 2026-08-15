@@ -15,6 +15,7 @@ from .models import TEMPLATE_DEFAULTS, WhatsAppMessage, WhatsAppTemplate
 from .services import (
     normalize_whatsapp_phone,
     process_unanswered_24h_reminders,
+    process_expired_prepayment_requests,
     queue_booking_message,
     queue_booking_confirmation,
     queue_due_reminders,
@@ -143,6 +144,45 @@ class WhatsAppBotTests(TestCase):
         booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
         self.assertEqual(len(result["cancelled"]), 0)
+
+    def test_expired_unpaid_prepayment_cancels_booking(self):
+        booking = self._booking(timezone.now() + timedelta(days=2))
+        booking.status = Booking.Statuses.PENDING
+        booking.prepayment_policy = Booking.PrepaymentPolicies.REQUIRED
+        booking.prepayment_requested_at = timezone.now() - timedelta(minutes=31)
+        booking.prepayment_deadline_at = timezone.now() - timedelta(minutes=1)
+        booking.save(
+            update_fields=[
+                "status",
+                "prepayment_policy",
+                "prepayment_requested_at",
+                "prepayment_deadline_at",
+            ]
+        )
+        payment = Payment.objects.create(
+            booking=booking,
+            amount=Decimal("5.00"),
+            order_number="expired-deposit-1",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PENDING,
+        )
+
+        result = process_expired_prepayment_requests()
+        send_due_messages()
+
+        booking.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
+        self.assertEqual(payment.status, Payment.Statuses.EXPIRED)
+        self.assertEqual(len(result["cancelled"]), 1)
+        self.assertTrue(
+            WhatsAppMessage.objects.filter(
+                booking=booking,
+                kind=WhatsAppMessage.Kinds.PREPAYMENT_TIMEOUT_CANCELLED,
+                status=WhatsAppMessage.Statuses.SENT,
+            ).exists()
+        )
 
     def test_default_24h_template_contains_confirmation_actions_once(self):
         booking = self._booking(timezone.now() + timedelta(hours=24, minutes=5))

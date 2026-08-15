@@ -68,6 +68,17 @@
       </div>
       {% endif %}
 
+      {% if not is_edit %}
+      <div class="field field-checkbox">
+        <label for="{{ form.prepayment_required.id_for_label }}">Prepago</label>
+        <div class="checkbox-row">
+          {{ form.prepayment_required }}
+          <span>Enviar enlace de Stripe · plazo de 30 minutos</span>
+        </div>
+        <div class="booking-hint">Si se desactiva, la cita queda confirmada y se paga en el salón.</div>
+      </div>
+      {% endif %}
+
       <div class="field">
         <label for="{{ form.service.id_for_label }}">Servicio</label>
         {{ form.service }}
@@ -262,6 +273,7 @@
     </div>
   </div>
 </div>
+{{ prepayment_exempt_client_ids|json_script:"prepayment-exempt-client-ids" }}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   const clientSelect = document.getElementById("id_client");
@@ -273,6 +285,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const hintBox = document.getElementById("service-duration-hint");
   const slotHint = document.getElementById("slot-availability-hint");
   const rewardCheckbox = document.getElementById("id_apply_referral_reward");
+  const prepaymentCheckbox = document.getElementById("id_prepayment_required");
+  const prepaymentExemptClientIds = new Set(
+    JSON.parse(document.getElementById("prepayment-exempt-client-ids")?.textContent || "[]")
+      .map(String)
+  );
   const rewardHint = document.getElementById("client-reward-hint");
   const clientCreateModal = document.getElementById("client-create-modal");
   const clientCreateOpenButton = document.getElementById("open-client-create-modal");
@@ -332,6 +349,14 @@ document.addEventListener("DOMContentLoaded", function () {
   let userTouchedEnd = !!initialEndValue;
   let slotCheckTimer = null;
   let clientInlineSubmitting = false;
+
+  function syncClientPrepayment() {
+    if (!clientSelect || !prepaymentCheckbox || isEdit) return;
+    prepaymentCheckbox.checked = !prepaymentExemptClientIds.has(String(clientSelect.value));
+  }
+
+  clientSelect?.addEventListener("change", syncClientPrepayment);
+  syncClientPrepayment();
 
   function getCsrfToken() {
     const csrfInput = document.querySelector("#booking-form input[name='csrfmiddlewaretoken']");

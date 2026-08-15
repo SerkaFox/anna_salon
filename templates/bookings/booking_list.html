@@ -141,6 +141,15 @@
             <td>{{ booking.get_source_display }}</td>
             <td>
               {{ booking.payment_state_label }}
+              {% if booking.prepayment_policy == "exempt" %}
+                <div class="muted-text">Sin prepago · pago en el salón</div>
+              {% elif booking.prepayment_policy == "required" and not booking.payment_paid_total %}
+                <div class="muted-text">
+                  Esperando prepago{% if booking.prepayment_deadline_at %} hasta {{ booking.prepayment_deadline_at|date:"H:i" }}{% endif %}
+                </div>
+              {% elif booking.prepayment_policy == "required" %}
+                <div class="muted-text">Prepago realizado</div>
+              {% endif %}
               {% if booking.payment_paid_total %}
                 <div class="muted-text">Recibido: {{ booking.payment_paid_total }} €</div>
               {% endif %}

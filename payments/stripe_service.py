@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import stripe
@@ -122,6 +123,105 @@ def create_checkout_session(payment, request):
         ]
     )
     return session
+
+
+def request_booking_prepayment(booking, request, *, timeout_minutes=30):
+    """Create a Stripe deposit link and send it to the booking client."""
+    from whatsapp_bot.models import WhatsAppMessage
+    from whatsapp_bot.services import queue_and_send
+
+    existing = (
+        booking.online_payments.filter(
+            provider=Payment.Providers.STRIPE,
+            status=Payment.Statuses.PENDING,
+        )
+        .exclude(checkout_url="")
+        .first()
+    )
+    now = timezone.now()
+    booking.prepayment_policy = Booking.PrepaymentPolicies.REQUIRED
+    booking.prepayment_requested_at = now
+    booking.prepayment_deadline_at = now + timedelta(minutes=timeout_minutes)
+    booking.status = Booking.Statuses.PENDING
+    booking.save(
+        update_fields=[
+            "prepayment_policy",
+            "prepayment_requested_at",
+            "prepayment_deadline_at",
+            "status",
+            "updated_at",
+        ]
+    )
+    payment = existing or create_pending_stripe_payment(
+        booking,
+        get_booking_deposit_amount(booking),
+        reason="manual_booking_deposit",
+    )
+    if not payment.checkout_url:
+        create_checkout_session(payment, request)
+    local_deadline = timezone.localtime(booking.prepayment_deadline_at)
+    queue_and_send(
+        booking,
+        kind=WhatsAppMessage.Kinds.PREPAYMENT_REQUEST,
+        extra_context={
+            "payment_amount": f"{payment.amount:.2f}",
+            "payment_url": payment.checkout_url,
+            "payment_deadline": local_deadline.strftime("%H:%M"),
+        },
+    )
+    return payment
+
+
+def expire_booking_prepayment(booking):
+    """Close pending Stripe checkout sessions for an expired deposit request."""
+    stripe.api_key = getattr(settings, "STRIPE_SECRET_KEY", "")
+    payments = list(
+        booking.online_payments.filter(
+            provider=Payment.Providers.STRIPE,
+            status=Payment.Statuses.PENDING,
+        )
+    )
+    for payment in payments:
+        if stripe.api_key and payment.stripe_checkout_session_id:
+            try:
+                stripe.checkout.Session.expire(payment.stripe_checkout_session_id)
+            except stripe.StripeError as expire_error:
+                # A completed checkout cannot be expired. Confirm its current
+                # state before treating the local request as unpaid.
+                try:
+                    session = stripe.checkout.Session.retrieve(
+                        payment.stripe_checkout_session_id
+                    )
+                except stripe.StripeError:
+                    raise expire_error
+                if (
+                    _object_get(session, "payment_status", "") == "paid"
+                    or _object_get(session, "status", "") == "complete"
+                ):
+                    payment.status = Payment.Statuses.PAID
+                    payment.paid_at = payment.paid_at or timezone.now()
+                    payment.stripe_payment_intent_id = (
+                        _object_get(session, "payment_intent", "")
+                        or payment.stripe_payment_intent_id
+                    )
+                    payment.save(
+                        update_fields=[
+                            "status",
+                            "paid_at",
+                            "stripe_payment_intent_id",
+                            "updated_at",
+                        ]
+                    )
+                    if booking.status == Booking.Statuses.PENDING:
+                        booking.status = Booking.Statuses.CONFIRMED
+                        booking.save(update_fields=["status", "updated_at"])
+                    create_booking_prepayment(booking, payment)
+                    continue
+                if _object_get(session, "status", "") != "expired":
+                    raise expire_error
+        payment.status = Payment.Statuses.EXPIRED
+        payment.save(update_fields=["status", "updated_at"])
+    return payments
 
 
 def create_combined_checkout_session(payments, request):

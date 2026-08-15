@@ -338,6 +338,57 @@ def process_unanswered_24h_reminders(*, timeout_minutes=15):
     return {"cancelled": cancelled, "failed": failed}
 
 
+def process_expired_prepayment_requests():
+    """Cancel bookings whose 30-minute Stripe deposit window has elapsed."""
+    from payments.models import Payment
+    from payments.stripe_service import expire_booking_prepayment
+
+    candidate_ids = list(
+        Booking.objects.filter(
+            prepayment_policy=Booking.PrepaymentPolicies.REQUIRED,
+            prepayment_deadline_at__isnull=False,
+            prepayment_deadline_at__lte=timezone.now(),
+            status=Booking.Statuses.PENDING,
+        ).values_list("pk", flat=True)
+    )
+    cancelled = []
+    failed = []
+    for booking_id in candidate_ids:
+        try:
+            with transaction.atomic():
+                booking = (
+                    Booking.objects.select_for_update()
+                    .select_related("client", "service")
+                    .prefetch_related("online_payments")
+                    .get(pk=booking_id)
+                )
+                if booking.status != Booking.Statuses.PENDING:
+                    continue
+                if booking.online_payments.filter(status=Payment.Statuses.PAID).exists():
+                    booking.status = Booking.Statuses.CONFIRMED
+                    booking.save(update_fields=["status", "updated_at"])
+                    continue
+                expire_booking_prepayment(booking)
+                if booking.online_payments.filter(status=Payment.Statuses.PAID).exists():
+                    booking.status = Booking.Statuses.CONFIRMED
+                    booking.save(update_fields=["status", "updated_at"])
+                    continue
+                booking.status = Booking.Statuses.CANCELLED
+                booking.save(update_fields=["status", "updated_at"])
+                message, _created = queue_booking_message(
+                    booking,
+                    kind=WhatsAppMessage.Kinds.PREPAYMENT_TIMEOUT_CANCELLED,
+                )
+                cancelled.append((booking, message))
+        except Exception as exc:
+            logger.exception(
+                "Could not auto-cancel booking %s after missing prepayment.",
+                booking_id,
+            )
+            failed.append((booking_id, str(exc)))
+    return {"cancelled": cancelled, "failed": failed}
+
+
 def send_whatsapp_message(message):
     claimed = WhatsAppMessage.objects.filter(
         pk=message.pk,
@@ -378,9 +429,13 @@ def send_whatsapp_message(message):
     return message
 
 
-def queue_and_send(booking, *, kind):
+def queue_and_send(booking, *, kind, extra_context=None):
     """Queue a booking notification and dispatch it immediately."""
-    msg, created = queue_booking_message(booking, kind=kind)
+    msg, created = queue_booking_message(
+        booking,
+        kind=kind,
+        extra_context=extra_context,
+    )
     if created:
         send_whatsapp_message(msg)
     return msg, created

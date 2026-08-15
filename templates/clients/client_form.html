@@ -76,6 +76,18 @@
         </div>
       {% endif %}
 
+      {% if form.prepayment_exempt %}
+        <div class="field field-checkbox">
+          <label for="{{ form.prepayment_exempt.id_for_label }}">Prepago</label>
+          <div class="checkbox-row">
+            {{ form.prepayment_exempt }}
+            <span>Sin prepago · pago en el salón</span>
+          </div>
+          <p class="muted-text">Para clientes que no pueden pagar mediante un enlace.</p>
+          {{ form.prepayment_exempt.errors }}
+        </div>
+      {% endif %}
+
       <div class="field field-checkbox">
         <label for="{{ form.is_active.id_for_label }}">Cliente activo</label>
         <div class="checkbox-row">

@@ -502,6 +502,45 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(booking.zone_id, self.zone.pk)
         self.assertEqual(booking.end_at, booking.start_at + timedelta(minutes=self.service.duration_minutes))
 
+    @patch("mobile_api.views.request_booking_prepayment")
+    def test_manual_booking_can_request_prepayment(self, request_prepayment):
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(
+                zone=None,
+                start_at="2026-04-27T12:00:00+02:00",
+                prepayment_required=True,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.REQUIRED)
+        self.assertEqual(booking.status, Booking.Statuses.PENDING)
+        request_prepayment.assert_called_once()
+
+    def test_manual_booking_can_be_exempt_from_prepayment(self):
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(
+                zone=None,
+                start_at="2026-04-27T13:00:00+02:00",
+                prepayment_required=False,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.EXEMPT)
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
+        self.assertEqual(response.json()["prepayment_state"], "exempt")
+
     def test_booking_auto_zone_is_limited_to_employee_zones(self):
         self.employee.zones.set([self.other_zone])
         self._auth(self.owner_user)

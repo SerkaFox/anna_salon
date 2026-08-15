@@ -3,6 +3,11 @@ from django.utils import timezone
 
 
 class Booking(models.Model):
+    class PrepaymentPolicies(models.TextChoices):
+        OPTIONAL = "optional", "Sin solicitud de prepago"
+        REQUIRED = "required", "Prepago obligatorio"
+        EXEMPT = "exempt", "Sin prepago; paga en el salon"
+
     class Statuses(models.TextChoices):
         PENDING = "pending", "Pendiente"
         CONFIRMED = "confirmed", "Confirmada"
@@ -76,6 +81,22 @@ class Booking(models.Model):
         max_length=20,
         choices=ClientResponses.choices,
         default=ClientResponses.PENDING,
+    )
+    prepayment_policy = models.CharField(
+        "Politica de prepago",
+        max_length=20,
+        choices=PrepaymentPolicies.choices,
+        default=PrepaymentPolicies.OPTIONAL,
+    )
+    prepayment_requested_at = models.DateTimeField(
+        "Prepago solicitado el",
+        null=True,
+        blank=True,
+    )
+    prepayment_deadline_at = models.DateTimeField(
+        "Limite para el prepago",
+        null=True,
+        blank=True,
     )
     client_responded_at = models.DateTimeField(
         "Respondido el",

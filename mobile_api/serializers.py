@@ -129,6 +129,7 @@ class ClientSerializer(serializers.ModelSerializer):
             "average_expense_amount_cents",
             "appointments_frequency",
             "is_blacklisted",
+            "prepayment_exempt",
             "is_active",
             "created_at",
             "updated_at",
@@ -219,6 +220,7 @@ class ClientWriteSerializer(serializers.ModelSerializer):
             "notes",
             "how_we_met",
             "is_blacklisted",
+            "prepayment_exempt",
             "referred_by",
             "username",
             "password",
@@ -729,6 +731,9 @@ class BookingSerializer(serializers.ModelSerializer):
     can_refund = serializers.SerializerMethodField()
     refundable_until = serializers.SerializerMethodField()
     can_reschedule = serializers.SerializerMethodField()
+    prepayment_state = serializers.SerializerMethodField()
+    prepayment_state_label = serializers.SerializerMethodField()
+    prepayment_checkout_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -749,6 +754,12 @@ class BookingSerializer(serializers.ModelSerializer):
             "source",
             "source_label",
             "notes",
+            "prepayment_policy",
+            "prepayment_requested_at",
+            "prepayment_deadline_at",
+            "prepayment_state",
+            "prepayment_state_label",
+            "prepayment_checkout_url",
             "price_snapshot",
             "duration_snapshot",
             "client_price_snapshot",
@@ -849,6 +860,39 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_can_reschedule(self, obj):
         return can_client_reschedule(obj)
 
+    def get_prepayment_state(self, obj):
+        if obj.prepayment_policy == Booking.PrepaymentPolicies.EXEMPT:
+            return "exempt"
+        if obj.prepayment_policy == Booking.PrepaymentPolicies.REQUIRED:
+            if self._payment_info(obj)["paid_total"] > 0:
+                return "paid"
+            if obj.status == Booking.Statuses.CANCELLED:
+                return "expired"
+            return "awaiting"
+        return "optional"
+
+    def get_prepayment_state_label(self, obj):
+        russian = _mobile_language(self) == "ru"
+        labels = {
+            "exempt": "Предоплата не требуется · оплата на месте" if russian else "Sin prepago · pago en el salón",
+            "paid": "Предоплата внесена" if russian else "Prepago realizado",
+            "expired": "Не оплачено вовремя · отменено" if russian else "No pagado a tiempo · cancelado",
+            "awaiting": "Ожидается предоплата" if russian else "Esperando prepago",
+            "optional": "Предоплата не запрашивалась" if russian else "Prepago no solicitado",
+        }
+        return labels[self.get_prepayment_state(obj)]
+
+    def get_prepayment_checkout_url(self, obj):
+        payment = next(
+            (
+                item
+                for item in obj.online_payments.all()
+                if item.status == OnlinePayment.Statuses.PENDING and item.checkout_url
+            ),
+            None,
+        )
+        return payment.checkout_url if payment else ""
+
 
 class BookingWaitlistEntrySerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source='service.name', read_only=True)
@@ -877,6 +921,7 @@ class BookingWriteSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
     apply_referral_reward = serializers.BooleanField(required=False, default=False)
     reward_rule = serializers.PrimaryKeyRelatedField(queryset=ClientRewardRule.objects.filter(is_active=True), allow_null=True, required=False)
+    prepayment_required = serializers.BooleanField(required=False)
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -978,6 +1023,11 @@ class BookingWriteSerializer(serializers.Serializer):
             raise _form_errors_to_validation_error(form)
 
         self._booking_form = form
+        self._prepayment_required_supplied = "prepayment_required" in attrs
+        self._prepayment_required = attrs.get(
+            "prepayment_required",
+            False,
+        )
         return attrs
 
     def create(self, validated_data):
@@ -987,7 +1037,20 @@ class BookingWriteSerializer(serializers.Serializer):
         return self._booking_form.save()
 
     def save(self, **kwargs):
-        return self._booking_form.save()
+        booking = self._booking_form.save()
+        if self.instance is None or self._prepayment_required_supplied:
+            booking.prepayment_policy = (
+                Booking.PrepaymentPolicies.REQUIRED
+                if self._prepayment_required
+                else Booking.PrepaymentPolicies.EXEMPT
+            )
+            booking.status = (
+                Booking.Statuses.PENDING
+                if self._prepayment_required
+                else Booking.Statuses.CONFIRMED
+            )
+            booking.save(update_fields=["prepayment_policy", "status", "updated_at"])
+        return booking
 
 
 class FiscalDocumentLineSerializer(serializers.ModelSerializer):

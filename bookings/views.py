@@ -37,6 +37,7 @@ from payments.stripe_service import (
     create_checkout_session,
     create_pending_stripe_payment,
     get_booking_deposit_amount,
+    request_booking_prepayment,
 )
 from .utils import (
     DEFAULT_WORK_END_HOUR,
@@ -303,10 +304,14 @@ def booking_create(request):
         )
         if form.is_valid():
             booking = form.save()
+            if form.cleaned_data.get("prepayment_required"):
+                request_booking_prepayment(booking, request)
+            else:
+                booking.prepayment_policy = Booking.PrepaymentPolicies.EXEMPT
+                booking.status = Booking.Statuses.CONFIRMED
+                booking.save(update_fields=["prepayment_policy", "status", "updated_at"])
             if booking.status == Booking.Statuses.CANCELLED:
                 notify_waitlist_for_booking_opening(booking)
-            elif booking.status == Booking.Statuses.CONFIRMED and booking.client.phone:
-                queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CONFIRMATION)
             log_event(
                 actor=request.user,
                 section="booking",
@@ -336,6 +341,9 @@ def booking_create(request):
             "photo_form": None,
             "booking_photos": [],
             "referral_clients": Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+            "prepayment_exempt_client_ids": list(
+                Client.objects.filter(prepayment_exempt=True).values_list("pk", flat=True)
+            ),
         },
     )
 
@@ -429,6 +437,9 @@ def booking_update(request, pk):
             "photo_form": photo_form,
             **_build_booking_photo_context(booking),
             "referral_clients": Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
+            "prepayment_exempt_client_ids": list(
+                Client.objects.filter(prepayment_exempt=True).values_list("pk", flat=True)
+            ),
         },
     )
 

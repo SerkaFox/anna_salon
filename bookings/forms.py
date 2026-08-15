@@ -30,6 +30,11 @@ def get_available_rewards(client):
 
 
 class BookingForm(forms.ModelForm):
+    prepayment_required = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Requerir prepago",
+    )
     apply_referral_reward = forms.BooleanField(
         required=False,
         label="Aplicar premio de referido",

@@ -24,6 +24,7 @@ urlpatterns = [
     path("bookings/check-availability/", views.BookingAvailabilityCheckView.as_view(), name="booking_check_availability"),
     path("availability/slots/", views.AvailabilitySlotsView.as_view(), name="availability_slots"),
     path("bookings/<int:pk>/", views.BookingDetailView.as_view(), name="booking_detail"),
+    path("bookings/<int:pk>/prepayment/", views.BookingPrepaymentView.as_view(), name="booking_prepayment"),
     path("bookings/<int:pk>/payment/", views.BookingPaymentStartView.as_view(), name="booking_payment"),
     path("bookings/<int:pk>/stripe-checkout/", views.BookingStripeCheckoutView.as_view(), name="booking_stripe_checkout"),
     path("bookings/<int:pk>/cancel/", views.BookingCancelView.as_view(), name="booking_cancel"),
