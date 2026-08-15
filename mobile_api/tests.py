@@ -712,6 +712,32 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("sin permiso", str(response.json()).lower())
 
+    def test_schedule_validation_uses_mobile_language_and_explains_invalid_break(self):
+        self._auth(self.owner_user)
+        response = self.api_client.patch(
+            reverse("mobile_api:employee_schedule", args=[self.other_employee.pk]),
+            {
+                "weekly_shifts": [
+                    {
+                        "weekday": 5,
+                        "is_day_off": False,
+                        "start_time": "10:30",
+                        "end_time": "14:00",
+                        "break_start": "14:30",
+                        "break_end": "15:30",
+                    }
+                ]
+            },
+            format="json",
+            HTTP_ACCEPT_LANGUAGE="ru",
+        )
+        self.assertEqual(response.status_code, 400)
+        message = str(response.json())
+        self.assertIn("Суббота", message)
+        self.assertIn("нельзя устанавливать паузу вне рабочего графика", message)
+        self.assertIn("10:30–14:00", message)
+        self.assertIn("14:30–15:30", message)
+
     def test_time_block_rejects_overlap_with_block_and_booking_unless_forced(self):
         EmployeeTimeBlock.objects.create(
             employee=self.employee,

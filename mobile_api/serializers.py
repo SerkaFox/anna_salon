@@ -28,6 +28,37 @@ from services_app.models import Service
 User = get_user_model()
 
 
+def _mobile_language(serializer):
+    request = serializer.context.get("request")
+    language = request.headers.get("Accept-Language", "") if request else ""
+    return "ru" if language.lower().startswith("ru") else "es"
+
+
+def _schedule_day_label(serializer, attrs, *, override=False):
+    language = _mobile_language(serializer)
+    if override:
+        date_value = attrs.get("date")
+        if date_value is None and serializer.instance is not None:
+            date_value = serializer.instance.date
+        return str(date_value) if date_value else ("Особый день" if language == "ru" else "Día especial")
+
+    weekday = attrs.get("weekday")
+    if weekday is None and serializer.instance is not None:
+        weekday = serializer.instance.weekday
+    labels = {
+        "ru": ("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"),
+        "es": ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"),
+    }
+    try:
+        return labels[language][int(weekday)]
+    except (TypeError, ValueError, IndexError):
+        return "Рабочий день" if language == "ru" else "Día laborable"
+
+
+def _schedule_error(serializer, spanish, russian):
+    return russian if _mobile_language(serializer) == "ru" else spanish
+
+
 def _can_schedule_for_employee(user, employee):
     if is_admin_user(user):
         return True
@@ -457,20 +488,25 @@ class EmployeeWeeklyShiftSerializer(serializers.ModelSerializer):
         end_time = attrs.get("end_time", self.instance.end_time if self.instance else None)
         break_start = attrs.get("break_start", self.instance.break_start if self.instance else None)
         break_end = attrs.get("break_end", self.instance.break_end if self.instance else None)
+        day = _schedule_day_label(self, attrs)
 
         if is_day_off:
             return attrs
         if not start_time or not end_time:
-            raise serializers.ValidationError({"start_time": ["Indica inicio y fin del turno."]})
+            raise serializers.ValidationError({"start_time": [_schedule_error(self, f"{day}: indica inicio y fin del turno.", f"{day}: укажите время начала и окончания смены.")]})
         if end_time <= start_time:
-            raise serializers.ValidationError({"end_time": ["La hora de fin debe ser posterior al inicio."]})
+            raise serializers.ValidationError({"end_time": [_schedule_error(self, f"{day}: la hora de fin debe ser posterior al inicio.", f"{day}: окончание смены должно быть позже её начала.")]})
         if bool(break_start) != bool(break_end):
-            raise serializers.ValidationError({"break_start": ["Indica inicio y fin de la pausa."]})
+            raise serializers.ValidationError({"break_start": [_schedule_error(self, f"{day}: indica inicio y fin de la pausa.", f"{day}: укажите начало и окончание паузы.")]})
         if break_start and break_end:
             if break_end <= break_start:
-                raise serializers.ValidationError({"break_end": ["La pausa debe terminar despues de empezar."]})
+                raise serializers.ValidationError({"break_end": [_schedule_error(self, f"{day}: la pausa debe terminar después de empezar.", f"{day}: окончание паузы должно быть позже её начала.")]})
             if break_start < start_time or break_end > end_time:
-                raise serializers.ValidationError({"break_start": ["La pausa debe estar dentro del turno."]})
+                raise serializers.ValidationError({"break_start": [_schedule_error(
+                    self,
+                    f"{day}: no se puede poner una pausa fuera del horario laboral. Turno {start_time.strftime('%H:%M')}–{end_time.strftime('%H:%M')}, pausa {break_start.strftime('%H:%M')}–{break_end.strftime('%H:%M')}.",
+                    f"{day}: нельзя устанавливать паузу вне рабочего графика. Смена {start_time.strftime('%H:%M')}–{end_time.strftime('%H:%M')}, пауза {break_start.strftime('%H:%M')}–{break_end.strftime('%H:%M')}.",
+                )]})
         return attrs
 
 
@@ -501,20 +537,25 @@ class EmployeeScheduleOverrideSerializer(serializers.ModelSerializer):
         end_time = attrs.get("end_time", self.instance.end_time if self.instance else None)
         break_start = attrs.get("break_start", self.instance.break_start if self.instance else None)
         break_end = attrs.get("break_end", self.instance.break_end if self.instance else None)
+        day = _schedule_day_label(self, attrs, override=True)
 
         if is_day_off:
             return attrs
         if not start_time or not end_time:
-            raise serializers.ValidationError({"start_time": ["Indica inicio y fin del turno especial."]})
+            raise serializers.ValidationError({"start_time": [_schedule_error(self, f"{day}: indica inicio y fin del turno especial.", f"{day}: укажите начало и окончание особой смены.")]})
         if end_time <= start_time:
-            raise serializers.ValidationError({"end_time": ["La hora de fin debe ser posterior al inicio."]})
+            raise serializers.ValidationError({"end_time": [_schedule_error(self, f"{day}: la hora de fin debe ser posterior al inicio.", f"{day}: окончание смены должно быть позже её начала.")]})
         if bool(break_start) != bool(break_end):
-            raise serializers.ValidationError({"break_start": ["Indica inicio y fin de la pausa."]})
+            raise serializers.ValidationError({"break_start": [_schedule_error(self, f"{day}: indica inicio y fin de la pausa.", f"{day}: укажите начало и окончание паузы.")]})
         if break_start and break_end:
             if break_end <= break_start:
-                raise serializers.ValidationError({"break_end": ["La pausa debe terminar despues de empezar."]})
+                raise serializers.ValidationError({"break_end": [_schedule_error(self, f"{day}: la pausa debe terminar después de empezar.", f"{day}: окончание паузы должно быть позже её начала.")]})
             if break_start < start_time or break_end > end_time:
-                raise serializers.ValidationError({"break_start": ["La pausa debe estar dentro del turno."]})
+                raise serializers.ValidationError({"break_start": [_schedule_error(
+                    self,
+                    f"{day}: no se puede poner una pausa fuera del horario laboral. Turno {start_time.strftime('%H:%M')}–{end_time.strftime('%H:%M')}, pausa {break_start.strftime('%H:%M')}–{break_end.strftime('%H:%M')}.",
+                    f"{day}: нельзя устанавливать паузу вне рабочего графика. Смена {start_time.strftime('%H:%M')}–{end_time.strftime('%H:%M')}, пауза {break_start.strftime('%H:%M')}–{break_end.strftime('%H:%M')}.",
+                )]})
         return attrs
 
 
@@ -525,7 +566,7 @@ class EmployeeScheduleSerializer(serializers.Serializer):
     def validate(self, attrs):
         request = self.context["request"]
         if not request.user.can_manage_staff:
-            raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar horarios."]})
+            raise serializers.ValidationError({"non_field_errors": [_schedule_error(self, "Sin permiso para editar horarios.", "Нет разрешения на изменение графика.")]})
         return attrs
 
     def update(self, instance, validated_data):
