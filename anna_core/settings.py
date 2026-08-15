@@ -192,6 +192,7 @@ LOGIN_REDIRECT_URL = 'dashboard:home'
 LOGOUT_REDIRECT_URL = 'accounts:login'
 
 REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'mobile_api.exceptions.mobile_exception_handler',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',

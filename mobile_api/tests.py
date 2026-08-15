@@ -732,11 +732,23 @@ class MobileApiMvpTests(TestCase):
             HTTP_ACCEPT_LANGUAGE="ru",
         )
         self.assertEqual(response.status_code, 400)
-        message = str(response.json())
+        self.assertEqual(list(response.json()), ["detail"])
+        message = str(response.json()["detail"])
         self.assertIn("Суббота", message)
         self.assertIn("нельзя устанавливать паузу вне рабочего графика", message)
         self.assertIn("10:30–14:00", message)
         self.assertIn("14:30–15:30", message)
+
+    def test_russian_api_errors_hide_technical_field_paths(self):
+        self._auth(self.employee_user)
+        response = self.api_client.patch(
+            reverse("mobile_api:employee_schedule", args=[self.employee.pk]),
+            {"weekly_shifts": []},
+            format="json",
+            HTTP_ACCEPT_LANGUAGE="ru",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": ["Нет разрешения на изменение графика."]})
 
     def test_time_block_rejects_overlap_with_block_and_booking_unless_forced(self):
         EmployeeTimeBlock.objects.create(

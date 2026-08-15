@@ -13,7 +13,7 @@ from django.db.models.functions import Coalesce
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework import generics, serializers, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
@@ -2449,14 +2449,14 @@ class NotificationTemplateDetailView(MobileApiMixin, APIView):
         _mobile_admin_required(request.user)
         tmpl = self._get_template(kind)
         if not tmpl:
-            return Response({"detail": "Not found."}, status=404)
+            raise NotFound()
         return Response(self._serialize(tmpl))
 
     def patch(self, request, kind):
         _mobile_admin_required(request.user)
         tmpl = self._get_template(kind)
         if not tmpl:
-            return Response({"detail": "Not found."}, status=404)
+            raise NotFound()
         if "body" in request.data:
             tmpl.body = str(request.data["body"])
         if "enabled" in request.data:
@@ -2491,7 +2491,7 @@ class NotificationTemplateResetView(MobileApiMixin, APIView):
         )
         default_body = TEMPLATE_DEFAULTS.get(kind)
         if not default_body:
-            return Response({"detail": "Unknown kind."}, status=404)
+            raise NotFound("Unknown kind.")
         tmpl, _ = WhatsAppTemplate.objects.get_or_create(
             kind=kind,
             defaults={"name": TEMPLATE_NAMES.get(kind, kind), "body": default_body},
