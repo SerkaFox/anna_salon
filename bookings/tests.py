@@ -4,6 +4,7 @@ from unittest.mock import patch
 from urllib.parse import urlparse
 
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
@@ -268,3 +269,45 @@ class ClientBookingActionTests(TestCase):
         self.assertIsNotNone(result["payment"])
         self.assertEqual(result["payment"].status, Payment.Statuses.EXTRA_PAYMENT_PENDING)
         self.assertEqual(result["payment"].checkout_url, "https://checkout.test/extra")
+
+
+class CalendarBookingModalTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="calendar-admin",
+            password="test-password",
+            role=User.ROLE_ADMIN,
+        )
+        self.client_obj = Client.objects.create(first_name="Maria", last_name="Test")
+        self.employee = Employee.objects.create(first_name="Ana", is_active=True)
+        self.service = Service.objects.create(
+            name="Manicura",
+            duration_minutes=60,
+            price=Decimal("25.00"),
+            is_active=True,
+        )
+        start_at = timezone.localtime().replace(hour=12, minute=0, second=0, microsecond=0)
+        self.booking = Booking.objects.create(
+            client=self.client_obj,
+            employee=self.employee,
+            service=self.service,
+            start_at=start_at,
+            end_at=start_at + timedelta(minutes=60),
+            status=Booking.Statuses.CONFIRMED,
+            price_snapshot=self.service.price,
+            duration_snapshot=60,
+            original_client_price_snapshot=self.service.price,
+            client_price_snapshot=self.service.price,
+        )
+        self.client.force_login(self.user)
+
+    def test_modal_contains_entity_and_cashbox_links_and_disables_current_status(self):
+        response = self.client.get(reverse("bookings:calendar_day"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'data-client-url="{reverse("clients:detail", args=[self.client_obj.pk])}"')
+        self.assertContains(response, f'data-employee-url="{reverse("employees:update", args=[self.employee.pk])}"')
+        self.assertContains(response, f'data-service-url="{reverse("services_app:update", args=[self.service.pk])}"')
+        self.assertContains(response, f'{reverse("documents:cashbox")}?date=')
+        self.assertContains(response, 'button.disabled = isCurrent;')
+        self.assertContains(response, 'data-modal-cashbox')

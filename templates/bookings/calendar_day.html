@@ -222,8 +222,12 @@
                       data-zone-id="{{ card.zone_id|default:'' }}"
                       data-client="{{ card.client }}"
                       data-client-id="{{ card.client_id }}"
+                      data-client-url="{% url 'clients:detail' card.client_id %}"
                       data-employee="{{ card.employee }}"
+                      data-employee-url="{% if request.user.can_manage_staff %}{% url 'employees:update' card.employee_id %}{% endif %}"
                       data-service="{{ card.service }}"
+                      data-service-url="{% if request.user.can_manage_staff %}{% url 'services_app:update' card.service_id %}{% endif %}"
+                      data-cashbox-url="{% if request.user.can_manage_staff %}{% url 'documents:cashbox' %}?date={{ card.start_at|date:'Y-m-d' }}{% endif %}"
                       data-zone="{{ card.zone }}"
                       data-status="{{ card.status }}"
                       data-status-label="{{ card.status_label }}"
@@ -388,8 +392,12 @@
                     data-zone-id="{{ card.zone_id|default:'' }}"
                     data-client="{{ card.client }}"
                     data-client-id="{{ card.client_id }}"
+                    data-client-url="{% url 'clients:detail' card.client_id %}"
                     data-employee="{{ card.employee }}"
+                    data-employee-url="{% if request.user.can_manage_staff %}{% url 'employees:update' card.employee_id %}{% endif %}"
                     data-service="{{ card.service }}"
+                    data-service-url="{% if request.user.can_manage_staff %}{% url 'services_app:update' card.service_id %}{% endif %}"
+                    data-cashbox-url="{% if request.user.can_manage_staff %}{% url 'documents:cashbox' %}?date={{ card.start_at|date:'Y-m-d' }}{% endif %}"
                     data-zone="{{ card.zone }}"
                       data-status="{{ card.status }}"
                       data-status-label="{{ card.status_label }}"
@@ -453,7 +461,9 @@
         <div class="booking-modal__summary">
           <div>
             <span class="booking-modal__label">Cliente</span>
-            <strong data-modal-client></strong>
+            <a href="#" class="booking-modal__entity-link" data-modal-client-link>
+              <strong data-modal-client></strong>
+            </a>
           </div>
           <span class="booking-status-badge" data-modal-status-badge>
             <span class="booking-status-badge__icon" data-modal-status-icon></span>
@@ -468,11 +478,15 @@
           </div>
           <div>
             <span class="booking-modal__label">Servicio</span>
-            <strong data-modal-service></strong>
+            <a href="#" class="booking-modal__entity-link" data-modal-service-link>
+              <strong data-modal-service></strong>
+            </a>
           </div>
           <div>
             <span class="booking-modal__label">Empleado</span>
-            <strong data-modal-employee></strong>
+            <a href="#" class="booking-modal__entity-link" data-modal-employee-link>
+              <strong data-modal-employee></strong>
+            </a>
           </div>
           <div>
             <span class="booking-modal__label">Origen</span>
@@ -567,6 +581,7 @@
     <div class="booking-modal__footer">
       <a href="#" class="btn btn-light btn-small" data-modal-create-next>+ Cita siguiente</a>
       <button type="button" class="btn btn-light btn-small" data-modal-create-block>+ Bloqueo</button>
+      <a href="#" class="btn btn-light btn-small" data-modal-cashbox>Caja</a>
       <a href="#" class="btn btn-light btn-small" data-modal-edit>Editar</a>
     </div>
   </div>
@@ -811,9 +826,12 @@ document.addEventListener("DOMContentLoaded", function () {
   const modalCloseButtons = document.querySelectorAll("[data-modal-close]");
   const rescheduleForm = document.querySelector("[data-reschedule-form]");
   const modalClient = document.querySelector("[data-modal-client]");
+  const modalClientLink = document.querySelector("[data-modal-client-link]");
   const modalTime = document.querySelector("[data-modal-time]");
   const modalService = document.querySelector("[data-modal-service]");
+  const modalServiceLink = document.querySelector("[data-modal-service-link]");
   const modalEmployee = document.querySelector("[data-modal-employee]");
+  const modalEmployeeLink = document.querySelector("[data-modal-employee-link]");
   const modalSource = document.querySelector("[data-modal-source]");
   const modalNotes = document.querySelector("[data-modal-notes]");
   const modalNotesWrap = document.querySelector("[data-modal-notes-wrap]");
@@ -823,6 +841,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const modalEdit = document.querySelector("[data-modal-edit]");
   const modalCreateNext = document.querySelector("[data-modal-create-next]");
   const modalCreateBlock = document.querySelector("[data-modal-create-block]");
+  const modalCashbox = document.querySelector("[data-modal-cashbox]");
   const statusButtons = document.querySelectorAll("[data-status-option]");
   const photoUploadForm = document.querySelector("[data-photo-upload-form]");
   const modalPhotosPanel = document.querySelector("[data-modal-photos-panel]");
@@ -1230,8 +1249,19 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function updateStatusButtons(statusValue) {
     statusButtons.forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.statusOption === statusValue);
+      const isCurrent = button.dataset.statusOption === statusValue;
+      button.classList.toggle("is-active", isCurrent);
+      button.disabled = isCurrent;
+      button.setAttribute("aria-pressed", isCurrent ? "true" : "false");
+      button.title = isCurrent ? "Estado actual" : "Cambiar a este estado";
     });
+  }
+
+  function setModalLink(link, url) {
+    if (!link) return;
+    const hasUrl = Boolean(url);
+    link.hidden = !hasUrl;
+    link.href = hasUrl ? url : "#";
   }
 
   function getStatusSymbol(statusValue) {
@@ -1280,15 +1310,19 @@ document.addEventListener("DOMContentLoaded", function () {
     document.body.classList.add("has-booking-modal");
 
     modalClient.textContent = card.dataset.client;
+    setModalLink(modalClientLink, card.dataset.clientUrl);
     modalTime.textContent = formatDateTimeRange(card.dataset.startAt, card.dataset.endAt);
     modalService.textContent = card.dataset.service;
+    setModalLink(modalServiceLink, card.dataset.serviceUrl);
     modalEmployee.textContent = card.dataset.employee;
+    setModalLink(modalEmployeeLink, card.dataset.employeeUrl);
     modalSource.textContent = card.dataset.sourceLabel || "Manual";
     modalStatusBadge.dataset.status = card.dataset.status;
     modalStatusIcon.textContent = getStatusSymbol(card.dataset.status);
     modalStatusText.textContent = card.dataset.statusLabel;
     modalEdit.href = card.dataset.editUrl;
     modalCreateNext.href = card.dataset.createFromUrl;
+    setModalLink(modalCashbox, card.dataset.cashboxUrl);
 
     if (card.dataset.notes && card.dataset.notes.trim()) {
       modalNotes.textContent = card.dataset.notes;
@@ -1766,7 +1800,7 @@ document.addEventListener("DOMContentLoaded", function () {
       } catch (error) {
         window.alert(error.message);
       } finally {
-        button.disabled = false;
+        updateStatusButtons(activeCard ? activeCard.dataset.status : "");
       }
     });
   });
