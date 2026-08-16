@@ -82,6 +82,9 @@
       </div>
 
       <button type="submit" class="btn login-btn">{{ t.login_submit|default:"Entrar" }}</button>
+      <a class="btn btn-light login-btn" href="{% url 'accounts:password_recovery' %}">
+        ¿Olvidaste la contraseña?
+      </a>
     </form>
   </div>
 </div>

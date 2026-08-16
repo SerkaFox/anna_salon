@@ -33,6 +33,20 @@ class LoginForm(AuthenticationForm):
         return username
 
 
+class PasswordRecoveryForm(forms.Form):
+    identifier = forms.CharField(
+        label="Usuario, teléfono o email",
+        max_length=254,
+        widget=forms.TextInput(
+            attrs={
+                "class": "input",
+                "autocomplete": "username",
+                "placeholder": "Usuario, teléfono o email",
+            }
+        ),
+    )
+
+
 class UserProfileForm(forms.ModelForm):
     class Meta:
         model = User

@@ -168,6 +168,32 @@ def queue_booking_rescheduled(booking):
     return message, True
 
 
+def send_password_reset_credentials(client, *, username, password):
+    """Send temporary login credentials and report actual bridge acceptance."""
+    context = {
+        "client_name": client.first_name or client.full_name or "hola",
+        "salon_name": _salon_name(),
+        "username": username,
+        "password": password,
+        "login_url": f"{getattr(settings, 'PUBLIC_BASE_URL', '').rstrip('/')}/cuentas/login/",
+    }
+    template = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.PASSWORD_RESET)
+    body = template.format_map(context)
+    phone = normalize_whatsapp_phone(client.phone or client.alternate_phone)
+    if not phone:
+        return False
+    message = WhatsAppMessage.objects.create(
+        connection=get_default_connection(),
+        client=client,
+        kind=WhatsAppMessage.Kinds.PASSWORD_RESET,
+        to_phone=phone,
+        body=body,
+        scheduled_for=timezone.now(),
+    )
+    send_whatsapp_message(message)
+    return message.status == WhatsAppMessage.Statuses.SENT
+
+
 def queue_review_request(booking):
     if (
         booking.status != Booking.Statuses.DONE

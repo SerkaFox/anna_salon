@@ -16,10 +16,12 @@ from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework import generics, serializers, status
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import can_access_booking, can_access_client, can_access_employee, get_client_profile, get_employee_profile, scope_bookings_queryset, scope_clients_queryset, scope_employees_queryset
+from accounts.password_recovery import request_client_password_recovery
 from auditlog.services import log_event
 from bookings.models import Booking, BookingPhoto, BookingWaitlistEntry
 from bookings.client_actions import cancel_booking, change_booking_service, reschedule_booking
@@ -427,6 +429,27 @@ def _employee_detail_payload(employee, request):
 
 class MobileApiMixin:
     permission_classes = [IsAuthenticatedMobileUser]
+
+
+class PasswordRecoveryView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        identifier = serializers.CharField(max_length=254).run_validation(
+            request.data.get("identifier")
+        )
+        request_client_password_recovery(identifier)
+        return Response(
+            {
+                "message": (
+                    "Если данные найдены, временный логин и пароль отправлены на доступные контакты."
+                    if request.headers.get("Accept-Language", "").lower().startswith("ru")
+                    else "Si los datos coinciden, enviaremos el usuario y la contraseña temporal a los contactos disponibles."
+                )
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
 
 
 class MeView(MobileApiMixin, APIView):

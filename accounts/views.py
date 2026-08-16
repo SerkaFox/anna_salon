@@ -16,11 +16,13 @@ from employees.models import Employee
 
 from .forms import (
     LoginForm,
+    PasswordRecoveryForm,
     StyledPasswordChangeForm,
     UserAdminForm,
     UserAdminUpdateForm,
     UserProfileForm,
 )
+from .password_recovery import request_client_password_recovery
 
 User = get_user_model()
 
@@ -56,6 +58,18 @@ class UserLoginView(LoginView):
 def user_logout(request):
     logout(request)
     return redirect("accounts:login")
+
+
+def password_recovery_view(request):
+    form = PasswordRecoveryForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        request_client_password_recovery(form.cleaned_data["identifier"])
+        messages.success(
+            request,
+            "Si los datos coinciden, enviaremos el usuario y la contraseña temporal a los contactos disponibles.",
+        )
+        return redirect("accounts:password_recovery")
+    return render(request, "accounts/password_recovery.html", {"form": form})
 
 
 @login_required
