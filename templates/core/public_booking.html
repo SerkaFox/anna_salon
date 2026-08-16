@@ -137,6 +137,9 @@
           <span>{{ t.public_booking_password }}</span>
           <input class="lux-input" type="password" name="password" autocomplete="new-password" minlength="6" aria-describedby="public-booking-password-help" required>
           <small id="public-booking-password-help" class="field-help">{{ t.public_booking_password_help }}</small>
+          <a class="field-help booking-password-recovery-link" href="{% url 'accounts:password_recovery' %}" target="_blank" rel="noopener">
+            {{ t.public_booking_password_recovery }}
+          </a>
           <small class="form-error" data-error-for="password">{% if booking_errors.password %}{{ booking_errors.password.0 }}{% endif %}</small>
         </label>
       </div>

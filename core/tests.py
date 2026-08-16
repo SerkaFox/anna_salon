@@ -108,6 +108,8 @@ class PublicBookingTests(TestCase):
         self.assertContains(response, self.service.name)
         self.assertContains(response, "Lista de servicios")
         self.assertContains(response, "35,00 €")
+        self.assertContains(response, reverse("accounts:password_recovery"))
+        self.assertContains(response, "¿Olvidaste la contraseña?")
 
     def test_public_booking_slots_returns_employee_options(self):
         response = self.browser.get(

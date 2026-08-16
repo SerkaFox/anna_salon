@@ -1485,6 +1485,22 @@ img { max-width: 100%; }
   line-height: 1.45;
 }
 .field-help-placeholder { visibility: hidden; }
+.booking-password-recovery-link {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid rgba(240, 208, 145, 0.42);
+  border-radius: 999px;
+  color: var(--gold-light) !important;
+  text-decoration: none;
+  transition: background .2s ease, border-color .2s ease;
+}
+.booking-password-recovery-link:hover {
+  border-color: rgba(240, 208, 145, 0.82);
+  background: rgba(240, 208, 145, 0.10);
+}
 .booking-details-grid .form-error { min-height: 20px; }
 .lux-input.is-invalid { border-color: rgba(255, 211, 196, 0.72); box-shadow: 0 0 0 4px rgba(255, 120, 92, 0.16); }
 .lux-input {

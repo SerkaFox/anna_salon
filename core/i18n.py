@@ -533,6 +533,22 @@ PUBLIC_TRANSLATIONS["fr"].update({
     "hint_theme_label": "Style",
 })
 
+PUBLIC_TRANSLATIONS["es"].update({
+    "public_booking_password_recovery": "¿Olvidaste la contraseña? Recibe un acceso temporal.",
+})
+PUBLIC_TRANSLATIONS["ru"].update({
+    "public_booking_password_recovery": "Забыли пароль? Получите временный доступ.",
+})
+PUBLIC_TRANSLATIONS["en"].update({
+    "public_booking_password_recovery": "Forgot your password? Get temporary access.",
+})
+PUBLIC_TRANSLATIONS["de"].update({
+    "public_booking_password_recovery": "Passwort vergessen? Temporären Zugang erhalten.",
+})
+PUBLIC_TRANSLATIONS["fr"].update({
+    "public_booking_password_recovery": "Mot de passe oublié ? Recevez un accès temporaire.",
+})
+
 
 def localize_items(items, translations, language):
     language = normalize_public_language(language)
