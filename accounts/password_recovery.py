@@ -76,7 +76,7 @@ def _email_credentials(client, username, password):
         "Hemos creado un acceso temporal para BRIMOON Studio.\n"
         f"Usuario: {username}\n"
         f"Contraseña temporal: {password}\n\n"
-        f"Acceso: {settings.PUBLIC_BASE_URL.rstrip('/')}/cuentas/login/\n\n"
+        f"Acceso: {settings.PUBLIC_BASE_URL.rstrip('/')}/login/\n\n"
         "Después de entrar, cambia la contraseña desde tu perfil."
     )
     try:

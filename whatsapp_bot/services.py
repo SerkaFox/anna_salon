@@ -175,7 +175,7 @@ def send_password_reset_credentials(client, *, username, password):
         "salon_name": _salon_name(),
         "username": username,
         "password": password,
-        "login_url": f"{getattr(settings, 'PUBLIC_BASE_URL', '').rstrip('/')}/cuentas/login/",
+        "login_url": f"{getattr(settings, 'PUBLIC_BASE_URL', '').rstrip('/')}/login/",
     }
     template = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.PASSWORD_RESET)
     body = template.format_map(context)
