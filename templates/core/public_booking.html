@@ -133,15 +133,15 @@
           <small class="field-help field-help-placeholder" aria-hidden="true">&nbsp;</small>
           <small class="form-error" data-error-for="name">{% if booking_errors.name %}{{ booking_errors.name.0 }}{% endif %}</small>
         </label>
-        <label class="lux-field lux-field-card">
-          <span>{{ t.public_booking_password }}</span>
-          <input class="lux-input" type="password" name="password" autocomplete="new-password" minlength="6" aria-describedby="public-booking-password-help" required>
+        <div class="lux-field lux-field-card">
+          <label for="public-booking-password">{{ t.public_booking_password }}</label>
+          <input id="public-booking-password" class="lux-input" type="password" name="password" autocomplete="new-password" minlength="6" aria-describedby="public-booking-password-help" required>
           <small id="public-booking-password-help" class="field-help">{{ t.public_booking_password_help }}</small>
-          <a class="field-help booking-password-recovery-link" href="{% url 'accounts:password_recovery' %}" target="_blank" rel="noopener">
+          <button class="field-help booking-password-recovery-link" type="button" data-open-password-recovery>
             {{ t.public_booking_password_recovery }}
-          </a>
+          </button>
           <small class="form-error" data-error-for="password">{% if booking_errors.password %}{{ booking_errors.password.0 }}{% endif %}</small>
-        </label>
+        </div>
       </div>
 
       <p class="field-help">{{ t.public_booking_contact_required }}</p>
@@ -213,6 +213,27 @@
   </div>
 </dialog>
 
+<dialog class="waitlist-modal password-recovery-modal" data-password-recovery-modal>
+  <div class="waitlist-modal__panel">
+    <button class="waitlist-modal__close" type="button" data-close-password-recovery aria-label="Cerrar">×</button>
+    <div class="waitlist-modal__body">
+      <span class="lux-kicker">{{ salon_name }}</span>
+      <h3>{{ t.public_booking_recovery_title }}</h3>
+      <p>{{ t.public_booking_recovery_text }}</p>
+      <form class="waitlist-card waitlist-card--modal" action="{% url 'mobile_api:password_recovery' %}" method="post" data-password-recovery-form>
+        <label class="lux-field">
+          <span>{{ t.public_booking_recovery_identifier }}</span>
+          <input class="lux-input" type="text" name="identifier" autocomplete="username" required data-password-recovery-identifier>
+        </label>
+        <div class="booking-alert" data-password-recovery-message hidden></div>
+        <button class="btn-lux btn-lux-primary btn-lux-large" type="submit" data-password-recovery-submit>
+          {{ t.public_booking_recovery_submit }}
+        </button>
+      </form>
+    </div>
+  </div>
+</dialog>
+
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('[data-public-booking-form]');
@@ -250,6 +271,13 @@
     const waitlistModal = document.querySelector('[data-waitlist-modal]');
     const waitlistOpenButtons = document.querySelectorAll('[data-open-waitlist]');
     const waitlistCloseButton = document.querySelector('[data-close-waitlist]');
+    const passwordRecoveryOpenButton = form.querySelector('[data-open-password-recovery]');
+    const passwordRecoveryModal = document.querySelector('[data-password-recovery-modal]');
+    const passwordRecoveryCloseButton = document.querySelector('[data-close-password-recovery]');
+    const passwordRecoveryForm = document.querySelector('[data-password-recovery-form]');
+    const passwordRecoveryIdentifier = document.querySelector('[data-password-recovery-identifier]');
+    const passwordRecoveryMessage = document.querySelector('[data-password-recovery-message]');
+    const passwordRecoverySubmit = document.querySelector('[data-password-recovery-submit]');
     const waitlistEmployeesNode = document.getElementById('waitlist-employees-data');
     const waitlistEmployees = waitlistEmployeesNode ? JSON.parse(waitlistEmployeesNode.textContent || '[]') : [];
     let lastSlots = [];
@@ -279,6 +307,8 @@
       secondaryEmailHelp: '{{ t.public_booking_contact_secondary_email_help|escapejs }}'
     };
     const waitlistCtaText = '{{ t.public_waitlist_inline_cta|escapejs }}';
+    const passwordRecoverySuccess = '{{ t.public_booking_recovery_success|escapejs }}';
+    const passwordRecoveryError = '{{ t.public_booking_recovery_error|escapejs }}';
 
     function syncServiceCards() {
       const selected = serviceSelect.value;
@@ -348,6 +378,71 @@
     if (waitlistModal) {
       waitlistModal.addEventListener('click', function (event) {
         if (event.target === waitlistModal) closeWaitlistModal();
+      });
+    }
+
+    function openPasswordRecoveryModal() {
+      if (!passwordRecoveryModal) return;
+      if (passwordRecoveryIdentifier && !passwordRecoveryIdentifier.value.trim()) {
+        passwordRecoveryIdentifier.value = (contactInput && contactInput.value.trim()) ||
+          (secondaryContactInput && secondaryContactInput.value.trim()) || '';
+      }
+      if (passwordRecoveryMessage) {
+        passwordRecoveryMessage.hidden = true;
+        passwordRecoveryMessage.textContent = '';
+        passwordRecoveryMessage.classList.remove('is-success');
+      }
+      if (typeof passwordRecoveryModal.showModal === 'function') {
+        passwordRecoveryModal.showModal();
+        window.setTimeout(function () { passwordRecoveryIdentifier?.focus(); }, 50);
+      }
+    }
+
+    function closePasswordRecoveryModal() {
+      if (passwordRecoveryModal && passwordRecoveryModal.open) passwordRecoveryModal.close();
+    }
+
+    if (passwordRecoveryOpenButton) passwordRecoveryOpenButton.addEventListener('click', openPasswordRecoveryModal);
+    if (passwordRecoveryCloseButton) passwordRecoveryCloseButton.addEventListener('click', closePasswordRecoveryModal);
+    if (passwordRecoveryModal) {
+      passwordRecoveryModal.addEventListener('click', function (event) {
+        if (event.target === passwordRecoveryModal) closePasswordRecoveryModal();
+      });
+    }
+    if (passwordRecoveryForm) {
+      passwordRecoveryForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!passwordRecoveryForm.reportValidity()) return;
+        const originalText = passwordRecoverySubmit.textContent;
+        passwordRecoverySubmit.disabled = true;
+        fetch(passwordRecoveryForm.action, {
+          method: 'POST',
+          body: new FormData(passwordRecoveryForm),
+          headers: {
+            'Accept': 'application/json',
+            'Accept-Language': currentLanguage,
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error('recovery_failed');
+            if (passwordRecoveryMessage) {
+              passwordRecoveryMessage.textContent = passwordRecoverySuccess;
+              passwordRecoveryMessage.hidden = false;
+              passwordRecoveryMessage.classList.add('is-success');
+            }
+          })
+          .catch(function () {
+            if (passwordRecoveryMessage) {
+              passwordRecoveryMessage.textContent = passwordRecoveryError;
+              passwordRecoveryMessage.hidden = false;
+              passwordRecoveryMessage.classList.remove('is-success');
+            }
+          })
+          .finally(function () {
+            passwordRecoverySubmit.disabled = false;
+            passwordRecoverySubmit.textContent = originalText;
+          });
       });
     }
 

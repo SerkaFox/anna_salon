@@ -535,18 +535,48 @@ PUBLIC_TRANSLATIONS["fr"].update({
 
 PUBLIC_TRANSLATIONS["es"].update({
     "public_booking_password_recovery": "¿Olvidaste la contraseña? Recibe un acceso temporal.",
+    "public_booking_recovery_title": "Recuperar contraseña",
+    "public_booking_recovery_text": "Escribe tu usuario, teléfono o email. Te enviaremos un acceso temporal por los contactos disponibles sin perder esta reserva.",
+    "public_booking_recovery_identifier": "Usuario, teléfono o email",
+    "public_booking_recovery_submit": "Enviar acceso temporal",
+    "public_booking_recovery_success": "Si los datos coinciden, hemos enviado el acceso temporal por WhatsApp y/o email.",
+    "public_booking_recovery_error": "No se pudo solicitar el acceso ahora. Inténtalo de nuevo en unos minutos.",
 })
 PUBLIC_TRANSLATIONS["ru"].update({
     "public_booking_password_recovery": "Забыли пароль? Получите временный доступ.",
+    "public_booking_recovery_title": "Восстановление пароля",
+    "public_booking_recovery_text": "Введите логин, телефон или email. Мы отправим временный доступ по имеющимся контактам, а выбранная запись сохранится.",
+    "public_booking_recovery_identifier": "Логин, телефон или email",
+    "public_booking_recovery_submit": "Отправить временный доступ",
+    "public_booking_recovery_success": "Если данные совпали, временный доступ отправлен через WhatsApp и/или email.",
+    "public_booking_recovery_error": "Сейчас не удалось запросить доступ. Повторите попытку через несколько минут.",
 })
 PUBLIC_TRANSLATIONS["en"].update({
     "public_booking_password_recovery": "Forgot your password? Get temporary access.",
+    "public_booking_recovery_title": "Recover password",
+    "public_booking_recovery_text": "Enter your username, phone or email. We will send temporary access without losing this booking.",
+    "public_booking_recovery_identifier": "Username, phone or email",
+    "public_booking_recovery_submit": "Send temporary access",
+    "public_booking_recovery_success": "If the details match, temporary access was sent by WhatsApp and/or email.",
+    "public_booking_recovery_error": "Access could not be requested right now. Try again in a few minutes.",
 })
 PUBLIC_TRANSLATIONS["de"].update({
     "public_booking_password_recovery": "Passwort vergessen? Temporären Zugang erhalten.",
+    "public_booking_recovery_title": "Passwort wiederherstellen",
+    "public_booking_recovery_text": "Geben Sie Benutzername, Telefon oder Email ein. Wir senden einen temporären Zugang, ohne diese Buchung zu verlieren.",
+    "public_booking_recovery_identifier": "Benutzername, Telefon oder Email",
+    "public_booking_recovery_submit": "Temporären Zugang senden",
+    "public_booking_recovery_success": "Wenn die Daten übereinstimmen, wurde der temporäre Zugang per WhatsApp und/oder Email gesendet.",
+    "public_booking_recovery_error": "Der Zugang konnte gerade nicht angefordert werden. Versuchen Sie es in einigen Minuten erneut.",
 })
 PUBLIC_TRANSLATIONS["fr"].update({
     "public_booking_password_recovery": "Mot de passe oublié ? Recevez un accès temporaire.",
+    "public_booking_recovery_title": "Récupérer le mot de passe",
+    "public_booking_recovery_text": "Saisissez votre identifiant, téléphone ou email. Nous enverrons un accès temporaire sans perdre cette réservation.",
+    "public_booking_recovery_identifier": "Identifiant, téléphone ou email",
+    "public_booking_recovery_submit": "Envoyer un accès temporaire",
+    "public_booking_recovery_success": "Si les données correspondent, l’accès temporaire a été envoyé par WhatsApp et/ou email.",
+    "public_booking_recovery_error": "Impossible de demander l’accès maintenant. Réessayez dans quelques minutes.",
 })
 
 

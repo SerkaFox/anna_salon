@@ -1475,7 +1475,8 @@ img { max-width: 100%; }
 }
 
 .lux-field { display: grid; gap: 8px; color: rgba(247,239,227,0.9); font-weight: 800; }
-.lux-field span { font-size: 0.88rem; color: var(--gold-light); }
+.lux-field span,
+.lux-field > label { font-size: 0.88rem; color: var(--gold-light); }
 .lux-field small,
 .form-error { color: #ffd3c4; font-size: 0.85rem; }
 .field-help {
@@ -1495,6 +1496,9 @@ img { max-width: 100%; }
   border-radius: 999px;
   color: var(--gold-light) !important;
   text-decoration: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
   transition: background .2s ease, border-color .2s ease;
 }
 .booking-password-recovery-link:hover {
