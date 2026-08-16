@@ -43,6 +43,7 @@ from .utils import (
     DEFAULT_WORK_END_HOUR,
     DEFAULT_WORK_START_HOUR,
     build_calendar_hour_lines,
+    calendar_pixels,
     build_time_block_layout_data,
     booking_layout_data,
     booking_payment_summary,
@@ -1065,10 +1066,10 @@ def booking_calendar_day(request):
 
         if schedule:
             schedule_block = {
-                "top": max(minutes_from_work_start(schedule["start_at"]), 0),
+                "top": calendar_pixels(max(minutes_from_work_start(schedule["start_at"]), 0)),
                 "height": max(
-                    int((schedule["end_at"] - schedule["start_at"]).total_seconds() // 60),
-                    30,
+                    calendar_pixels(int((schedule["end_at"] - schedule["start_at"]).total_seconds() // 60)),
+                    calendar_pixels(30),
                 ),
             }
             schedule_label = (
@@ -1080,15 +1081,15 @@ def booking_calendar_day(request):
 
             if schedule.get("break_start_at") and schedule.get("break_end_at"):
                 break_block = {
-                    "top": max(minutes_from_work_start(schedule["break_start_at"]), 0),
+                    "top": calendar_pixels(max(minutes_from_work_start(schedule["break_start_at"]), 0)),
                     "height": max(
-                        int(
+                        calendar_pixels(int(
                             (
                                 schedule["break_end_at"] - schedule["break_start_at"]
                             ).total_seconds()
                             // 60
-                        ),
-                        18,
+                        )),
+                        calendar_pixels(18),
                     ),
                     "label": schedule.get("break_label") or "Pausa",
                     "employee_id": employee.pk,
@@ -1116,7 +1117,8 @@ def booking_calendar_day(request):
         "calendar_view": calendar_view if request.user.can_manage_staff else "days",
         "current_date": current_date,
         "hour_lines": build_calendar_hour_lines(),
-        "calendar_height": (DEFAULT_WORK_END_HOUR - DEFAULT_WORK_START_HOUR) * 60,
+        "calendar_height": calendar_pixels((DEFAULT_WORK_END_HOUR - DEFAULT_WORK_START_HOUR) * 60),
+        "calendar_half_hour_height": calendar_pixels(30),
         "prev_date": current_date - timedelta(days=1),
         "next_date": current_date + timedelta(days=1),
         "today": today,

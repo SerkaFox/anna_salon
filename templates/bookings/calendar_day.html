@@ -14,7 +14,7 @@
 {% endblock %}
 
 {% block panel_content %}
-<section class="calendar-workspace">
+<section class="calendar-workspace" style="--calendar-height: {{ calendar_height }}px; --calendar-half-hour-height: {{ calendar_half_hour_height }}px;">
   <section class="panel-card calendar-hero calendar-hero--glass">
     <div class="calendar-hero__summary">
       <div class="calendar-hero__eyebrow">Green glass board</div>
@@ -177,7 +177,7 @@
               <section class="calendar-day-panel">
                 <div class="calendar-grid" data-date="{{ day.date|date:'Y-m-d' }}">
                 {% for line in hour_lines %}
-                  <div class="calendar-hour-line" style="top: {{ line.top }}px;"></div>
+                  <div class="calendar-hour-line {% if not line.is_hour %}calendar-half-hour-line{% endif %}" style="top: {{ line.top }}px;"></div>
                 {% endfor %}
 
                 {% for block in day.time_blocks %}
@@ -318,7 +318,7 @@
 
               <div class="team-day-grid calendar-grid" data-date="{{ current_date|date:'Y-m-d' }}" data-employee-id="{{ item.employee.pk }}">
                 {% for line in hour_lines %}
-                  <div class="calendar-hour-line" style="top: {{ line.top }}px;"></div>
+                  <div class="calendar-hour-line {% if not line.is_hour %}calendar-half-hour-line{% endif %}" style="top: {{ line.top }}px;"></div>
                 {% endfor %}
 
                 {% if item.schedule_block %}
@@ -888,6 +888,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const createBase = "{% url 'bookings:create' %}";
   const workStartHour = 9;
   const stepMinutes = 30;
+  const calendarPixelsPerMinute = 1.5;
   let draggedCard = null;
   let previewNode = null;
   let activeCard = null;
@@ -955,7 +956,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function minutesFromGridTop(grid, clientY) {
     const rect = grid.getBoundingClientRect();
-    return clientY - rect.top;
+    return (clientY - rect.top) / calendarPixelsPerMinute;
   }
 
   function formatPreviewLabel(dateTimeString, durationMinutes) {
@@ -1045,8 +1046,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const endDate = new Date(card.dataset.endAt);
     const durationMinutes = Math.max(30, Math.round((endDate - startDate) / 60000));
 
-    preview.style.top = `${snappedMinutes}px`;
-    preview.style.height = `${durationMinutes}px`;
+    preview.style.top = `${snappedMinutes * calendarPixelsPerMinute}px`;
+    preview.style.height = `${durationMinutes * calendarPixelsPerMinute}px`;
     preview.innerHTML = `
       <strong>${card.dataset.client}</strong>
       <span>${formatPreviewLabel(startAt, durationMinutes)}</span>

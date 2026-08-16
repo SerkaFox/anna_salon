@@ -13,6 +13,7 @@ DEFAULT_WORK_START_HOUR = 9
 DEFAULT_WORK_END_HOUR = 20
 SLOT_STEP_MINUTES = 30
 MOBILE_SLOT_STEP_MINUTES = 15
+CALENDAR_PIXELS_PER_MINUTE = 1.5
 CALENDAR_DAY_SPAN = 5  # сколько дней показывать сверху
 PUBLIC_BOOKING_MAX_DAYS_AHEAD = 366
 
@@ -35,12 +36,20 @@ def combine_local(date_obj, time_obj):
 
 def build_calendar_hour_lines():
     lines = []
-    for hour in range(DEFAULT_WORK_START_HOUR, DEFAULT_WORK_END_HOUR):
+    total_minutes = (DEFAULT_WORK_END_HOUR - DEFAULT_WORK_START_HOUR) * 60
+    for minute_offset in range(0, total_minutes, 30):
+        hour = DEFAULT_WORK_START_HOUR + minute_offset // 60
+        minute = minute_offset % 60
         lines.append({
-            "label": f"{hour:02d}:00",
-            "top": (hour - DEFAULT_WORK_START_HOUR) * 60,
+            "label": f"{hour:02d}:{minute:02d}",
+            "top": calendar_pixels(minute_offset),
+            "is_hour": minute == 0,
         })
     return lines
+
+
+def calendar_pixels(minutes):
+    return round(minutes * CALENDAR_PIXELS_PER_MINUTE)
 
 def get_day_bounds(date_obj):
     day_start = combine_local(date_obj, time(hour=0, minute=0))
@@ -486,8 +495,8 @@ def build_time_block_layout_data(block):
         "color": block.color or "#111111",
         "start_at": timezone.localtime(start_at),
         "end_at": timezone.localtime(end_at),
-        "top": max(start_minutes, 0),
-        "height": max(duration_minutes, 18),
+        "top": calendar_pixels(max(start_minutes, 0)),
+        "height": max(calendar_pixels(duration_minutes), calendar_pixels(18)),
     }
 
 
@@ -582,8 +591,8 @@ def booking_layout_data(booking):
         "notes": booking.notes,
         "start_at": timezone.localtime(booking.start_at),
         "end_at": timezone.localtime(booking.end_at),
-        "top": max(start_minutes, 0),
-        "height": max(duration_minutes, 30),
+        "top": calendar_pixels(max(start_minutes, 0)),
+        "height": max(calendar_pixels(duration_minutes), calendar_pixels(30)),
         "payment_label": payment_summary["label"],
         "payment_status_class": payment_summary["status_class"],
     }

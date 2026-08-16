@@ -3,7 +3,7 @@ from decimal import Decimal
 from unittest.mock import patch
 from urllib.parse import urlparse
 
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -18,6 +18,17 @@ from salon.models import Zone
 from salon.models import SalonSettings
 from services_app.models import Service
 from whatsapp_bot.services import booking_response_url
+from bookings.utils import build_calendar_hour_lines, calendar_pixels
+
+
+class CalendarScaleTests(SimpleTestCase):
+    def test_calendar_uses_half_hour_labels_and_expanded_scale(self):
+        lines = build_calendar_hour_lines()
+
+        self.assertEqual(lines[0]["label"], "09:00")
+        self.assertEqual(lines[1]["label"], "09:30")
+        self.assertEqual(lines[1]["top"], calendar_pixels(30))
+        self.assertEqual(calendar_pixels(60), 90)
 
 
 class BookingScheduleTests(TestCase):

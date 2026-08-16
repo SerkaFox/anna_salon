@@ -568,12 +568,12 @@
 
 .calendar-time-rail {
   position: relative;
-  height: 660px;
+  height: var(--calendar-height, 990px);
 }
 
 .calendar-time-rail__labels {
   position: relative;
-  height: 660px;
+  height: var(--calendar-height, 990px);
 }
 
 .calendar-time-rail__label {
@@ -598,15 +598,15 @@
 
 .calendar-grid {
   position: relative;
-  height: 660px;
+  height: var(--calendar-height, 990px);
   border-radius: 16px;
   border: 1px solid var(--line);
   background:
     repeating-linear-gradient(
       to bottom,
       rgba(235, 255, 243, 0.08) 0px,
-      rgba(235, 255, 243, 0.08) 29px,
-      rgba(13, 32, 23, 0.16) 30px
+      rgba(235, 255, 243, 0.08) calc(var(--calendar-half-hour-height, 45px) - 1px),
+      rgba(13, 32, 23, 0.16) var(--calendar-half-hour-height, 45px)
     );
   overflow: hidden;
 }
@@ -617,6 +617,10 @@
   right: 0;
   height: 1px;
   background: rgba(140, 229, 176, 0.14);
+}
+
+.calendar-half-hour-line {
+  background: rgba(140, 229, 176, 0.08);
 }
 
 .calendar-empty {
@@ -1224,7 +1228,7 @@ body.has-booking-modal {
 
 .calendar-time-rail--team {
   --team-head-height: 86px;
-  height: calc(660px + var(--team-head-height));
+  height: calc(var(--calendar-height, 990px) + var(--team-head-height));
 }
 
 .calendar-time-rail__spacer--team {
