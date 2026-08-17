@@ -25,9 +25,11 @@ class Command(BaseCommand):
         if not connection_status["connected"]:
             self.stdout.write(
                 self.style.WARNING(
-                    f"WhatsApp unavailable: {connection_status['status']}"
+                    f"WhatsApp unavailable: {connection_status['status']}; "
+                    "message sending and automatic cancellations are paused"
                 )
             )
+            return
         hours_values = options["hours"] or [24, 2]
         total_queued = 0
         total_skipped = 0
