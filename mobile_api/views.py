@@ -58,6 +58,7 @@ from payments.stripe_service import (
     request_booking_prepayment,
 )
 from whatsapp_bot.models import WhatsAppMessage
+from whatsapp_bot.monitoring import refresh_connection_status
 
 from .permissions import IsAuthenticatedMobileUser
 from .serializers import (
@@ -429,6 +430,13 @@ def _employee_detail_payload(employee, request):
 
 class MobileApiMixin:
     permission_classes = [IsAuthenticatedMobileUser]
+
+
+class WhatsAppStatusView(MobileApiMixin, APIView):
+    def get(self, request):
+        if not request.user.can_manage_staff:
+            raise PermissionDenied("Sin permiso para gestionar WhatsApp.")
+        return Response(refresh_connection_status())
 
 
 class PasswordRecoveryView(APIView):

@@ -11,7 +11,13 @@ from employees.models import Employee
 from services_app.models import Service
 from payments.models import Payment
 
-from .models import TEMPLATE_DEFAULTS, WhatsAppMessage, WhatsAppTemplate
+from .models import (
+    TEMPLATE_DEFAULTS,
+    WhatsAppConnection,
+    WhatsAppMessage,
+    WhatsAppTemplate,
+)
+from .monitoring import refresh_connection_status
 from .services import (
     normalize_whatsapp_phone,
     process_unanswered_24h_reminders,
@@ -22,6 +28,32 @@ from .services import (
     send_due_messages,
     send_whatsapp_message,
 )
+
+
+class WhatsAppConnectionMonitoringTests(TestCase):
+    @patch("whatsapp_bot.monitoring.bridge.get_status")
+    def test_qr_status_replaces_stale_connected_state(self, get_status):
+        connection = WhatsAppConnection.objects.create(
+            name="main", status=WhatsAppConnection.Statuses.CONNECTED
+        )
+        get_status.return_value = {"status": "qr"}
+
+        result = refresh_connection_status()
+
+        connection.refresh_from_db()
+        self.assertFalse(result["connected"])
+        self.assertTrue(result["needs_reconnect"])
+        self.assertEqual(connection.status, WhatsAppConnection.Statuses.QR_PENDING)
+
+    @patch("whatsapp_bot.monitoring.bridge.get_status")
+    def test_ready_status_is_connected(self, get_status):
+        get_status.return_value = {"status": "ready", "phone": "+34600000000"}
+
+        result = refresh_connection_status()
+
+        self.assertTrue(result["connected"])
+        self.assertFalse(result["needs_reconnect"])
+        self.assertEqual(result["phone"], "+34600000000")
 
 
 @override_settings(WHATSAPP_DRY_RUN=True)

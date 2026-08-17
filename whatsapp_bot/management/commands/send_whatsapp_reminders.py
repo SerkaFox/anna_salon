@@ -7,6 +7,7 @@ from whatsapp_bot.services import (
     process_expired_prepayment_requests,
     send_due_messages,
 )
+from whatsapp_bot.monitoring import refresh_connection_status
 
 
 class Command(BaseCommand):
@@ -20,6 +21,13 @@ class Command(BaseCommand):
         parser.add_argument("--response-timeout-minutes", type=int, default=15)
 
     def handle(self, *args, **options):
+        connection_status = refresh_connection_status()
+        if not connection_status["connected"]:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"WhatsApp unavailable: {connection_status['status']}"
+                )
+            )
         hours_values = options["hours"] or [24, 2]
         total_queued = 0
         total_skipped = 0
