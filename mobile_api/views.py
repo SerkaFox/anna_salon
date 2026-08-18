@@ -38,6 +38,7 @@ from clients.models import Client
 from clients.models import ClientRewardRule
 from clients.rewards import client_reward_progress
 from documents.models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment as ManualPayment
+from documents.line_items import delete_document_line, update_document_line_price
 from employees.models import (
     Employee,
     EmployeeRecurringTimeBlock,
@@ -80,6 +81,7 @@ from .serializers import (
     EmployeeScheduleOverrideSerializer,
     EmployeeWeeklyShiftSerializer,
     FiscalDocumentLineSerializer,
+    FiscalDocumentLinePriceSerializer,
     FiscalDocumentLineWriteSerializer,
     FiscalDocumentSerializer,
     ManualPaymentSerializer,
@@ -1698,6 +1700,57 @@ class CashDocumentLineCreateView(MobileApiMixin, APIView):
         )
         document.refresh_from_db()
         return Response(FiscalDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+class CashDocumentLineDetailView(MobileApiMixin, APIView):
+    def get_object(self, request, pk):
+        _mobile_admin_required(request.user)
+        line = generics.get_object_or_404(
+            FiscalDocumentLine.objects.select_related(
+                "fiscal_document", "fiscal_document__booking"
+            ),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(
+            request.user, line.fiscal_document.booking
+        ):
+            raise PermissionDenied("Sin acceso a este documento.")
+        return line
+
+    def patch(self, request, pk):
+        line = self.get_object(request, pk)
+        serializer = FiscalDocumentLinePriceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            document, updated_line = update_document_line_price(
+                line.pk, serializer.validated_data["unit_amount"]
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"unit_amount": exc.messages})
+        log_event(
+            actor=request.user,
+            section="document",
+            action="line_update",
+            instance=updated_line,
+            message=f"Precio de línea actualizado en {document.number}.",
+        )
+        return Response(FiscalDocumentSerializer(document).data)
+
+    def delete(self, request, pk):
+        line = self.get_object(request, pk)
+        document_number = line.fiscal_document.number
+        try:
+            document = delete_document_line(line.pk)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"detail": exc.messages})
+        log_event(
+            actor=request.user,
+            section="document",
+            action="line_delete",
+            instance=document,
+            message=f"Línea eliminada de {document_number}.",
+        )
+        return Response(FiscalDocumentSerializer(document).data)
 
 
 class CashDocumentPaymentCreateView(MobileApiMixin, APIView):

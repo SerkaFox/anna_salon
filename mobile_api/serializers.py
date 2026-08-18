@@ -1253,6 +1253,14 @@ class FiscalDocumentLineWriteSerializer(serializers.Serializer):
         return attrs
 
 
+class FiscalDocumentLinePriceSerializer(serializers.Serializer):
+    unit_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+    )
+
+
 class ManualPaymentWriteSerializer(serializers.ModelSerializer):
     paid_at = SalonDateTimeField(required=False)
 

@@ -67,10 +67,19 @@
             <td>{{ line.unit_amount }} €</td>
             <td><strong>{{ line.total_amount }} €</strong></td>
             <td class="actions-cell">
-              <form method="post" action="{% url 'documents:line_delete' line.id %}">
-                {% csrf_token %}
-                <button class="btn btn-light btn-small" type="submit">Eliminar</button>
-              </form>
+              <div class="actions-inline">
+                <form method="post" action="{% url 'documents:line_edit' line.id %}" class="actions-inline">
+                  {% csrf_token %}
+                  <input class="input" name="unit_amount" type="number" step="0.01" min="0" value="{{ line.unit_amount }}" aria-label="Precio unitario" style="width: 105px;">
+                  <button class="btn btn-light btn-small" type="submit">Guardar</button>
+                </form>
+                {% if document.lines.all|length > 1 %}
+                  <form method="post" action="{% url 'documents:line_delete' line.id %}" onsubmit="return confirm('¿Eliminar esta línea?');">
+                    {% csrf_token %}
+                    <button class="btn btn-light btn-small" type="submit" title="Eliminar" aria-label="Eliminar">&times;</button>
+                  </form>
+                {% endif %}
+              </div>
             </td>
           </tr>
         {% empty %}

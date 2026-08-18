@@ -19,7 +19,8 @@ from bookings.models import Booking
 from payments.account_service import get_stripe_account_summary, request_stripe_payout
 from payments.models import StripePayoutRequest
 
-from .forms import FiscalDocumentLineForm, PaymentForm
+from .forms import FiscalDocumentLineForm, FiscalDocumentLinePriceForm, PaymentForm
+from .line_items import delete_document_line, update_document_line_price
 from .models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment
 
 
@@ -246,7 +247,7 @@ def document_detail(request, pk):
             "booking__employee",
             "booking__service",
             "booking__zone",
-        ).prefetch_related("payments"),
+        ).prefetch_related("payments", "lines"),
         pk=pk,
     )
     initial_paid_at = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
@@ -320,9 +321,33 @@ def document_line_create(request, document_pk):
 def document_line_delete(request, pk):
     line = get_object_or_404(FiscalDocumentLine.objects.select_related("fiscal_document"), pk=pk)
     document = line.fiscal_document
-    line.delete()
-    document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
+    try:
+        delete_document_line(line.pk)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+        return redirect("documents:detail", pk=document.pk)
     messages.success(request, "Línea eliminada del documento.")
+    return redirect("documents:detail", pk=document.pk)
+
+
+@login_required
+@require_POST
+@admin_required
+def document_line_edit(request, pk):
+    line = get_object_or_404(
+        FiscalDocumentLine.objects.select_related("fiscal_document"), pk=pk
+    )
+    document = line.fiscal_document
+    form = FiscalDocumentLinePriceForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Indica un precio válido.")
+        return redirect("documents:detail", pk=document.pk)
+    try:
+        update_document_line_price(line.pk, form.cleaned_data["unit_amount"])
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        messages.success(request, "Precio actualizado.")
     return redirect("documents:detail", pk=document.pk)
 
 

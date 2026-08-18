@@ -50,6 +50,7 @@ urlpatterns = [
     path("cashbox/close/", views.CashboxCloseView.as_view(), name="cashbox_close"),
     path("cashbox/documents/<int:pk>/", views.CashDocumentDetailView.as_view(), name="cash_document_detail"),
     path("cashbox/documents/<int:pk>/lines/", views.CashDocumentLineCreateView.as_view(), name="cash_document_line_create"),
+    path("cashbox/lines/<int:pk>/", views.CashDocumentLineDetailView.as_view(), name="cash_document_line_detail"),
     path("cashbox/documents/<int:pk>/payments/", views.CashDocumentPaymentCreateView.as_view(), name="cash_document_payment_create"),
     path("cashbox/payments/<int:pk>/", views.CashPaymentDetailView.as_view(), name="cash_payment_detail"),
     path("cashbox/documents/<int:pk>/share/", views.CashDocumentShareView.as_view(), name="cash_document_share"),

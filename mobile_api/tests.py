@@ -11,7 +11,7 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from bookings.models import Booking, BookingWaitlistEntry
 from clients.models import Client
-from documents.models import FiscalDocument, Payment as ManualPayment
+from documents.models import FiscalDocument, FiscalDocumentLine, Payment as ManualPayment
 from employees.models import (
     Employee,
     EmployeeRecurringTimeBlock,
@@ -324,6 +324,77 @@ class MobileApiMvpTests(TestCase):
         )
         self.assertEqual(cash_only.status_code, 200, cash_only.content)
         self.assertEqual(cash_only.json()["payments_total"], "20.00")
+
+    def test_owner_can_edit_cash_document_line_price(self):
+        booking = self._create_booking()
+        document = FiscalDocument.objects.create(booking=booking)
+        line = FiscalDocumentLine.objects.create(
+            fiscal_document=document,
+            service=booking.service,
+            description="Peinado",
+            quantity=Decimal("1.00"),
+            unit_amount=Decimal("20.00"),
+        )
+        document.save()
+        self._auth(self.owner_user)
+
+        response = self.api_client.patch(
+            reverse("mobile_api:cash_document_line_detail", args=[line.pk]),
+            {"unit_amount": "23.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        line.refresh_from_db()
+        self.assertEqual(line.unit_amount, Decimal("23.00"))
+        self.assertEqual(response.json()["total_amount"], "23.00")
+
+    def test_owner_cannot_delete_last_cash_document_line(self):
+        booking = self._create_booking()
+        document = FiscalDocument.objects.create(booking=booking)
+        line = FiscalDocumentLine.objects.create(
+            fiscal_document=document,
+            service=booking.service,
+            description="Peinado",
+            quantity=Decimal("1.00"),
+            unit_amount=Decimal("20.00"),
+        )
+        document.save()
+        self._auth(self.owner_user)
+
+        response = self.api_client.delete(
+            reverse("mobile_api:cash_document_line_detail", args=[line.pk])
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertTrue(FiscalDocumentLine.objects.filter(pk=line.pk).exists())
+
+    def test_owner_can_delete_extra_cash_document_line(self):
+        booking = self._create_booking()
+        document = FiscalDocument.objects.create(booking=booking)
+        FiscalDocumentLine.objects.create(
+            fiscal_document=document,
+            service=booking.service,
+            description="Peinado",
+            quantity=Decimal("1.00"),
+            unit_amount=Decimal("20.00"),
+        )
+        extra = FiscalDocumentLine.objects.create(
+            fiscal_document=document,
+            description="Lavado",
+            quantity=Decimal("1.00"),
+            unit_amount=Decimal("3.00"),
+        )
+        document.save()
+        self._auth(self.owner_user)
+
+        response = self.api_client.delete(
+            reverse("mobile_api:cash_document_line_detail", args=[extra.pk])
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(FiscalDocumentLine.objects.filter(pk=extra.pk).exists())
+        self.assertEqual(response.json()["total_amount"], "20.00")
 
     def test_paid_document_can_be_reopened_and_payment_method_changed(self):
         booking = self._create_booking()

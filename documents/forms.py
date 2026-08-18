@@ -60,3 +60,15 @@ class FiscalDocumentLineForm(forms.ModelForm):
         if cleaned.get("unit_amount") is None:
             self.add_error("unit_amount", "Indica un importe.")
         return cleaned
+
+
+class FiscalDocumentLinePriceForm(forms.Form):
+    unit_amount = forms.DecimalField(
+        label="Precio unitario",
+        min_value=0,
+        decimal_places=2,
+        max_digits=10,
+        widget=forms.NumberInput(
+            attrs={"class": "input", "step": "0.01", "min": "0"}
+        ),
+    )

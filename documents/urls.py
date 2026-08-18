@@ -20,6 +20,7 @@ urlpatterns = [
     path("<int:pk>/print/", views.document_print, name="print"),
     path("<int:document_pk>/lines/create/", views.document_line_create, name="line_create"),
     path("lines/<int:pk>/delete/", views.document_line_delete, name="line_delete"),
+    path("lines/<int:pk>/edit/", views.document_line_edit, name="line_edit"),
     path("<int:pk>/refund/quick/", views.document_quick_refund, name="quick_refund"),
     path("<int:document_pk>/payments/create/", views.payment_create, name="payment_create"),
     path("payments/<int:pk>/edit/", views.payment_edit, name="payment_edit"),
