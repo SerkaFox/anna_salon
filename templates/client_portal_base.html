@@ -20,6 +20,7 @@
     <div>
       <h1>{% block portal_title %}{% endblock %}</h1>
       <p>{% block portal_subtitle %}{% endblock %}</p>
+      {% block portal_header_action %}{% endblock %}
     </div>
     <div class="panel-actions" id="clientPanelActions">
       {% client_lang as current_client_lang %}
@@ -36,7 +37,6 @@
       </form>
       <a class="btn btn-light" href="{% url 'home' %}">{% ct "site_home" %}</a>
       <a class="btn btn-light" href="{% url 'clients:portal' %}">{% ct "my_portal" %}</a>
-      <a class="btn btn-light" href="{% url 'accounts:profile' %}">{% ct "my_data" %}</a>
       <a class="btn btn-light" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
     </div>
   </header>

@@ -50,6 +50,28 @@
   font-size: 0.9rem;
 }
 
+.login-lang-corner {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  z-index: 10;
+}
+.login-lang-corner select {
+  background: rgba(6,9,15,0.72);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 5px 10px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+.login-lang-corner select:hover { border-color: var(--gold); color: var(--gold-light); }
+
+.login-lux-topline {
+  margin-bottom: 20px;
+}
+
 /* ── Shell & Sidebar ───────────────────────────────── */
 .dashboard-shell {
   min-height: 100vh;
@@ -456,29 +478,46 @@ a.client-link-pill {
   min-width: 74px;
   min-height: 82px;
   padding: 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(15, 54, 41, 0.88);
+  background: rgba(214, 167, 92, 0.07);
   color: var(--text);
   display: grid;
   place-items: center;
   gap: 3px;
   cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.portal-date-pill:hover {
+  border-color: var(--line-strong);
+  background: rgba(214, 167, 92, 0.13);
+}
+
+.portal-date-pill.is-selected {
+  border-color: var(--gold);
+  background: rgba(214, 167, 92, 0.18);
 }
 
 .portal-date-pill strong {
   font-size: 1.65rem;
-  color: #f4dfaa;
+  color: var(--gold-light);
 }
 
 .portal-slot-time {
   min-height: 40px;
   padding: 0 14px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(15, 54, 41, 0.88);
-  color: #f4fff8;
-  font-weight: 800;
+  background: rgba(214, 167, 92, 0.07);
+  color: var(--text);
+  font-weight: 600;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.portal-slot-time:hover {
+  border-color: var(--line-strong);
+  background: rgba(214, 167, 92, 0.13);
 }
 
 .portal-slot-picker[hidden] {

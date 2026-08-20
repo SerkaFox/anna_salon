@@ -79,7 +79,30 @@ def profile_view(request):
     password_form = StyledPasswordChangeForm(request.user)
     fiscal_form = ClientFiscalForm(instance=client) if client else None
 
-    if is_client_portal and request.method == "POST" and request.POST.get("action") == "change_password":
+    if request.method == "POST" and request.POST.get("action") == "save_all":
+        form = UserProfileForm(request.POST, instance=request.user)
+        fiscal_form = ClientFiscalForm(request.POST, instance=client) if client else None
+        has_password = any(request.POST.get(f) for f in ("old_password", "new_password1", "new_password2"))
+        password_form = StyledPasswordChangeForm(request.user, request.POST) if has_password else StyledPasswordChangeForm(request.user)
+        profile_ok = form.is_valid() and (fiscal_form is None or fiscal_form.is_valid())
+        password_ok = (not has_password) or password_form.is_valid()
+        if profile_ok and password_ok:
+            form.save()
+            if fiscal_form:
+                fiscal_form.save()
+            if has_password:
+                saved_user = password_form.save()
+                update_session_auth_hash(request, saved_user)
+            log_event(
+                actor=request.user,
+                section="account",
+                action="profile_update",
+                instance=request.user,
+                message=f"Perfil actualizado por {request.user.username}.",
+            )
+            messages.success(request, "Datos guardados correctamente.")
+            return redirect("clients:portal" if is_client_portal else "accounts:profile")
+    elif is_client_portal and request.method == "POST" and request.POST.get("action") == "change_password":
         form = UserProfileForm(instance=request.user)
         password_form = StyledPasswordChangeForm(request.user, request.POST)
         if password_form.is_valid():

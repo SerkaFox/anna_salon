@@ -4,6 +4,7 @@
 {% block title %}{% ct "my_portal" %} | {{ salon_name }}{% endblock %}
 {% block portal_title %}{% ct "hello" name=client.full_name %}{% endblock %}
 {% block portal_subtitle %}{% ct "portal_subtitle" %}{% endblock %}
+{% block portal_header_action %}<a class="btn btn-light btn-small" href="{% url 'accounts:profile' %}">{% ct "my_data" %}</a>{% endblock %}
 
 {% block portal_content %}
   {% ct "no_phone" as client_no_phone %}
@@ -328,6 +329,7 @@
       {% endif %}
     </article>
   </section>
+
 {{ portal_services|json_script:"portal-services-data" }}
 {% client_lang as current_client_lang %}
 {% ct "select_master" as t_select_master %}

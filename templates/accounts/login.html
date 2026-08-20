@@ -6,6 +6,17 @@
 {% block body_class %}client-lux-body login-lux-body{% endblock %}
 
 {% block body %}
+<form method="post" action="{% url 'set_public_language' %}" class="login-lang-corner">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <label class="sr-only" for="login-language">Language</label>
+  <select id="login-language" name="language" onchange="this.form.submit()">
+    {% for code, label in public_languages %}
+      <option value="{{ code }}" {% if code == public_language %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+</form>
+
 <div class="login-shell login-lux-shell">
   <div class="login-card login-lux-card">
     <div class="login-brand">
@@ -18,16 +29,6 @@
 
     <div class="login-lux-topline">
       <a class="btn btn-light btn-small" href="{% url 'home' %}">{{ t.back_to_site|default:"Volver al sitio" }}</a>
-      <form method="post" action="{% url 'set_public_language' %}" class="language-switcher login-language-switcher">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <label class="sr-only" for="login-language">Language</label>
-        <select id="login-language" name="language" class="input" onchange="this.form.submit()">
-          {% for code, label in public_languages %}
-            <option value="{{ code }}" {% if code == public_language %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </form>
     </div>
 
     <h1>{{ t.login_title|default:"Iniciar sesión" }}</h1>
@@ -87,5 +88,6 @@
       </a>
     </form>
   </div>
+</div>
 </div>
 {% endblock %}

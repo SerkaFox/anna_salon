@@ -7,123 +7,102 @@
 
 {% block portal_content %}
 <section class="panel-card">
-  <form method="post" class="entity-form">
+  <form method="post" action="{% url 'accounts:profile' %}" class="entity-form">
     {% csrf_token %}
-    <input type="hidden" name="action" value="save_profile">
+    <input type="hidden" name="action" value="save_all">
+
     {% if form.non_field_errors %}
       <div class="form-errors">
-        {% for error in form.non_field_errors %}
-          <div>{{ error }}</div>
-        {% endfor %}
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
       </div>
     {% endif %}
-    <div class="form-grid">
-      <div class="field">
-        <label for="{{ form.username.id_for_label }}">{% ct "username" %}</label>
-        {{ form.username }}
-        <p class="muted-text">{% ct "username_help" %}</p>
-        {% for error in form.username.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+    {% if password_form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in password_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
       </div>
+    {% endif %}
+
+    <div class="form-grid">
       <div class="field">
         <label for="{{ form.first_name.id_for_label }}">{% ct "first_name" %}</label>
         {{ form.first_name }}
-        {% for error in form.first_name.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {% for e in form.first_name.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
       </div>
       <div class="field">
         <label for="{{ form.last_name.id_for_label }}">{% ct "last_name" %}</label>
         {{ form.last_name }}
-        {% for error in form.last_name.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {% for e in form.last_name.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ form.username.id_for_label }}">{% ct "username" %}</label>
+        {{ form.username }}
+        <p class="muted-text">{% ct "username_help" %}</p>
+        {% for e in form.username.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
       </div>
       <div class="field">
         <label for="{{ form.email.id_for_label }}">{% ct "email" %}</label>
         {{ form.email }}
-        {% for error in form.email.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {% for e in form.email.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
       </div>
       <div class="field">
         <label for="{{ form.phone.id_for_label }}">{% ct "phone" %}</label>
         {{ form.phone }}
-        {% for error in form.phone.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {% for e in form.phone.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
       </div>
     </div>
 
     {% if fiscal_form %}
       <h3 style="margin-top: 18px;">{% ct "fiscal_data" %}</h3>
       <p class="muted-text">{% ct "fiscal_data_help" %}</p>
-      {% if fiscal_form.non_field_errors %}
-        <div class="form-errors">
-          {% for error in fiscal_form.non_field_errors %}
-            <div>{{ error }}</div>
-          {% endfor %}
-        </div>
-      {% endif %}
       <div class="form-grid">
         <div class="field">
           <label for="{{ fiscal_form.fiscal_id.id_for_label }}">{% ct "fiscal_id" %}</label>
           {{ fiscal_form.fiscal_id }}
-          {% for error in fiscal_form.fiscal_id.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+          {% for e in fiscal_form.fiscal_id.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
         </div>
         <div class="field">
           <label for="{{ fiscal_form.fiscal_address.id_for_label }}">{% ct "fiscal_address" %}</label>
           {{ fiscal_form.fiscal_address }}
-          {% for error in fiscal_form.fiscal_address.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+          {% for e in fiscal_form.fiscal_address.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
         </div>
         <div class="field">
           <label for="{{ fiscal_form.fiscal_city.id_for_label }}">{% ct "fiscal_city" %}</label>
           {{ fiscal_form.fiscal_city }}
-          {% for error in fiscal_form.fiscal_city.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+          {% for e in fiscal_form.fiscal_city.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
         </div>
         <div class="field">
           <label for="{{ fiscal_form.fiscal_postcode.id_for_label }}">{% ct "fiscal_postcode" %}</label>
           {{ fiscal_form.fiscal_postcode }}
-          {% for error in fiscal_form.fiscal_postcode.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+          {% for e in fiscal_form.fiscal_postcode.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
         </div>
       </div>
     {% endif %}
+
+    <hr style="border:none;border-top:1px solid var(--border-color,#2a2a2a);margin:22px 0 18px;">
+    <h3>{% ct "change_password" %}</h3>
+    <p class="muted-text" style="margin-bottom:14px;">{% ct "change_password_help" %}</p>
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ password_form.old_password.id_for_label }}">{% ct "current_password" %}</label>
+        {{ password_form.old_password }}
+        {% for e in password_form.old_password.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ password_form.new_password1.id_for_label }}">{% ct "new_password" %}</label>
+        {{ password_form.new_password1 }}
+        {% for e in password_form.new_password1.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ password_form.new_password2.id_for_label }}">{% ct "repeat_password" %}</label>
+        {{ password_form.new_password2 }}
+        {% for e in password_form.new_password2.errors %}<small class="field-error">{{ e }}</small>{% endfor %}
+      </div>
+    </div>
 
     <div class="form-actions">
       <button type="submit" class="btn">{% ct "save_data" %}</button>
       <a href="{% url 'clients:portal' %}" class="btn btn-light">{% ct "back" %}</a>
       <a href="{% url 'accounts:logout' %}" class="btn btn-light">{% ct "logout" %}</a>
-    </div>
-  </form>
-</section>
-
-<section class="panel-card" style="margin-top: 18px;">
-  <div class="section-heading">
-    <div>
-      <h2>{% ct "change_password" %}</h2>
-      <p>{% ct "change_password_help" %}</p>
-    </div>
-  </div>
-  <form method="post" class="entity-form">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="change_password">
-    {% if password_form.non_field_errors %}
-      <div class="form-errors">
-        {% for error in password_form.non_field_errors %}
-          <div>{{ error }}</div>
-        {% endfor %}
-      </div>
-    {% endif %}
-    <div class="form-grid">
-      <div class="field">
-        <label for="{{ password_form.old_password.id_for_label }}">{% ct "current_password" %}</label>
-        {{ password_form.old_password }}
-        {% for error in password_form.old_password.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
-      </div>
-      <div class="field">
-        <label for="{{ password_form.new_password1.id_for_label }}">{% ct "new_password" %}</label>
-        {{ password_form.new_password1 }}
-        {% for error in password_form.new_password1.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
-      </div>
-      <div class="field">
-        <label for="{{ password_form.new_password2.id_for_label }}">{% ct "repeat_password" %}</label>
-        {{ password_form.new_password2 }}
-        {% for error in password_form.new_password2.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
-      </div>
-    </div>
-    <div class="form-actions">
-      <button type="submit" class="btn">{% ct "change_password" %}</button>
     </div>
   </form>
 </section>
