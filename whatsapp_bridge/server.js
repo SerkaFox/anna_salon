@@ -216,6 +216,17 @@ app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/sessions/:session/state", async (req, res) => {
+  const state = getSession(req.params.session);
+  if (!state.client) return res.json({ error: "no client" });
+  try {
+    const waState = await state.client.getState();
+    res.json({ wa_state: waState, bridge_status: state.status });
+  } catch (err) {
+    res.json({ error: err?.message || String(err), bridge_status: state.status });
+  }
+});
+
 app.post("/auth/qr", (req, res) => {
   const state = getSession(req.body?.session);
   res.json({
@@ -255,9 +266,74 @@ app.post("/messages", async (req, res) => {
     return res.status(409).json({ error: `Session is not ready: ${state.status}` });
   }
 
+  // Verify the number is on WhatsApp. getNumberId may return a LID
+  // (@lid) address for migrated contacts — we always send to the
+  // canonical phone-number chatId (digits@c.us) so that getChat can
+  // find or create the conversation regardless of LID migration status.
+  let onWhatsApp;
   try {
-    const result = await state.client.sendMessage(`${digits}@c.us`, body);
-    return res.json({ id: result.id?._serialized || "", message_id: result.id?._serialized || "" });
+    onWhatsApp = await state.client.getNumberId(digits);
+  } catch (_) {
+    onWhatsApp = null;
+  }
+  if (!onWhatsApp) {
+    console.warn(`[whatsapp:${state.name}] number not on WhatsApp: ${digits}`);
+    return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
+  }
+  const lid = onWhatsApp._serialized;
+  console.log(`[whatsapp:${state.name}] sending to ${digits} (lid=${lid})`);
+
+  // WhatsApp Web stores existing chats under LID keys. For new contacts
+  // (no chat history), getChat fails on both LID and phone wids. We try
+  // the LID first, then fall back to phone, accepting undefined as "sent
+  // but ID unresolvable" (LID key mismatch in Msg.get after send).
+  async function trySend() {
+    // Ensure the chat exists in the local collection before sending.
+    // For contacts migrated to LID, getChat(phone) returns null but
+    // getChat(lid) finds existing chats. For brand-new contacts,
+    // we force-open the chat via pupPage before sending.
+    const primed = await state.client.pupPage.evaluate(async (digitsArg, lidArg) => {
+      const WAWebWidFactory = window.require("WAWebWidFactory");
+      const WAWebFindChatAction = window.require("WAWebFindChatAction");
+      const Chat = window.require("WAWebCollections").Chat;
+
+      // Try LID wid first (existing chats are indexed by LID).
+      if (lidArg) {
+        const lidWid = WAWebWidFactory.createWid(lidArg);
+        let chat = Chat.get(lidWid);
+        if (chat) return { found: "lid", serialized: lidArg };
+
+        const res = await WAWebFindChatAction.findOrCreateLatestChat(lidWid);
+        chat = res?.chat || res;
+        if (chat && chat.id) return { found: "lid-created", serialized: chat.id._serialized };
+      }
+
+      // Fallback: phone-based wid.
+      const phoneWid = WAWebWidFactory.createWid(`${digitsArg}@c.us`);
+      let chat = Chat.get(phoneWid);
+      if (chat) return { found: "phone", serialized: `${digitsArg}@c.us` };
+
+      const res2 = await WAWebFindChatAction.findOrCreateLatestChat(phoneWid);
+      chat = res2?.chat || res2;
+      if (chat && chat.id) return { found: "phone-created", serialized: chat.id._serialized };
+
+      return { found: null, serialized: null };
+    }, digits, lid);
+
+    console.log(`[whatsapp:${state.name}] chat probe for ${digits}: found=${primed.found} chatId=${primed.serialized}`);
+
+    if (!primed.serialized) {
+      return { id: "", message_id: "", error: "chat_not_found" };
+    }
+
+    const result = await state.client.sendMessage(primed.serialized, body, { sendSeen: false });
+    const msgId = result?.id?._serialized || "";
+    console.log(`[whatsapp:${state.name}] sent to ${digits} via ${primed.serialized}, msgId=${msgId || "(lid-keyed)"}`);
+    return { id: msgId, message_id: msgId };
+  }
+
+  try {
+    return res.json(await trySend());
   } catch (error) {
     console.warn(`[whatsapp:${state.name}] send failed, self-healing:`, error?.message || error);
     await restartClient(state, { reason: "send_failure" });
@@ -266,12 +342,7 @@ app.post("/messages", async (req, res) => {
       return res.status(500).json({ error: error?.message || String(error) });
     }
     try {
-      const result = await state.client.sendMessage(`${digits}@c.us`, body);
-      return res.json({
-        id: result.id?._serialized || "",
-        message_id: result.id?._serialized || "",
-        self_healed: true
-      });
+      return res.json({ ...(await trySend()), self_healed: true });
     } catch (error2) {
       return res.status(500).json({ error: error2?.message || String(error2) });
     }

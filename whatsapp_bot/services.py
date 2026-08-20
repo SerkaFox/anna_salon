@@ -11,6 +11,7 @@ from bookings.client_actions import cancel_booking
 from bookings.utils import booking_payment_summary
 
 from . import bridge
+from .bridge import WhatsAppNumberNotFound
 from .models import WhatsAppConnection, WhatsAppMessage, WhatsAppTemplate
 
 logger = logging.getLogger(__name__)
@@ -441,6 +442,11 @@ def send_whatsapp_message(message):
 
     try:
         result = bridge.send_message(message.connection, to_phone=message.to_phone, body=message.body)
+    except WhatsAppNumberNotFound as exc:
+        message.status = WhatsAppMessage.Statuses.SKIPPED
+        message.error = str(exc)
+        message.save(update_fields=["status", "error", "updated_at"])
+        return message
     except bridge.WhatsAppBridgeError as exc:
         message.status = WhatsAppMessage.Statuses.FAILED
         message.error = str(exc)

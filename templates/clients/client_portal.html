@@ -68,7 +68,7 @@
               <strong>{{ booking.start_at|date:"d/m/Y H:i" }}</strong>
               <p>{{ booking.service }} · {{ booking.employee }}</p>
               <div class="portal-card-actions">
-                <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}">Ver reserva</a>
+                <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}">Ver y modificar</a>
                 {% if booking.can_cancel %}
                   <form method="post" action="{% url 'clients:booking_cancel' booking.id %}" data-cancel-form data-refundable="{% if booking.can_reschedule %}1{% else %}0{% endif %}">
                     {% csrf_token %}
@@ -164,7 +164,7 @@
       {{ booking_form.start_at }}
       {{ booking_form.end_at }}
       {{ booking_form.employee }}
-      {{ booking_form.zone }}
+      <div style="display:none">{{ booking_form.zone }}</div>
       {{ booking_form.apply_referral_reward }}
 
       {% if booking_form.non_field_errors %}
@@ -223,7 +223,6 @@
         <div class="portal-slot-grid" data-slot-grid></div>
         {{ booking_form.start_at.errors }}
         {{ booking_form.employee.errors }}
-        {{ booking_form.zone.errors }}
       </div>
 
       <div class="field">
@@ -309,7 +308,10 @@
             <article class="booking-list-card">
               <strong>{{ booking.start_at|date:"d/m/Y H:i" }}</strong>
               <p>{{ booking.service }} · {{ booking.employee }}</p>
-              <p><a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}">Ver reserva</a></p>
+              <div class="portal-card-actions">
+                <a class="btn btn-light btn-small" href="{% url 'clients:booking_detail' booking.id %}">Ver reserva</a>
+                <button class="btn btn-small btn-light" type="button" data-repeat-service="{{ booking.service_id }}">Repetir reserva</button>
+              </div>
               <p class="muted-text">{{ booking.get_status_display }} · {{ booking.client_price_snapshot }} €</p>
               {% if booking.online_payment_is_paid %}
                 <span class="dashboard-badge portal-payment-badge is-paid">Pagado online</span>
@@ -612,6 +614,19 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   renderDateStrip();
   loadSlots();
+});
+
+// "Repetir reserva" — pre-selects the service and scrolls to the booking form.
+document.querySelectorAll("[data-repeat-service]").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    const serviceId = btn.getAttribute("data-repeat-service");
+    const serviceSelect = document.getElementById("id_service");
+    const section = document.getElementById("nueva-reserva");
+    if (!serviceSelect || !serviceId) return;
+    serviceSelect.value = serviceId;
+    serviceSelect.dispatchEvent(new Event("change"));
+    if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 });
 </script>
 {% endblock %}

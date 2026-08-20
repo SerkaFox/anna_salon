@@ -623,7 +623,7 @@ img { max-width: 100%; }
   transition: color 0.24s ease, text-shadow 0.24s ease;
 }
 .lux-nav__links a:not(.btn-lux):hover { color: var(--gold-light); text-shadow: 0 0 22px rgba(240, 208, 145, 0.42); }
-.lux-menu-toggle { display: none; width: 46px; height: 42px; border: 1px solid var(--line); border-radius: 14px; background: rgba(7, 16, 24, 0.64); color: var(--text); }
+.lux-menu-toggle { display: none; width: 46px; height: 42px; border: 1px solid var(--line-strong); border-radius: 14px; background: rgba(7, 16, 24, 0.82); color: var(--text); cursor: pointer; }
 .lux-menu-toggle span { display: block; width: 20px; height: 2px; margin: 4px auto; background: var(--gold-light); border-radius: 99px; }
 
 .lux-hero__content {
@@ -995,7 +995,7 @@ img { max-width: 100%; }
   position: relative;
   min-height: 46vh;
   padding-bottom: 38px;
-  overflow: hidden;
+  overflow: visible;
   isolation: isolate;
 }
 .lux-page-header::before {

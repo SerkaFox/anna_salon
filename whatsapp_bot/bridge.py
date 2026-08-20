@@ -9,6 +9,10 @@ class WhatsAppBridgeError(Exception):
     pass
 
 
+class WhatsAppNumberNotFound(WhatsAppBridgeError):
+    """The destination number is not registered on WhatsApp."""
+
+
 def _bridge_url(path):
     base_url = getattr(settings, "WHATSAPP_BRIDGE_URL", "").rstrip("/")
     if not base_url:
@@ -31,6 +35,8 @@ def _request(path, payload=None, *, timeout=15):
             raw = response.read().decode("utf-8")
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        if exc.code == 422:
+            raise WhatsAppNumberNotFound(detail) from exc
         raise WhatsAppBridgeError(f"Bridge HTTP {exc.code}: {detail}") from exc
     except URLError as exc:
         raise WhatsAppBridgeError(f"Bridge unavailable: {exc.reason}") from exc
