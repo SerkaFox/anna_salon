@@ -25,6 +25,7 @@ from .services import (
     queue_booking_message,
     queue_booking_confirmation,
     queue_due_reminders,
+    send_password_reset_credentials,
     send_due_messages,
     send_whatsapp_message,
 )
@@ -89,6 +90,24 @@ class WhatsAppBotTests(TestCase):
 
     def test_normalize_spanish_mobile_phone(self):
         self.assertEqual(normalize_whatsapp_phone("600 111 222"), "+34600111222")
+
+    def test_password_reset_sends_password_in_its_own_message(self):
+        sent = send_password_reset_credentials(
+            self.client_obj,
+            username="ana600",
+            password="CopyMe123",
+        )
+
+        self.assertTrue(sent)
+        messages = list(
+            WhatsAppMessage.objects.filter(
+                kind=WhatsAppMessage.Kinds.PASSWORD_RESET
+            ).order_by("created_at", "id")
+        )
+        self.assertEqual(len(messages), 2)
+        self.assertNotIn("CopyMe123", messages[0].body)
+        self.assertIn("ana600", messages[0].body)
+        self.assertEqual(messages[1].body, "CopyMe123")
 
     def test_queue_confirmation_is_idempotent(self):
         booking = self._booking(timezone.now() + timedelta(days=3))

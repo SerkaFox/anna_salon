@@ -19,6 +19,7 @@ from employees.models import (
     EmployeeTimeBlock,
     EmployeeWeeklyShift,
 )
+from mobile_api.serializers import BookingSerializer
 from payments.models import Payment, PaymentRefund
 from salon.models import SalonSettings, Zone
 from services_app.models import Service
@@ -173,6 +174,34 @@ class MobileApiMvpTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["username"], "owner")
+
+    def test_client_profile_name_update_is_visible_in_existing_booking(self):
+        client_user = User.objects.create_user(
+            username="maria-client",
+            password="testpass123",
+            role=User.ROLE_CLIENT,
+            first_name="Maria",
+            last_name="Lopez",
+        )
+        self.client_obj.user = client_user
+        self.client_obj.save(update_fields=["user"])
+        booking = self._create_booking(client=self.client_obj)
+        self._auth(client_user)
+
+        response = self.api_client.patch(
+            reverse("mobile_api:me"),
+            {"first_name": "Marina", "last_name": "Vega"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.client_obj.refresh_from_db()
+        booking.refresh_from_db()
+        self.assertEqual(self.client_obj.full_name, "Marina Vega")
+        self.assertEqual(
+            BookingSerializer(booking).data["client_name"],
+            "Marina Vega",
+        )
 
     def test_owner_can_update_deposit_percent_from_cashbox(self):
         self._auth(self.owner_user)

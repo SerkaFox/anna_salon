@@ -307,6 +307,31 @@ class StripePaymentTests(TestCase):
             salon_amount_snapshot=Decimal("30.00"),
         )
 
+    def test_compact_public_payment_url_redirects_to_stripe(self):
+        Payment.objects.create(
+            booking=self.booking,
+            amount=Decimal("10.00"),
+            currency="eur",
+            order_number="stripe-a1b2c3d4e5f6",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PENDING,
+            checkout_url="https://checkout.stripe.test/a-very-long-session-url",
+        )
+
+        response = self.client.get(
+            reverse(
+                "payments:public_payment",
+                kwargs={"reference": "a1b2c3d4e5f6"},
+            )
+        )
+
+        self.assertRedirects(
+            response,
+            "https://checkout.stripe.test/a-very-long-session-url",
+            fetch_redirect_response=False,
+        )
+
     @patch("payments.stripe_service.stripe.checkout.Session.create")
     def test_panel_checkout_creates_payment_and_returns_link(self, mocked_create):
         mocked_create.return_value = SimpleNamespace(

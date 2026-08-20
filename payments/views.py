@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from django.http import HttpResponseBadRequest, HttpResponse
+from django.http import Http404, HttpResponseBadRequest, HttpResponse
 import stripe
 
 from accounts.permissions import get_client_profile
@@ -19,6 +19,26 @@ from bookings.services import create_booking_prepayment
 from .models import Payment
 from .redsys import RedsysSignatureError, is_successful_response, sanitize_redsys_payload, verify_signature
 from .stripe_service import handle_stripe_event, verify_webhook_signature
+
+
+def public_payment(request, reference):
+    """Resolve a compact BRIMOON payment URL to the active Stripe checkout."""
+    payment = Payment.objects.filter(
+        order_number=f"stripe-{reference}",
+        provider=Payment.Providers.STRIPE,
+    ).first()
+    if payment is None:
+        raise Http404
+    if payment.status not in {
+        Payment.Statuses.PENDING,
+        Payment.Statuses.EXTRA_PAYMENT_PENDING,
+    } or not payment.checkout_url:
+        return render(
+            request,
+            "payments/stripe_result.html",
+            {"status": "unavailable"},
+        )
+    return redirect(payment.checkout_url)
 
 
 @csrf_exempt

@@ -184,7 +184,7 @@ TEMPLATE_DEFAULTS = {
     WhatsAppMessage.Kinds.PREPAYMENT_REQUEST: (
         "Hola {client_name}. Para confirmar tu cita en {salon_name} del {date} "
         "a las {time} ({service_name}), paga {payment_amount} EUR en los próximos "
-        "30 minutos:\n{payment_url}\n\nSi no se recibe el pago antes de "
+        "30 minutos:\n👉 Pagar reserva: {payment_url}\n\nSi no se recibe el pago antes de "
         "{payment_deadline}, la cita se cancelará automáticamente."
     ),
     WhatsAppMessage.Kinds.PREPAYMENT_TIMEOUT_CANCELLED: (
@@ -194,8 +194,8 @@ TEMPLATE_DEFAULTS = {
     ),
     WhatsAppMessage.Kinds.PASSWORD_RESET: (
         "Hola {client_name}. Hemos creado un acceso temporal para {salon_name}.\n\n"
-        "Usuario: {username}\nContraseña temporal: {password}\n\n"
-        "Acceso: {login_url}\n\nDespués de entrar, cambia la contraseña desde tu perfil."
+        "Usuario: {username}\nAcceso: {login_url}\n\n"
+        "Después de entrar, cambia la contraseña desde tu perfil."
     ),
     WhatsAppMessage.Kinds.REVIEW_REQUEST: (
         "Hola {client_name}. Gracias por visitarnos en {salon_name}.\n\n"
@@ -231,7 +231,7 @@ TEMPLATE_VARIABLES = {
     WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED: "{client_name} {salon_name} {date} {time} {service_name} {refund_message}",
     WhatsAppMessage.Kinds.PREPAYMENT_REQUEST: "{client_name} {salon_name} {date} {time} {service_name} {payment_amount} {payment_url} {payment_deadline}",
     WhatsAppMessage.Kinds.PREPAYMENT_TIMEOUT_CANCELLED: "{client_name} {salon_name} {date} {time} {service_name}",
-    WhatsAppMessage.Kinds.PASSWORD_RESET: "{client_name} {salon_name} {username} {password} {login_url}",
+    WhatsAppMessage.Kinds.PASSWORD_RESET: "{client_name} {salon_name} {username} {login_url}",
     WhatsAppMessage.Kinds.WELCOME_CREDENTIALS: "{client_name} {salon_name} {username} {password} {portal_url}",
     WhatsAppMessage.Kinds.BIRTHDAY_GREETING: "{client_name} {salon_name} {offer}",
     WhatsAppMessage.Kinds.WAITLIST_JOINED: '{client_name} {salon_name} {service_name} {date} {time_range} {phone} {email}',

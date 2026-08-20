@@ -170,7 +170,7 @@ def queue_booking_rescheduled(booking):
 
 
 def send_password_reset_credentials(client, *, username, password):
-    """Send temporary login credentials and report actual bridge acceptance."""
+    """Send recovery details, followed by a password-only copyable message."""
     context = {
         "client_name": client.first_name or client.full_name or "hola",
         "salon_name": _salon_name(),
@@ -180,6 +180,16 @@ def send_password_reset_credentials(client, *, username, password):
     }
     template = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.PASSWORD_RESET)
     body = template.format_map(context)
+    # The bridge currently supports plain text only (no native copy button).
+    # Keep the password out of the explanatory message so the next WhatsApp
+    # bubble can be copied without any surrounding text. This also cleans up
+    # older/custom templates that still contain a line with {password}.
+    body_lines = [line for line in body.splitlines() if password not in line]
+    body = "\n".join(body_lines).strip()
+    body += (
+        "\n\nTe enviamos la contraseña temporal en el siguiente mensaje "
+        "para que puedas copiarla fácilmente."
+    )
     phone = normalize_whatsapp_phone(client.phone or client.alternate_phone)
     if not phone:
         return False
@@ -192,7 +202,19 @@ def send_password_reset_credentials(client, *, username, password):
         scheduled_for=timezone.now(),
     )
     send_whatsapp_message(message)
-    return message.status == WhatsAppMessage.Statuses.SENT
+    if message.status != WhatsAppMessage.Statuses.SENT:
+        return False
+
+    password_message = WhatsAppMessage.objects.create(
+        connection=message.connection,
+        client=client,
+        kind=WhatsAppMessage.Kinds.PASSWORD_RESET,
+        to_phone=phone,
+        body=password,
+        scheduled_for=timezone.now(),
+    )
+    send_whatsapp_message(password_message)
+    return password_message.status == WhatsAppMessage.Statuses.SENT
 
 
 def queue_review_request(booking):

@@ -7,6 +7,7 @@ import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
+from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, DecimalField, Q, Sum
 from django.db.models.functions import Coalesce
@@ -494,14 +495,38 @@ class MeView(MobileApiMixin, APIView):
             for key, value in serializer.validated_data.items()
             if key in {"first_name", "last_name", "email"}
         }
-        for field, value in profile_fields.items():
-            setattr(request.user, field, value)
-        new_password = serializer.validated_data.get("new_password")
-        if new_password:
-            request.user.set_password(new_password)
-            request.user.save()
-        elif profile_fields:
-            request.user.save(update_fields=[*profile_fields.keys()])
+        with transaction.atomic():
+            for field, value in profile_fields.items():
+                setattr(request.user, field, value)
+            new_password = serializer.validated_data.get("new_password")
+            if new_password:
+                request.user.set_password(new_password)
+                request.user.save()
+            elif profile_fields:
+                request.user.save(update_fields=[*profile_fields.keys()])
+
+            # Bookings reference Client/Employee profiles, while this endpoint
+            # edits the auth user. Keep both sides synchronized so existing
+            # calendar entries immediately render the new name.
+            client = get_client_profile(request.user)
+            if client is not None:
+                client_updates = []
+                for field in ("first_name", "last_name", "email"):
+                    if field in profile_fields:
+                        setattr(client, field, profile_fields[field])
+                        client_updates.append(field)
+                if client_updates:
+                    client.save(update_fields=[*client_updates, "updated_at"])
+
+            employee = getattr(request.user, "employee_profile", None)
+            if employee is not None:
+                employee_updates = []
+                for field in ("first_name", "last_name", "email"):
+                    if field in profile_fields:
+                        setattr(employee, field, profile_fields[field])
+                        employee_updates.append(field)
+                if employee_updates:
+                    employee.save(update_fields=[*employee_updates, "updated_at"])
         return Response(self._payload(request))
 
 

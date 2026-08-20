@@ -17,6 +17,14 @@ from bookings.services import create_booking_prepayment
 from .models import Payment, PaymentRefund
 
 
+def get_public_payment_url(payment, request):
+    """Return a compact, branded URL instead of exposing Stripe's long URL."""
+    reference = payment.order_number.removeprefix("stripe-")
+    return request.build_absolute_uri(
+        reverse("payments:public_payment", kwargs={"reference": reference})
+    )
+
+
 def _decimal_setting(value):
     if value in {None, ""}:
         return None
@@ -165,7 +173,7 @@ def request_booking_prepayment(booking, request, *, timeout_minutes=30):
         kind=WhatsAppMessage.Kinds.PREPAYMENT_REQUEST,
         extra_context={
             "payment_amount": f"{payment.amount:.2f}",
-            "payment_url": payment.checkout_url,
+            "payment_url": get_public_payment_url(payment, request),
             "payment_deadline": local_deadline.strftime("%H:%M"),
         },
     )
