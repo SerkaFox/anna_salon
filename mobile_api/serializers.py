@@ -764,6 +764,8 @@ class BookingSerializer(serializers.ModelSerializer):
             "prepayment_checkout_url",
             "price_snapshot",
             "duration_snapshot",
+            "extra_duration_minutes",
+            "cleanup_duration_minutes",
             "client_price_snapshot",
             "discount_amount_snapshot",
             "reward_rule",
@@ -930,6 +932,12 @@ class BookingWriteSerializer(serializers.Serializer):
     apply_referral_reward = serializers.BooleanField(required=False, default=False)
     reward_rule = serializers.PrimaryKeyRelatedField(queryset=ClientRewardRule.objects.filter(is_active=True), allow_null=True, required=False)
     prepayment_required = serializers.BooleanField(required=False)
+    extra_duration_minutes = serializers.IntegerField(
+        required=False, min_value=0, max_value=180
+    )
+    cleanup_duration_minutes = serializers.IntegerField(
+        required=False, min_value=0, max_value=90
+    )
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -972,6 +980,8 @@ class BookingWriteSerializer(serializers.Serializer):
             values["client"] = client_profile
             values["status"] = Booking.Statuses.PENDING
             values["source"] = Booking.Sources.WEBSITE
+            attrs["extra_duration_minutes"] = 0
+            attrs["cleanup_duration_minutes"] = 0
         elif not is_admin_user(user):
             requested_employee = values.get("employee") or employee_profile
             if requested_employee and not _can_schedule_for_employee(user, requested_employee):
@@ -1024,8 +1034,27 @@ class BookingWriteSerializer(serializers.Serializer):
             raise serializers.ValidationError({"employee": ["Este empleado no realiza el servicio seleccionado."]})
 
         start_at = values["start_at"]
-        total_duration = sum(item.duration_minutes for item in selected_services)
-        if not values.get("end_at") or "start_at" in attrs or "service" in attrs or "services" in attrs:
+        extra_duration = attrs.get(
+            "extra_duration_minutes",
+            instance.extra_duration_minutes if instance else 0,
+        )
+        cleanup_duration = attrs.get(
+            "cleanup_duration_minutes",
+            instance.cleanup_duration_minutes if instance else 0,
+        )
+        total_duration = (
+            sum(item.duration_minutes for item in selected_services)
+            + extra_duration
+            + cleanup_duration
+        )
+        if (
+            not values.get("end_at")
+            or "start_at" in attrs
+            or "service" in attrs
+            or "services" in attrs
+            or "extra_duration_minutes" in attrs
+            or "cleanup_duration_minutes" in attrs
+        ):
             values["end_at"] = start_at + timedelta(minutes=total_duration)
 
         if service.requires_zone and values.get("zone") is None:
@@ -1065,6 +1094,7 @@ class BookingWriteSerializer(serializers.Serializer):
             data=form_data,
             instance=instance,
             allowed_employee=None,
+            allow_outside_schedule=not bool(client_profile),
             allowed_clients=Client.objects.filter(pk=client_profile.pk) if client_profile else Client.objects.filter(is_active=True).order_by("first_name", "last_name"),
         )
         if not form.is_valid():
@@ -1072,6 +1102,8 @@ class BookingWriteSerializer(serializers.Serializer):
 
         self._booking_form = form
         self._selected_services = selected_services
+        self._extra_duration_minutes = extra_duration
+        self._cleanup_duration_minutes = cleanup_duration
         self._prepayment_required_supplied = "prepayment_required" in attrs
         self._prepayment_required = True if client_profile else attrs.get("prepayment_required", False)
         return attrs
@@ -1125,7 +1157,13 @@ class BookingWriteSerializer(serializers.Serializer):
             booking.service_items_snapshot[-1]["client_price"] = str(
                 (client_total - allocated).quantize(Decimal("0.01"))
             )
-        booking.duration_snapshot = sum(item.duration_minutes for item in services)
+        booking.extra_duration_minutes = self._extra_duration_minutes
+        booking.cleanup_duration_minutes = self._cleanup_duration_minutes
+        booking.duration_snapshot = (
+            sum(item.duration_minutes for item in services)
+            + booking.extra_duration_minutes
+            + booking.cleanup_duration_minutes
+        )
         booking.price_snapshot = original_total
         booking.original_client_price_snapshot = original_total
         booking.discount_amount_snapshot = discount_total
@@ -1144,7 +1182,8 @@ class BookingWriteSerializer(serializers.Serializer):
                 else Booking.Statuses.CONFIRMED
             )
         booking.save(update_fields=[
-            "service_items_snapshot", "duration_snapshot", "price_snapshot",
+            "service_items_snapshot", "duration_snapshot", "extra_duration_minutes",
+            "cleanup_duration_minutes", "price_snapshot",
             "original_client_price_snapshot", "discount_amount_snapshot",
             "client_price_snapshot", "employee_amount_snapshot",
             "salon_amount_snapshot", "prepayment_policy", "status", "updated_at",

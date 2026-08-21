@@ -94,7 +94,7 @@ def get_employee_schedule(employee, date_obj):
     }
 
 
-def fits_employee_schedule(employee, start_at, end_at):
+def fits_employee_schedule(employee, start_at, end_at, allow_outside_schedule=False):
     local_start = timezone.localtime(start_at)
     local_end = timezone.localtime(end_at)
 
@@ -102,14 +102,16 @@ def fits_employee_schedule(employee, start_at, end_at):
         return False, "La reserva debe empezar y terminar el mismo día."
 
     schedule = get_employee_schedule(employee, local_start.date())
-    if not schedule:
+    if not schedule and not allow_outside_schedule:
         return False, "El empleado no trabaja ese día."
 
-    if start_at < schedule["start_at"] or end_at > schedule["end_at"]:
+    if schedule and not allow_outside_schedule and (
+        start_at < schedule["start_at"] or end_at > schedule["end_at"]
+    ):
         return False, "La reserva queda fuera del turno del empleado."
 
-    break_start = schedule["break_start_at"]
-    break_end = schedule["break_end_at"]
+    break_start = schedule["break_start_at"] if schedule else None
+    break_end = schedule["break_end_at"] if schedule else None
     if break_start and break_end and overlaps(start_at, end_at, break_start, break_end):
         return False, "La reserva cae dentro de la pausa del empleado."
 
@@ -220,8 +222,13 @@ def recurring_time_block_conflicts(employee, weekday, start_time, end_time, date
     return recurring_conflict.exists()
 
 
-def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking_id=None):
-    fits_schedule, _message = fits_employee_schedule(employee, start_at, end_at)
+def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking_id=None, allow_outside_schedule=False):
+    fits_schedule, _message = fits_employee_schedule(
+        employee,
+        start_at,
+        end_at,
+        allow_outside_schedule=allow_outside_schedule,
+    )
     if not fits_schedule:
         return False
 
@@ -307,10 +314,10 @@ def find_available_slots_for_day(date_obj, employee, service, zone=None, exclude
     return slots
 
 
-def build_available_slots_for_day(date_obj, employee, service, zone=None, exclude_booking_id=None, step_minutes=SLOT_STEP_MINUTES, duration_minutes=None):
+def build_available_slots_for_day(date_obj, employee, service, zone=None, exclude_booking_id=None, step_minutes=SLOT_STEP_MINUTES, duration_minutes=None, allow_outside_schedule=False):
     schedule = get_employee_schedule(employee, date_obj)
     default_start, default_end = get_work_bounds(date_obj)
-    if not schedule:
+    if not schedule and not allow_outside_schedule:
         return [], [
             {
                 "start_at": default_start,
@@ -319,10 +326,10 @@ def build_available_slots_for_day(date_obj, employee, service, zone=None, exclud
             }
         ]
 
-    work_start = schedule["start_at"]
-    work_end = schedule["end_at"]
-    break_start = schedule["break_start_at"]
-    break_end = schedule["break_end_at"]
+    work_start = default_start if allow_outside_schedule else schedule["start_at"]
+    work_end = default_end if allow_outside_schedule else schedule["end_at"]
+    break_start = schedule["break_start_at"] if schedule else None
+    break_end = schedule["break_end_at"] if schedule else None
     time_blocks = get_employee_time_block_occurrences(employee, date_obj)
     duration = timedelta(minutes=duration_minutes or service.duration_minutes)
     step = timedelta(minutes=step_minutes)
@@ -331,10 +338,10 @@ def build_available_slots_for_day(date_obj, employee, service, zone=None, exclud
     slots = []
     blocked = []
 
-    if default_start < work_start:
-        blocked.append({"start_at": default_start, "end_at": work_start, "reason": "Fuera de horario"})
-    if work_end < default_end:
-        blocked.append({"start_at": work_end, "end_at": default_end, "reason": "Fuera de horario"})
+    if schedule and default_start < schedule["start_at"]:
+        blocked.append({"start_at": default_start, "end_at": schedule["start_at"], "reason": "Fuera de horario"})
+    if schedule and schedule["end_at"] < default_end:
+        blocked.append({"start_at": schedule["end_at"], "end_at": default_end, "reason": "Fuera de horario"})
 
     if break_start and break_end:
         blocked.append(
@@ -421,6 +428,7 @@ def build_available_slots_for_day(date_obj, employee, service, zone=None, exclud
             start_at=current,
             end_at=slot_end,
             exclude_booking_id=exclude_booking_id,
+            allow_outside_schedule=allow_outside_schedule,
         ):
             slots.append({
                 "start_at": current,

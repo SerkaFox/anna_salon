@@ -80,6 +80,7 @@ class BookingForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         allowed_employee = kwargs.pop("allowed_employee", None)
         allowed_clients = kwargs.pop("allowed_clients", None)
+        self.allow_outside_schedule = kwargs.pop("allow_outside_schedule", False)
         super().__init__(*args, **kwargs)
 
         self.fields["zone"].required = False
@@ -211,7 +212,12 @@ class BookingForm(forms.ModelForm):
                 raise ValidationError("La reserva debe empezar y terminar el mismo día.")
 
         if employee and start_at and end_at:
-            fits_schedule, schedule_message = fits_employee_schedule(employee, start_at, end_at)
+            fits_schedule, schedule_message = fits_employee_schedule(
+                employee,
+                start_at,
+                end_at,
+                allow_outside_schedule=self.allow_outside_schedule,
+            )
             if not fits_schedule:
                 raise ValidationError(schedule_message)
 

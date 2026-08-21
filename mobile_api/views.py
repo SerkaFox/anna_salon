@@ -1310,7 +1310,12 @@ class BookingEditServicesView(MobileApiMixin, APIView):
             raise PermissionDenied("Sin acceso a esta reserva.")
         service = generics.get_object_or_404(Service, pk=request.data.get("service"), is_active=True)
         try:
-            result = change_booking_service(booking, service=service, request=request)
+            result = change_booking_service(
+                booking,
+                service=service,
+                request=request,
+                allow_outside_schedule=get_client_profile(request.user) is None,
+            )
         except Exception as exc:
             raise serializers.ValidationError({"booking": [str(exc)]}) from exc
         booking = result["booking"]
@@ -2093,6 +2098,7 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         booking = data.get("booking")
+        allow_outside_schedule = get_client_profile(request.user) is None
         if not data.get("employee"):
             return self._team_slots(request, data, booking)
         slots, blocked = build_available_slots_for_day(
@@ -2103,6 +2109,7 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
             exclude_booking_id=booking.pk if booking else None,
             step_minutes=MOBILE_SLOT_STEP_MINUTES,
             duration_minutes=data.get("duration_minutes"),
+            allow_outside_schedule=allow_outside_schedule,
         )
         return Response(
             {
@@ -2112,6 +2119,7 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
                 "zone": data["zone"].pk if data.get("zone") else None,
                 "duration": data.get("duration_minutes") or data["service"].duration_minutes,
                 "step_minutes": MOBILE_SLOT_STEP_MINUTES,
+                "allow_outside_schedule": allow_outside_schedule,
                 "slots": [
                     {
                         "start_at": _format_api_datetime(slot["start_at"]),

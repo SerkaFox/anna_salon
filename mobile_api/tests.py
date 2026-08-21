@@ -625,6 +625,50 @@ class MobileApiMvpTests(TestCase):
         )
         self.assertEqual(response.json()["service_name"], "Color + Corte")
 
+    def test_staff_can_add_extra_and_cleanup_time(self):
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(
+                zone=None,
+                start_at="2026-04-27T15:00:00+02:00",
+                extra_duration_minutes=30,
+                cleanup_duration_minutes=15,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(booking.extra_duration_minutes, 30)
+        self.assertEqual(booking.cleanup_duration_minutes, 15)
+        self.assertEqual(booking.duration_snapshot, 105)
+        self.assertEqual(
+            booking.end_at,
+            booking.start_at + timedelta(minutes=105),
+        )
+        self.assertEqual(booking.client_price_snapshot, Decimal("50.00"))
+
+    def test_staff_can_book_outside_employee_shift(self):
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(
+                zone=None,
+                start_at="2026-04-27T18:00:00+02:00",
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(
+            booking.end_at,
+            timezone.make_aware(datetime(2026, 4, 27, 19, 0)),
+        )
+
     @patch("mobile_api.views.request_booking_prepayment")
     def test_client_booking_always_requires_prepayment(self, request_prepayment):
         client_user = User.objects.create_user(
@@ -652,6 +696,33 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.REQUIRED)
         self.assertEqual(booking.status, Booking.Statuses.PENDING)
         request_prepayment.assert_called_once()
+
+    @patch("mobile_api.views.request_booking_prepayment")
+    def test_client_cannot_book_outside_employee_shift(self, request_prepayment):
+        client_user = User.objects.create_user(
+            username="maria-outside-shift",
+            password="testpass123",
+            role=User.ROLE_CLIENT,
+        )
+        self.client_obj.user = client_user
+        self.client_obj.save(update_fields=["user"])
+        self._auth(client_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            {
+                "employee": self.employee.pk,
+                "service": self.service.pk,
+                "start_at": "2026-04-27T18:00:00+02:00",
+                "extra_duration_minutes": 180,
+                "cleanup_duration_minutes": 90,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("fuera del turno", str(response.json()).lower())
+        request_prepayment.assert_not_called()
 
     @patch("mobile_api.views.request_booking_prepayment")
     def test_manual_booking_can_request_prepayment(self, request_prepayment):
@@ -1157,6 +1228,27 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(reschedule_response.status_code, 200)
         self.assertIn("10:00", {slot["label"] for slot in reschedule_response.json()["slots"]})
         self.assertNotIn("Reserva", {item["reason"] for item in reschedule_response.json()["blocked"]})
+
+    def test_staff_availability_includes_hatched_time_outside_shift(self):
+        EmployeeWeeklyShift.objects.filter(
+            employee=self.employee, weekday=0
+        ).update(start_time=time(10, 0), end_time=time(17, 0))
+        self._auth(self.owner_user)
+
+        response = self.api_client.get(
+            reverse("mobile_api:availability_slots"),
+            {
+                "date": "2026-04-27",
+                "employee": self.employee.pk,
+                "service": self.no_zone_service.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["allow_outside_schedule"])
+        labels = {slot["label"] for slot in response.json()["slots"]}
+        self.assertIn("09:00", labels)
+        self.assertIn("17:00", labels)
 
     def test_availability_slots_returns_spanish_validation_errors(self):
         self._auth(self.employee_user)

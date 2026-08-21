@@ -113,7 +113,11 @@ def _apply_service_snapshots(booking, service):
     booking.original_client_price_snapshot = original_price
     booking.client_price_snapshot = client_price
     booking.discount_amount_snapshot = Decimal("0.00")
-    booking.duration_snapshot = service.duration_minutes
+    booking.duration_snapshot = (
+        service.duration_minutes
+        + booking.extra_duration_minutes
+        + booking.cleanup_duration_minutes
+    )
     booking.service_items_snapshot = [
         {
             "service_id": service.pk,
@@ -128,7 +132,9 @@ def _apply_service_snapshots(booking, service):
     booking.salon_amount_snapshot = salon_amount
 
 
-def change_booking_service(booking, *, service, request=None):
+def change_booking_service(
+    booking, *, service, request=None, allow_outside_schedule=False
+):
     if not isinstance(service, Service):
         service = Service.objects.get(pk=service)
     if not booking.employee.services.filter(pk=service.pk).exists():
@@ -136,11 +142,25 @@ def change_booking_service(booking, *, service, request=None):
 
     old_total = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
     paid_amount = booking_paid_amount(booking)
-    new_end_at = booking.start_at + timedelta(minutes=service.duration_minutes)
+    new_end_at = booking.start_at + timedelta(
+        minutes=(
+            service.duration_minutes
+            + booking.extra_duration_minutes
+            + booking.cleanup_duration_minutes
+        )
+    )
     zone = booking.zone
     if service.requires_zone and zone is None:
         zone = find_available_zone(service, booking.start_at, new_end_at, exclude_booking_id=booking.pk)
-    if not is_slot_available(booking.employee, service, zone, booking.start_at, new_end_at, exclude_booking_id=booking.pk):
+    if not is_slot_available(
+        booking.employee,
+        service,
+        zone,
+        booking.start_at,
+        new_end_at,
+        exclude_booking_id=booking.pk,
+        allow_outside_schedule=allow_outside_schedule,
+    ):
         raise ValidationError("No hay disponibilidad para la nueva duración del servicio.")
 
     _apply_service_snapshots(booking, service)
