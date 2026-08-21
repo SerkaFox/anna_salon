@@ -1713,6 +1713,50 @@ input[type="date"].lux-input::-webkit-calendar-picker-indicator {
   font-size: 1.6rem;
   cursor: pointer;
 }
+.mandatory-prepayment-modal {
+  width: min(720px, calc(100vw - 24px));
+  border-color: rgba(240, 208, 145, 0.62);
+}
+.mandatory-prepayment-modal__panel {
+  padding: clamp(30px, 6vw, 56px);
+}
+.mandatory-prepayment-modal__body {
+  justify-items: center;
+  text-align: center;
+  gap: 22px;
+}
+.mandatory-prepayment-modal__body h3 {
+  max-width: 560px;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1.04;
+}
+.mandatory-prepayment-modal__body > p {
+  max-width: 590px;
+  color: var(--text);
+  font-size: clamp(1.05rem, 2.4vw, 1.28rem);
+  line-height: 1.65;
+}
+.mandatory-prepayment-modal__icon {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  border: 1px solid rgba(240, 208, 145, 0.58);
+  border-radius: 999px;
+  background: rgba(240, 208, 145, 0.12);
+  color: var(--gold-light);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 2.2rem;
+}
+.mandatory-prepayment-modal__actions {
+  display: grid;
+  width: min(100%, 520px);
+  gap: 12px;
+}
+.mandatory-prepayment-modal__actions .btn-lux {
+  width: 100%;
+  justify-content: center;
+}
 .instagram-gallery-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

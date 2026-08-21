@@ -441,9 +441,19 @@ def detect_public_language(request):
     return DEFAULT_PUBLIC_LANGUAGE
 
 
+REQUIRED_PREPAYMENT_ASIDE_TEXT = {
+    "es": "Elige la hora y realiza el prepago obligatorio. Solo entonces la cita y el horario quedan confirmados.",
+    "ru": "Выберите время и внесите обязательную предоплату. Только после этого запись и время будут подтверждены.",
+    "en": "Choose a time and make the required prepayment. The appointment and time are confirmed only after payment.",
+    "de": "Wählen Sie eine Uhrzeit und leisten Sie die obligatorische Anzahlung. Erst danach sind Termin und Uhrzeit bestätigt.",
+    "fr": "Choisissez l’heure et effectuez l’acompte obligatoire. Le rendez-vous et l’heure ne sont confirmés qu’après le paiement.",
+}
+
+
 def public_texts(language):
     language = normalize_public_language(language)
     merged = {**PUBLIC_TRANSLATIONS[DEFAULT_PUBLIC_LANGUAGE], **PUBLIC_TRANSLATIONS.get(language, {})}
+    merged["public_booking_aside_text"] = REQUIRED_PREPAYMENT_ASIDE_TEXT[language]
     return {k: _subst(v) for k, v in merged.items()}
 
 

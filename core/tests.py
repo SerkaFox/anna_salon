@@ -1,5 +1,7 @@
 from datetime import timedelta, time
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.test import Client as DjangoClient, TestCase
 from django.urls import reverse
@@ -124,7 +126,13 @@ class PublicBookingTests(TestCase):
         self.assertGreater(len(payload["slots"]), 0)
         self.assertEqual(payload["slots"][0]["employees"][0]["id"], self.employee.pk)
 
-    def test_public_booking_creates_user_client_and_confirmed_booking(self):
+    @patch("core.views.request_booking_prepayment")
+    def test_public_booking_creates_pending_booking_with_required_prepayment(
+        self, request_prepayment
+    ):
+        request_prepayment.return_value = SimpleNamespace(
+            checkout_url="https://checkout.stripe.test/public"
+        )
         slot_response = self.browser.get(
             reverse("public_booking_slots"),
             {"service": self.service.pk, "date": self.date},
@@ -143,17 +151,28 @@ class PublicBookingTests(TestCase):
                 "password": "secret123",
                 "contact": "+34600111222",
             },
+            HTTP_ACCEPT="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
 
-        self.assertRedirects(response, reverse("clients:portal"))
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            response.json()["checkout_url"],
+            "https://checkout.stripe.test/public",
+        )
+        self.assertIn("whatsapp_action", response.json())
         booking = Booking.objects.get(client__first_name="Nueva")
-        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
+        self.assertEqual(booking.status, Booking.Statuses.PENDING)
+        self.assertEqual(
+            booking.prepayment_policy, Booking.PrepaymentPolicies.REQUIRED
+        )
         self.assertEqual(booking.source, Booking.Sources.WEBSITE)
         self.assertEqual(booking.service, self.service)
         user = User.objects.get(client_profile__first_name="Nueva")
         self.assertEqual(user.role, User.ROLE_CLIENT)
         self.assertTrue(user.check_password("secret123"))
         self.assertTrue(Client.objects.filter(user=user).exists())
+        request_prepayment.assert_called_once()
 
     def test_public_booking_rejects_taken_slot(self):
         slot_response = self.browser.get(

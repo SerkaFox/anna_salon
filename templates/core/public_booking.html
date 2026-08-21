@@ -234,6 +234,22 @@
   </div>
 </dialog>
 
+<dialog class="waitlist-modal mandatory-prepayment-modal" data-mandatory-prepayment-modal>
+  <div class="waitlist-modal__panel mandatory-prepayment-modal__panel">
+    <div class="waitlist-modal__body mandatory-prepayment-modal__body">
+      <span class="mandatory-prepayment-modal__icon" aria-hidden="true">€</span>
+      <span class="lux-kicker">{{ salon_name }}</span>
+      <h3 data-prepayment-title>Tu reserva todavía no está confirmada</h3>
+      <p data-prepayment-text>Para fijar la fecha y la hora debes realizar el prepago obligatorio. Si no pagas en 30 minutos, la reserva no se formalizará y otra persona podrá ocupar ese horario.</p>
+      <div class="mandatory-prepayment-modal__actions">
+        <a class="btn-lux btn-lux-primary btn-lux-large" href="#" data-prepayment-pay>Pagar ahora</a>
+        <button class="btn-lux btn-lux-outline btn-lux-large" type="button" data-prepayment-whatsapp>Recibir enlace por WhatsApp</button>
+      </div>
+      <p class="field-help" data-prepayment-status hidden></p>
+    </div>
+  </div>
+</dialog>
+
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('[data-public-booking-form]');
@@ -278,12 +294,51 @@
     const passwordRecoveryIdentifier = document.querySelector('[data-password-recovery-identifier]');
     const passwordRecoveryMessage = document.querySelector('[data-password-recovery-message]');
     const passwordRecoverySubmit = document.querySelector('[data-password-recovery-submit]');
+    const prepaymentModal = document.querySelector('[data-mandatory-prepayment-modal]');
+    const prepaymentTitle = document.querySelector('[data-prepayment-title]');
+    const prepaymentText = document.querySelector('[data-prepayment-text]');
+    const prepaymentPay = document.querySelector('[data-prepayment-pay]');
+    const prepaymentWhatsApp = document.querySelector('[data-prepayment-whatsapp]');
+    const prepaymentStatus = document.querySelector('[data-prepayment-status]');
     const waitlistEmployeesNode = document.getElementById('waitlist-employees-data');
     const waitlistEmployees = waitlistEmployeesNode ? JSON.parse(waitlistEmployeesNode.textContent || '[]') : [];
     let lastSlots = [];
     let activeDateRequest = 0;
     let nextAvailableSuggestion = null;
     const currentLanguage = '{{ public_language|default:"es"|escapejs }}';
+    const prepaymentCopy = {
+      es: {
+        title: 'Tu reserva todavía no está confirmada',
+        text: 'Para fijar la fecha y la hora debes realizar el prepago obligatorio. Si no pagas en 30 minutos, la reserva no se formalizará y otra persona podrá ocupar ese horario.',
+        pay: 'Pagar ahora', whatsapp: 'Recibir enlace por WhatsApp'
+      },
+      ru: {
+        title: 'Запись ещё не подтверждена',
+        text: 'Чтобы закрепить дату и время, внесите обязательную предоплату. Если не оплатить в течение 30 минут, запись не будет оформлена и это время сможет занять другой клиент.',
+        pay: 'Оплатить сейчас', whatsapp: 'Получить ссылку в WhatsApp'
+      },
+      en: {
+        title: 'Your booking is not confirmed yet',
+        text: 'To secure the date and time, the required prepayment must be made. If it is not paid within 30 minutes, the booking will not be completed and another client may take the slot.',
+        pay: 'Pay now', whatsapp: 'Receive link by WhatsApp'
+      },
+      de: {
+        title: 'Ihr Termin ist noch nicht bestätigt',
+        text: 'Um Datum und Uhrzeit zu sichern, ist die obligatorische Anzahlung erforderlich. Ohne Zahlung innerhalb von 30 Minuten wird die Buchung nicht abgeschlossen und der Termin kann anderweitig vergeben werden.',
+        pay: 'Jetzt bezahlen', whatsapp: 'Link per WhatsApp erhalten'
+      },
+      fr: {
+        title: 'Votre rendez-vous n’est pas encore confirmé',
+        text: 'Pour bloquer la date et l’heure, l’acompte obligatoire doit être payé. Sans paiement sous 30 minutes, la réservation ne sera pas finalisée et le créneau pourra être pris par une autre cliente.',
+        pay: 'Payer maintenant', whatsapp: 'Recevoir le lien par WhatsApp'
+      }
+    }[currentLanguage] || null;
+    if (prepaymentCopy) {
+      if (prepaymentTitle) prepaymentTitle.textContent = prepaymentCopy.title;
+      if (prepaymentText) prepaymentText.textContent = prepaymentCopy.text;
+      if (prepaymentPay) prepaymentPay.textContent = prepaymentCopy.pay;
+      if (prepaymentWhatsApp) prepaymentWhatsApp.textContent = prepaymentCopy.whatsapp;
+    }
     const messages = {
       choose: '{{ t.public_booking_select_service_date|escapejs }}',
       loading: '{{ t.public_booking_loading|escapejs }}',
@@ -309,6 +364,58 @@
     const waitlistCtaText = '{{ t.public_waitlist_inline_cta|escapejs }}';
     const passwordRecoverySuccess = '{{ t.public_booking_recovery_success|escapejs }}';
     const passwordRecoveryError = '{{ t.public_booking_recovery_error|escapejs }}';
+    let prepaymentRedirect = '';
+    let prepaymentWhatsAppAction = '';
+
+    if (prepaymentModal) {
+      prepaymentModal.addEventListener('cancel', function (event) { event.preventDefault(); });
+    }
+
+    function showMandatoryPrepayment(data) {
+      prepaymentRedirect = data.redirect || '';
+      prepaymentWhatsAppAction = data.whatsapp_action || '';
+      if (prepaymentPay) prepaymentPay.href = data.checkout_url || '#';
+      if (prepaymentModal && typeof prepaymentModal.showModal === 'function') {
+        prepaymentModal.showModal();
+      } else if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      }
+    }
+
+    if (prepaymentWhatsApp) {
+      prepaymentWhatsApp.addEventListener('click', function () {
+        if (!prepaymentWhatsAppAction) return;
+        prepaymentWhatsApp.disabled = true;
+        if (prepaymentStatus) {
+          prepaymentStatus.hidden = false;
+          prepaymentStatus.textContent = 'Enviando el enlace por WhatsApp...';
+        }
+        fetch(prepaymentWhatsAppAction, {
+          method: 'POST',
+          body: JSON.stringify({ required: true }),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': decodeURIComponent(
+              (document.cookie.split('; ').find(function (item) {
+                return item.indexOf('csrftoken=') === 0;
+              }) || 'csrftoken=').split('=').slice(1).join('=')
+            ) || form.querySelector('[name="csrfmiddlewaretoken"]').value,
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error('whatsapp_failed');
+            if (prepaymentStatus) prepaymentStatus.textContent = 'Enlace enviado. Revisa tu WhatsApp.';
+            window.setTimeout(function () {
+              if (prepaymentRedirect) window.location.href = prepaymentRedirect;
+            }, 900);
+          })
+          .catch(function () {
+            prepaymentWhatsApp.disabled = false;
+            if (prepaymentStatus) prepaymentStatus.textContent = 'No se pudo reenviar. Usa el botón «Pagar ahora».';
+          });
+      });
+    }
 
     function syncServiceCards() {
       const selected = serviceSelect.value;
@@ -829,8 +936,8 @@
       })
         .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
         .then(function (result) {
-          if (result.ok && result.data.ok && result.data.redirect) {
-            window.location.href = result.data.redirect;
+          if (result.ok && result.data.ok && result.data.checkout_url) {
+            showMandatoryPrepayment(result.data);
             return;
           }
           showErrors(result.data.errors || { __all__: [messages.error] });

@@ -32,7 +32,8 @@ from employees.models import Employee
 from gallery.selectors import get_public_instagram_posts
 from salon.models import Zone
 from services_app.models import Service
-from notifications.services import notify_booking_confirmation, notify_welcome_credentials
+from notifications.services import notify_welcome_credentials
+from payments.stripe_service import request_booking_prepayment
 
 from .i18n import (
     ARTICLE_TRANSLATIONS,
@@ -506,7 +507,7 @@ def _build_public_booking_form(client, service, employee, zone, start_at, end_at
             "zone": zone.pk if zone else "",
             "start_at": timezone.localtime(start_at).strftime("%Y-%m-%dT%H:%M"),
             "end_at": timezone.localtime(end_at).strftime("%Y-%m-%dT%H:%M"),
-            "status": Booking.Statuses.CONFIRMED,
+            "status": Booking.Statuses.PENDING,
             "source": Booking.Sources.WEBSITE,
             "notes": "Reserva creada desde la web publica.",
         },
@@ -514,7 +515,11 @@ def _build_public_booking_form(client, service, employee, zone, start_at, end_at
     )
     if not form.is_valid():
         raise PublicBookingError({field: [str(item) for item in errs] for field, errs in form.errors.items()})
-    return form.save()
+    booking = form.save()
+    booking.prepayment_policy = Booking.PrepaymentPolicies.REQUIRED
+    booking.status = Booking.Statuses.PENDING
+    booking.save(update_fields=["prepayment_policy", "status", "updated_at"])
+    return booking
 
 
 def _create_public_booking(values):
@@ -546,13 +551,6 @@ def _create_public_booking(values):
         )
         booking = _build_public_booking_form(client, values["service"], values["employee"], values["zone"], values["start_at"], values["end_at"])
     return user, booking
-
-
-def _notify_public_booking_created(booking):
-    try:
-        notify_booking_confirmation(booking)
-    except Exception:
-        logger.exception("Could not send booking confirmation notification for booking %s", booking.pk)
 
 
 def _resolve_client_contact_values(primary_contact, secondary_contact):
@@ -841,7 +839,7 @@ def public_booking(request):
         except Exception:
             logger.exception("Could not send welcome credentials notification for booking %s", booking.pk)
 
-    _notify_public_booking_created(booking)
+    payment = request_booking_prepayment(booking, request)
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     language = detect_public_language(request)
@@ -849,7 +847,18 @@ def public_booking(request):
     request.session[CLIENT_LANGUAGE_SESSION_KEY] = language
     redirect_url = reverse("clients:portal")
     if _public_wants_json(request):
-        return JsonResponse({"ok": True, "redirect": redirect_url, "username": user.username})
+        return JsonResponse(
+            {
+                "ok": True,
+                "redirect": redirect_url,
+                "username": user.username,
+                "booking_id": booking.pk,
+                "checkout_url": payment.checkout_url,
+                "whatsapp_action": reverse(
+                    "mobile_api:booking_prepayment", args=[booking.pk]
+                ),
+            }
+        )
     return redirect(redirect_url)
 
 
