@@ -84,7 +84,13 @@ def reschedule_booking(booking, *, start_at, employee=None, zone=None, allow_lat
     end_at = start_at + timedelta(minutes=booking.duration_snapshot or service.duration_minutes)
     if service.requires_zone and zone is None:
         zone = find_available_zone(service, start_at, end_at, exclude_booking_id=booking.pk)
-    if not employee.services.filter(pk=service.pk).exists():
+    required_service_ids = {
+        item.get("service_id") for item in booking.service_items if item.get("service_id")
+    }
+    supported_service_ids = set(
+        employee.services.filter(pk__in=required_service_ids).values_list("pk", flat=True)
+    )
+    if supported_service_ids != required_service_ids:
         raise ValidationError("Este empleado no realiza el servicio seleccionado.")
     if not is_slot_available(employee, service, zone, start_at, end_at, exclude_booking_id=booking.pk):
         raise ValidationError("El horario seleccionado no está disponible.")
@@ -108,6 +114,15 @@ def _apply_service_snapshots(booking, service):
     booking.client_price_snapshot = client_price
     booking.discount_amount_snapshot = Decimal("0.00")
     booking.duration_snapshot = service.duration_minutes
+    booking.service_items_snapshot = [
+        {
+            "service_id": service.pk,
+            "name": service.name,
+            "duration_minutes": service.duration_minutes,
+            "price": str(original_price.quantize(Decimal("0.01"))),
+            "client_price": str(client_price.quantize(Decimal("0.01"))),
+        }
+    ]
     booking.employee_percent_snapshot = employee_percent
     booking.employee_amount_snapshot = employee_amount
     booking.salon_amount_snapshot = salon_amount
@@ -141,6 +156,7 @@ def change_booking_service(booking, *, service, request=None):
             "client_price_snapshot",
             "discount_amount_snapshot",
             "duration_snapshot",
+            "service_items_snapshot",
             "employee_percent_snapshot",
             "employee_amount_snapshot",
             "salon_amount_snapshot",

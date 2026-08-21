@@ -115,6 +115,12 @@ class Booking(models.Model):
 
     price_snapshot = models.DecimalField("Precio guardado", max_digits=10, decimal_places=2, default=0)
     duration_snapshot = models.PositiveIntegerField("Duración guardada (min)", default=60)
+    service_items_snapshot = models.JSONField(
+        "Servicios guardados",
+        default=list,
+        blank=True,
+        help_text="Snapshot de los servicios incluidos en una sola reserva.",
+    )
 
     original_client_price_snapshot = models.DecimalField("Precio original cliente", max_digits=10, decimal_places=2, default=0)
     client_price_snapshot = models.DecimalField("Precio cliente", max_digits=10, decimal_places=2, default=0)
@@ -150,6 +156,27 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"{self.client} · {self.service} · {self.start_at:%d/%m/%Y %H:%M}"
+
+    @property
+    def service_items(self):
+        items = self.service_items_snapshot or []
+        if items:
+            return items
+        return [
+            {
+                "service_id": self.service_id,
+                "name": self.service.name,
+                "duration_minutes": self.duration_snapshot,
+                "price": str(self.price_snapshot),
+                "client_price": str(self.client_price_snapshot),
+            }
+        ]
+
+    @property
+    def service_names(self):
+        return " + ".join(
+            str(item.get("name") or "Servicio") for item in self.service_items
+        )
 
     @property
     def latest_online_payment(self):

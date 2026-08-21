@@ -86,7 +86,7 @@ def notify_booking_confirmation(booking):
     base = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
     portal = f"{base}/panel/clientes/portal/bookings/{booking.pk}/"
     client_name = client.first_name or client.full_name or "hola"
-    service_name = booking.service.name
+    service_name = booking.service_names
 
     body = (
         f"Hola {client_name} 👋 Tu cita en {salon} está confirmada:\n"
@@ -116,7 +116,7 @@ def notify_booking_cancelled(booking):
     salon = _salon_name()
     portal = _portal_url()
     client_name = client.first_name or client.full_name or "hola"
-    service_name = booking.service.name
+    service_name = booking.service_names
 
     body = (
         f"Hola {client_name}. Tu cita en {salon} del {date_text} "
@@ -144,7 +144,7 @@ def notify_booking_rescheduled(booking):
     salon = _salon_name()
     portal = _portal_url()
     client_name = client.first_name or client.full_name or "hola"
-    service_name = booking.service.name
+    service_name = booking.service_names
 
     body = (
         f"Hola {client_name}. Tu cita en {salon} ha sido reagendada:\n"
@@ -174,7 +174,7 @@ def notify_payment_receipt(booking, payment):
     base = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
     portal = f"{base}/panel/clientes/portal/bookings/{booking.pk}/"
     client_name = client.first_name or client.full_name or "hola"
-    service_name = booking.service.name
+    service_name = booking.service_names
     amount = f"{payment.amount:.2f} {payment.currency.upper()}"
 
     body = (

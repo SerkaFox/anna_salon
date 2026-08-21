@@ -159,14 +159,17 @@ def _ensure_document_default_line(document):
     if document.lines.exists():
         return
     booking = document.booking
-    FiscalDocumentLine.objects.create(
-        fiscal_document=document,
-        service=booking.service,
-        description=str(booking.service),
-        quantity=Decimal("1.00"),
-        unit_amount=booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00"),
-        sort_order=0,
-    )
+    for index, item in enumerate(booking.service_items):
+        FiscalDocumentLine.objects.create(
+            fiscal_document=document,
+            service_id=item.get("service_id"),
+            description=item.get("name") or "Servicio",
+            quantity=Decimal("1.00"),
+            unit_amount=Decimal(
+                str(item.get("client_price") or item.get("price") or "0.00")
+            ),
+            sort_order=index,
+        )
     document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
 
 
@@ -207,7 +210,7 @@ def _document_share_text(document, request=None):
         f"Hola {document.booking.client.full_name},\n\n"
         f"Te enviamos tu {document.get_document_type_display().lower()} {document.number}.\n"
         f"Fecha: {document.issue_date:%d/%m/%Y}\n"
-        f"Servicio: {document.booking.service.name}\n"
+        f"Servicio: {document.booking.service_names}\n"
         f"Reserva: {timezone.localtime(document.booking.start_at):%d/%m/%Y %H:%M}\n\n"
         f"{detail_text}\n\n"
         f"Total: {document.total_amount} EUR\n"
@@ -2099,6 +2102,7 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
             zone=data.get("zone"),
             exclude_booking_id=booking.pk if booking else None,
             step_minutes=MOBILE_SLOT_STEP_MINUTES,
+            duration_minutes=data.get("duration_minutes"),
         )
         return Response(
             {
@@ -2106,7 +2110,7 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
                 "employee": data["employee"].pk,
                 "service": data["service"].pk,
                 "zone": data["zone"].pk if data.get("zone") else None,
-                "duration": data["service"].duration_minutes,
+                "duration": data.get("duration_minutes") or data["service"].duration_minutes,
                 "step_minutes": MOBILE_SLOT_STEP_MINUTES,
                 "slots": [
                     {

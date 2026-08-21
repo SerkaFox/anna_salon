@@ -307,7 +307,7 @@ def find_available_slots_for_day(date_obj, employee, service, zone=None, exclude
     return slots
 
 
-def build_available_slots_for_day(date_obj, employee, service, zone=None, exclude_booking_id=None, step_minutes=SLOT_STEP_MINUTES):
+def build_available_slots_for_day(date_obj, employee, service, zone=None, exclude_booking_id=None, step_minutes=SLOT_STEP_MINUTES, duration_minutes=None):
     schedule = get_employee_schedule(employee, date_obj)
     default_start, default_end = get_work_bounds(date_obj)
     if not schedule:
@@ -324,7 +324,7 @@ def build_available_slots_for_day(date_obj, employee, service, zone=None, exclud
     break_start = schedule["break_start_at"]
     break_end = schedule["break_end_at"]
     time_blocks = get_employee_time_block_occurrences(employee, date_obj)
-    duration = timedelta(minutes=service.duration_minutes)
+    duration = timedelta(minutes=duration_minutes or service.duration_minutes)
     step = timedelta(minutes=step_minutes)
     day_start, day_end = get_day_bounds(date_obj)
 

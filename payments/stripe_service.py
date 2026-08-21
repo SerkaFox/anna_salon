@@ -83,7 +83,7 @@ def create_checkout_session(payment, request):
     success_url = request.build_absolute_uri(reverse("payments:stripe_success"))
     cancel_url = request.build_absolute_uri(reverse("payments:stripe_cancel"))
     customer_email = booking.client.email or getattr(getattr(booking.client, "user", None), "email", "") or ""
-    description = f"{booking.service.name} · {timezone.localtime(booking.start_at):%d/%m/%Y %H:%M}"
+    description = f"{booking.service_names} · {timezone.localtime(booking.start_at):%d/%m/%Y %H:%M}"
     session = stripe.checkout.Session.create(
         mode="payment",
         payment_method_types=["card"],
@@ -247,7 +247,7 @@ def create_combined_checkout_session(payments, request):
     for payment in payments:
         booking = payment.booking
         amount_cents = int((payment.amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-        description = f"{booking.service.name} · {timezone.localtime(booking.start_at):%d/%m/%Y %H:%M}"
+        description = f"{booking.service_names} · {timezone.localtime(booking.start_at):%d/%m/%Y %H:%M}"
         line_items.append(
             {
                 "price_data": {

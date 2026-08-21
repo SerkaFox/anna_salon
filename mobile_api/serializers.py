@@ -709,7 +709,8 @@ class ZoneWriteSerializer(serializers.ModelSerializer):
 class BookingSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source="client.full_name", read_only=True)
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
-    service_name = serializers.CharField(source="service.name", read_only=True)
+    service_name = serializers.CharField(source="service_names", read_only=True)
+    service_items = serializers.ListField(source="service_items_snapshot", read_only=True)
     zone_name = serializers.CharField(source="zone.name", read_only=True, allow_null=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     source_label = serializers.CharField(source="get_source_display", read_only=True)
@@ -745,6 +746,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "employee_name",
             "service",
             "service_name",
+            "service_items",
             "zone",
             "zone_name",
             "start_at",
@@ -913,6 +915,12 @@ class BookingWriteSerializer(serializers.Serializer):
     client = serializers.PrimaryKeyRelatedField(queryset=Client.objects.filter(is_active=True), required=False)
     employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True), required=False)
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.filter(is_active=True), required=False)
+    services = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.filter(is_active=True),
+        many=True,
+        required=False,
+        write_only=True,
+    )
     zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.filter(is_active=True), allow_null=True, required=False)
     start_at = SalonDateTimeField(required=False)
     end_at = SalonDateTimeField(required=False, allow_null=True)
@@ -929,6 +937,20 @@ class BookingWriteSerializer(serializers.Serializer):
         instance = self.instance
         employee_profile = get_employee_profile(user)
         client_profile = get_client_profile(user)
+
+        selected_services = list(attrs.get("services") or [])
+        if selected_services:
+            unique_services = []
+            seen_service_ids = set()
+            for selected_service in selected_services:
+                if selected_service.pk in seen_service_ids:
+                    continue
+                seen_service_ids.add(selected_service.pk)
+                unique_services.append(selected_service)
+            selected_services = unique_services
+            if attrs.get("service") and attrs["service"].pk not in seen_service_ids:
+                selected_services.insert(0, attrs["service"])
+            attrs["service"] = selected_services[0]
 
         if not is_admin_user(user) and not employee_profile and not client_profile:
             raise serializers.ValidationError({"employee": ["Tu usuario no tiene empleado vinculado."]})
@@ -973,12 +995,38 @@ class BookingWriteSerializer(serializers.Serializer):
 
         service = values["service"]
         employee = values["employee"]
-        if not employee.services.filter(pk=service.pk).exists():
+        if not selected_services:
+            if "service" in attrs:
+                selected_services = [service]
+            elif instance is not None and instance.service_items_snapshot:
+                snapshot_ids = [
+                    item.get("service_id")
+                    for item in instance.service_items_snapshot
+                    if item.get("service_id")
+                ]
+                service_map = {
+                    item.pk: item
+                    for item in Service.objects.filter(pk__in=snapshot_ids, is_active=True)
+                }
+                selected_services = [
+                    service_map[item_id]
+                    for item_id in snapshot_ids
+                    if item_id in service_map
+                ]
+            if not selected_services:
+                selected_services = [service]
+        unsupported = [
+            item.name
+            for item in selected_services
+            if not employee.services.filter(pk=item.pk).exists()
+        ]
+        if unsupported:
             raise serializers.ValidationError({"employee": ["Este empleado no realiza el servicio seleccionado."]})
 
         start_at = values["start_at"]
-        if not values.get("end_at") or "start_at" in attrs or "service" in attrs:
-            values["end_at"] = start_at + timedelta(minutes=service.duration_minutes)
+        total_duration = sum(item.duration_minutes for item in selected_services)
+        if not values.get("end_at") or "start_at" in attrs or "service" in attrs or "services" in attrs:
+            values["end_at"] = start_at + timedelta(minutes=total_duration)
 
         if service.requires_zone and values.get("zone") is None:
             values["zone"] = find_available_zone(
@@ -1023,11 +1071,9 @@ class BookingWriteSerializer(serializers.Serializer):
             raise _form_errors_to_validation_error(form)
 
         self._booking_form = form
+        self._selected_services = selected_services
         self._prepayment_required_supplied = "prepayment_required" in attrs
-        self._prepayment_required = attrs.get(
-            "prepayment_required",
-            False,
-        )
+        self._prepayment_required = True if client_profile else attrs.get("prepayment_required", False)
         return attrs
 
     def create(self, validated_data):
@@ -1038,6 +1084,54 @@ class BookingWriteSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         booking = self._booking_form.save()
+        services = self._selected_services
+        original_total = sum(
+            (item.price or Decimal("0.00")) for item in services
+        )
+        base_original = booking.original_client_price_snapshot or Decimal("0.00")
+        discount_rate = (
+            booking.discount_amount_snapshot / base_original
+            if base_original > 0
+            else Decimal("0.00")
+        )
+        discount_total = (original_total * discount_rate).quantize(Decimal("0.01"))
+        client_total = original_total - discount_total
+        employee_percent = booking.employee_percent_snapshot
+        employee_total = (
+            client_total * employee_percent / Decimal("100")
+        ).quantize(Decimal("0.01"))
+        booking.service_items_snapshot = [
+            {
+                "service_id": item.pk,
+                "name": item.name,
+                "duration_minutes": item.duration_minutes,
+                "price": str(
+                    (item.price or Decimal("0.00")).quantize(Decimal("0.01"))
+                ),
+                "client_price": str(
+                    (
+                        (item.price or Decimal("0.00"))
+                        * (Decimal("1.00") - discount_rate)
+                    ).quantize(Decimal("0.01"))
+                ),
+            }
+            for item in services
+        ]
+        if booking.service_items_snapshot:
+            allocated = sum(
+                Decimal(item["client_price"])
+                for item in booking.service_items_snapshot[:-1]
+            )
+            booking.service_items_snapshot[-1]["client_price"] = str(
+                (client_total - allocated).quantize(Decimal("0.01"))
+            )
+        booking.duration_snapshot = sum(item.duration_minutes for item in services)
+        booking.price_snapshot = original_total
+        booking.original_client_price_snapshot = original_total
+        booking.discount_amount_snapshot = discount_total
+        booking.client_price_snapshot = client_total
+        booking.employee_amount_snapshot = employee_total
+        booking.salon_amount_snapshot = client_total - employee_total
         if self.instance is None or self._prepayment_required_supplied:
             booking.prepayment_policy = (
                 Booking.PrepaymentPolicies.REQUIRED
@@ -1049,7 +1143,14 @@ class BookingWriteSerializer(serializers.Serializer):
                 if self._prepayment_required
                 else Booking.Statuses.CONFIRMED
             )
-            booking.save(update_fields=["prepayment_policy", "status", "updated_at"])
+        booking.save(update_fields=[
+            "service_items_snapshot", "duration_snapshot", "price_snapshot",
+            "original_client_price_snapshot", "discount_amount_snapshot",
+            "client_price_snapshot", "employee_amount_snapshot",
+            "salon_amount_snapshot", "prepayment_policy", "status", "updated_at",
+        ])
+        if booking.referral_reward_applied:
+            booking.reward_redemptions.update(discount_amount=discount_total)
         return booking
 
 
@@ -1114,7 +1215,7 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
     client_fiscal_address = serializers.CharField(source="booking.client.fiscal_address", read_only=True)
     client_fiscal_city = serializers.CharField(source="booking.client.fiscal_city", read_only=True)
     client_fiscal_postcode = serializers.CharField(source="booking.client.fiscal_postcode", read_only=True)
-    service_name = serializers.CharField(source="booking.service.name", read_only=True)
+    service_name = serializers.CharField(source="booking.service_names", read_only=True)
     booking_start_at = serializers.SerializerMethodField()
     business = serializers.SerializerMethodField()
     document_url = serializers.SerializerMethodField()
@@ -1364,6 +1465,7 @@ class AvailabilitySlotsQuerySerializer(serializers.Serializer):
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.filter(is_active=True))
     zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.filter(is_active=True), allow_null=True, required=False)
     booking = serializers.PrimaryKeyRelatedField(queryset=Booking.objects.select_related("employee"), required=False)
+    duration_minutes = serializers.IntegerField(required=False, min_value=1, max_value=1440)
 
     def validate(self, attrs):
         request = self.context["request"]

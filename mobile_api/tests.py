@@ -602,6 +602,57 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(booking.zone_id, self.zone.pk)
         self.assertEqual(booking.end_at, booking.start_at + timedelta(minutes=self.service.duration_minutes))
 
+    def test_booking_creation_supports_multiple_services_as_one_order(self):
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(
+                services=[self.service.pk, self.no_zone_service.pk],
+                zone=None,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(booking.duration_snapshot, 105)
+        self.assertEqual(booking.end_at, booking.start_at + timedelta(minutes=105))
+        self.assertEqual(booking.client_price_snapshot, Decimal("80.00"))
+        self.assertEqual(
+            [item["name"] for item in booking.service_items_snapshot],
+            ["Color", "Corte"],
+        )
+        self.assertEqual(response.json()["service_name"], "Color + Corte")
+
+    @patch("mobile_api.views.request_booking_prepayment")
+    def test_client_booking_always_requires_prepayment(self, request_prepayment):
+        client_user = User.objects.create_user(
+            username="maria-booking",
+            password="testpass123",
+            role=User.ROLE_CLIENT,
+        )
+        self.client_obj.user = client_user
+        self.client_obj.save(update_fields=["user"])
+        self._auth(client_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            {
+                "employee": self.employee.pk,
+                "service": self.service.pk,
+                "start_at": "2026-04-27T12:00:00+02:00",
+                "prepayment_required": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.REQUIRED)
+        self.assertEqual(booking.status, Booking.Statuses.PENDING)
+        request_prepayment.assert_called_once()
+
     @patch("mobile_api.views.request_booking_prepayment")
     def test_manual_booking_can_request_prepayment(self, request_prepayment):
         self._auth(self.owner_user)

@@ -28,14 +28,17 @@ def ensure_document_default_line(document):
     if document.lines.exists():
         return
     booking = document.booking
-    FiscalDocumentLine.objects.create(
-        fiscal_document=document,
-        service=booking.service,
-        description=str(booking.service),
-        quantity=Decimal("1.00"),
-        unit_amount=booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00"),
-        sort_order=0,
-    )
+    for index, item in enumerate(booking.service_items):
+        FiscalDocumentLine.objects.create(
+            fiscal_document=document,
+            service_id=item.get("service_id"),
+            description=item.get("name") or "Servicio",
+            quantity=Decimal("1.00"),
+            unit_amount=Decimal(
+                str(item.get("client_price") or item.get("price") or "0.00")
+            ),
+            sort_order=index,
+        )
     document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
 
 
