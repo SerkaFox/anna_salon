@@ -1302,6 +1302,75 @@ class MobileApiMvpTests(TestCase):
         self.assertIn("09:00", labels)
         self.assertIn("17:00", labels)
 
+    def test_staff_can_check_and_reschedule_into_hatched_time(self):
+        EmployeeWeeklyShift.objects.filter(
+            employee=self.employee, weekday=0
+        ).update(start_time=time(10, 0), end_time=time(17, 0))
+        booking = self._create_booking(
+            service=self.service,
+            zone=self.zone,
+            start_at=timezone.make_aware(datetime(2026, 4, 27, 12, 0)),
+        )
+        self._auth(self.employee_user)
+        target = "2026-04-27T18:00:00+02:00"
+
+        availability = self.api_client.post(
+            reverse("mobile_api:booking_check_availability"),
+            {
+                "employee": self.employee.pk,
+                "service": self.service.pk,
+                "zone": self.zone.pk,
+                "start_at": target,
+                "exclude_booking_id": booking.pk,
+            },
+            format="json",
+        )
+        rescheduled = self.api_client.post(
+            reverse("mobile_api:booking_reschedule", args=[booking.pk]),
+            {
+                "employee": self.employee.pk,
+                "service": self.service.pk,
+                "zone": self.zone.pk,
+                "start_at": target,
+            },
+            format="json",
+        )
+
+        self.assertEqual(availability.status_code, 200, availability.content)
+        self.assertTrue(availability.json()["available"])
+        self.assertEqual(rescheduled.status_code, 200, rescheduled.content)
+        booking.refresh_from_db()
+        self.assertEqual(
+            booking.start_at,
+            timezone.make_aware(datetime(2026, 4, 27, 18, 0)),
+        )
+
+    def test_client_availability_check_keeps_hatched_time_blocked(self):
+        EmployeeWeeklyShift.objects.filter(
+            employee=self.employee, weekday=0
+        ).update(start_time=time(10, 0), end_time=time(17, 0))
+        client_user = User.objects.create_user(
+            username="client-hatched-time",
+            password="testpass123",
+            role=User.ROLE_CLIENT,
+        )
+        self.client_obj.user = client_user
+        self.client_obj.save(update_fields=["user"])
+        self._auth(client_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:booking_check_availability"),
+            {
+                "employee": self.employee.pk,
+                "service": self.no_zone_service.pk,
+                "start_at": "2026-04-27T18:00:00+02:00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(response.json()["available"])
+
     def test_availability_slots_returns_spanish_validation_errors(self):
         self._auth(self.employee_user)
 

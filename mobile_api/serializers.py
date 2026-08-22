@@ -1514,6 +1514,7 @@ class AvailabilityCheckSerializer(serializers.Serializer):
         start_at = attrs["start_at"]
         end_at = start_at + timedelta(minutes=service.duration_minutes)
         exclude_booking_id = attrs.get("exclude_booking_id")
+        allow_outside_schedule = not bool(get_client_profile(user))
 
         if not _can_schedule_for_employee(user, employee):
             raise serializers.ValidationError({"employee": ["Sin acceso a este empleado."]})
@@ -1529,11 +1530,24 @@ class AvailabilityCheckSerializer(serializers.Serializer):
         else:
             zone = None
 
-        fits_schedule, schedule_message = fits_employee_schedule(employee, start_at, end_at)
+        fits_schedule, schedule_message = fits_employee_schedule(
+            employee,
+            start_at,
+            end_at,
+            allow_outside_schedule=allow_outside_schedule,
+        )
         if not fits_schedule:
             raise serializers.ValidationError({"non_field_errors": [schedule_message]})
 
-        if not is_slot_available(employee, service, zone, start_at, end_at, exclude_booking_id=exclude_booking_id):
+        if not is_slot_available(
+            employee,
+            service,
+            zone,
+            start_at,
+            end_at,
+            exclude_booking_id=exclude_booking_id,
+            allow_outside_schedule=allow_outside_schedule,
+        ):
             raise serializers.ValidationError({"non_field_errors": ["Ese horario no está disponible para el empleado o la zona."]})
 
         if service.requires_zone and zone is None:
