@@ -900,7 +900,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let suppressCardClick = false;
   let pendingGridAction = null;
   let editingTimeBlockId = null;
-  const teamFilterStorageKey = "anna-calendar-team-filter";
+  const teamFilterStorageKey = "brimoon-calendar-team-filter";
 
   function openBulkOpsModal() {
     if (!bulkOpsModal || !bulkPanelToggle) return;
@@ -1082,7 +1082,7 @@ document.addEventListener("DOMContentLoaded", function () {
       );
     });
 
-    window.localStorage.setItem("anna-calendar-view", viewName);
+    window.localStorage.setItem("brimoon-calendar-view", viewName);
   }
 
   function getStoredTeamEmployeeIds() {
@@ -1998,7 +1998,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  const savedView = window.localStorage.getItem("anna-calendar-view");
+  const savedView = window.localStorage.getItem("brimoon-calendar-view");
   initializeTeamFilter();
   if (savedView === "days" || savedView === "team") {
     activateCalendarView(savedView);

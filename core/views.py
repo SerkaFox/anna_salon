@@ -214,11 +214,11 @@ ARTICLES = [
 LEGAL_PAGES = {
     "privacy_policy": {
         "title": "Política de privacidad",
-        "summary": "Información sobre el tratamiento de datos en BRIMOON Studio / Anna Salon y el uso de integraciones con Instagram.",
+        "summary": "Información sobre el tratamiento de datos en BRIMOON Studio y el uso de integraciones con Instagram.",
         "sections": [
             (
                 "Quiénes somos",
-                "BRIMOON Studio / Anna Salon ofrece servicios de belleza y publica información comercial en brimoon.es. Para cuestiones sobre privacidad o solicitudes relacionadas con datos, puedes escribir a serkafox@gmail.com.",
+                "BRIMOON Studio ofrece servicios de belleza y publica información comercial en brimoon.es. Para cuestiones sobre privacidad o solicitudes relacionadas con datos, puedes escribir a serkafox@gmail.com.",
             ),
             (
                 "Uso de Instagram API",
@@ -244,11 +244,11 @@ LEGAL_PAGES = {
     },
     "terms": {
         "title": "Términos de servicio",
-        "summary": "Condiciones generales de uso del sitio web, la galería y las integraciones públicas de BRIMOON Studio / Anna Salon.",
+        "summary": "Condiciones generales de uso del sitio web, la galería y las integraciones públicas de BRIMOON Studio.",
         "sections": [
             (
                 "Uso del sitio",
-                "El sitio brimoon.es ofrece información sobre BRIMOON Studio / Anna Salon, servicios de belleza, reserva de citas y una galería de trabajos. Al utilizar el sitio, aceptas hacerlo de forma lícita y respetuosa con el funcionamiento del servicio.",
+                "El sitio brimoon.es ofrece información sobre BRIMOON Studio, servicios de belleza, reserva de citas y una galería de trabajos. Al utilizar el sitio, aceptas hacerlo de forma lícita y respetuosa con el funcionamiento del servicio.",
             ),
             (
                 "Reservas y contenido",
@@ -264,7 +264,7 @@ LEGAL_PAGES = {
             ),
             (
                 "Cambios del servicio",
-                "BRIMOON Studio / Anna Salon puede modificar contenidos, páginas, integraciones o disponibilidad del sitio cuando sea necesario para operación, seguridad o mejora del servicio.",
+                "BRIMOON Studio puede modificar contenidos, páginas, integraciones o disponibilidad del sitio cuando sea necesario para operación, seguridad o mejora del servicio.",
             ),
             (
                 "Contacto",
@@ -274,7 +274,7 @@ LEGAL_PAGES = {
     },
     "data_deletion": {
         "title": "Instrucciones de eliminación de datos",
-        "summary": "Cómo solicitar la eliminación de datos asociados a la integración de Instagram de BRIMOON Studio / Anna Salon.",
+        "summary": "Cómo solicitar la eliminación de datos asociados a la integración de Instagram de BRIMOON Studio.",
         "sections": [
             (
                 "Solicitud por email",
@@ -286,7 +286,7 @@ LEGAL_PAGES = {
             ),
             (
                 "Desconectar desde Meta o Instagram",
-                "Además de escribirnos, puedes desconectar la aplicación desde la configuración de Meta o Instagram. Revisa las secciones de aplicaciones, sitios web, integraciones empresariales o permisos conectados y elimina el acceso de la aplicación relacionada con BRIMOON Studio / Anna Salon.",
+                "Además de escribirnos, puedes desconectar la aplicación desde la configuración de Meta o Instagram. Revisa las secciones de aplicaciones, sitios web, integraciones empresariales o permisos conectados y elimina el acceso de la aplicación relacionada con BRIMOON Studio.",
             ),
             (
                 "Después de desconectar",
