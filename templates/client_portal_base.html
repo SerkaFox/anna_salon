@@ -50,10 +50,30 @@
   {% endif %}
 
   {% block portal_content %}{% endblock %}
+
+  {% block portal_bottom_nav %}
+    {% client_lang as portal_nav_lang %}
+    <nav class="client-app-nav" aria-label="Navegación del portal">
+      <a class="client-app-nav__item {% if active_section != 'profile' %}is-active{% endif %}" href="{% url 'clients:portal' %}#home" data-client-tab="home" {% if active_section != 'profile' %}aria-current="page"{% endif %}>
+        <span class="client-app-nav__icon" aria-hidden="true">&#128100;</span>
+        <span>{% if portal_nav_lang == "ru" %}Моя страница{% else %}Mi ficha{% endif %}</span>
+      </a>
+      <a class="client-app-nav__item" href="{% url 'clients:portal' %}#booking" data-client-tab="booking">
+        <span class="client-app-nav__icon" aria-hidden="true">&#128197;</span>
+        <span>{% if portal_nav_lang == "ru" %}Записаться{% else %}Reservar{% endif %}</span>
+      </a>
+      <a class="client-app-nav__item {% if active_section == 'profile' %}is-active{% endif %}" href="{% url 'clients:portal' %}#settings" data-client-tab="settings" {% if active_section == 'profile' %}aria-current="page"{% endif %}>
+        <span class="client-app-nav__icon" aria-hidden="true">&#9881;</span>
+        <span>{% if portal_nav_lang == "ru" %}Настройки{% else %}Ajustes{% endif %}</span>
+      </a>
+    </nav>
+  {% endblock %}
 </main>
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  const clientTheme = localStorage.getItem("brimoon-client-theme") || "dark";
+  document.body.classList.toggle("client-theme-light", clientTheme === "light");
   const menuToggle = document.getElementById("clientMenuToggle");
   const panelActions = document.getElementById("clientPanelActions");
   if (menuToggle && panelActions) {

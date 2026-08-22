@@ -4,12 +4,15 @@
 {% block title %}{% ct "my_portal" %} | {{ salon_name }}{% endblock %}
 {% block portal_title %}{% ct "hello" name=client.full_name %}{% endblock %}
 {% block portal_subtitle %}{% ct "portal_subtitle" %}{% endblock %}
-{% block portal_header_action %}<a class="btn btn-light btn-small" href="{% url 'accounts:profile' %}">{% ct "my_data" %}</a>{% endblock %}
+{% block portal_header_action %}{% endblock %}
 
 {% block portal_content %}
   {% ct "no_phone" as client_no_phone %}
   {% ct "no_email" as client_no_email %}
-  <section class="content-grid">
+  {% client_lang as current_client_lang %}
+  {% client_languages as available_client_languages %}
+  <div class="client-app-shell" data-client-app-shell>
+  <section class="content-grid client-app-view is-active" data-client-view="home">
     <article class="panel-card">
       <div class="dashboard-section-head">
         <div>
@@ -49,6 +52,10 @@
         <article class="stat-card">
           <span class="stat-label">{% ct "rewards" %}</span>
           <strong class="stat-value">{{ stats.available_rewards }}</strong>
+        </article>
+        <article class="stat-card">
+          <span class="stat-label">{% if current_client_lang == "ru" %}Потрачено{% else %}Gastado{% endif %}</span>
+          <strong class="stat-value">{{ stats.total_spent|floatformat:2 }} €</strong>
         </article>
       </div>
     </article>
@@ -125,7 +132,7 @@
     </article>
   </section>
 
-  <section class="panel-card">
+  <section class="panel-card client-app-view is-active" data-client-view="home">
     <div class="dashboard-section-head">
       <div>
         <h2>{% ct "rewards" %}</h2>
@@ -154,7 +161,7 @@
     {% endif %}
   </section>
 
-  <section class="panel-card" id="nueva-reserva">
+  <section class="panel-card client-app-view" id="nueva-reserva" data-client-view="booking">
     <h2>{% ct "new_booking_request" %}</h2>
     <p class="muted-text">{% ct "booking_help" %}</p>
     <form method="post" class="entity-form client-booking-form" data-portal-booking-form>
@@ -237,7 +244,7 @@
   </section>
 
   {% if reviewable_bookings or client_reviews %}
-    <section class="panel-card client-review-panel">
+    <section class="panel-card client-review-panel client-app-view is-active" data-client-view="home">
       <div class="dashboard-section-head">
         <div>
           <h2>Tu opinion</h2>
@@ -279,7 +286,7 @@
     </section>
   {% endif %}
 
-  <section class="content-grid">
+  <section class="content-grid client-app-view is-active" data-client-view="home">
     <article class="panel-card">
       <h2>{% ct "visual_history" %}</h2>
       {% if photo_history %}
@@ -330,6 +337,59 @@
     </article>
   </section>
 
+  <section class="client-app-view" data-client-view="settings">
+    <div class="content-grid client-settings-grid">
+      <article class="panel-card client-settings-card">
+        <div class="client-settings-card__head">
+          <div class="client-settings-icon" aria-hidden="true">&#9881;</div>
+          <div>
+            <h2>{% if current_client_lang == "ru" %}Профиль и настройки{% else %}Perfil y ajustes{% endif %}</h2>
+            <p class="muted-text">{% if current_client_lang == "ru" %}Личные данные, пароль и настройки кабинета.{% else %}Datos personales, contraseña y preferencias del portal.{% endif %}</p>
+          </div>
+        </div>
+        <div class="client-settings-list">
+          <a class="client-settings-row" href="{% url 'accounts:profile' %}">
+            <span class="client-settings-row__icon" aria-hidden="true">&#128100;</span>
+            <span><strong>{% ct "my_data" %}</strong><small>{{ client.phone|default:client_no_phone }} · {{ client.email|default:client_no_email }}</small></span>
+            <span aria-hidden="true">&#8250;</span>
+          </a>
+          <div class="client-settings-row is-static">
+            <span class="client-settings-row__icon" aria-hidden="true">&#128273;</span>
+            <span><strong>{% if current_client_lang == "ru" %}Логин{% else %}Usuario{% endif %}</strong><small>{{ request.user.username }}</small></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel-card client-settings-card">
+        <h2>{% if current_client_lang == "ru" %}Внешний вид и язык{% else %}Apariencia e idioma{% endif %}</h2>
+        <div class="client-theme-choice" role="group" aria-label="Tema">
+          <button class="btn btn-light" type="button" data-client-theme="dark">{% if current_client_lang == "ru" %}Тёмная{% else %}Oscuro{% endif %}</button>
+          <button class="btn btn-light" type="button" data-client-theme="light">{% if current_client_lang == "ru" %}Светлая{% else %}Claro{% endif %}</button>
+        </div>
+        <form method="post" action="{% url 'clients:set_language' %}" class="client-settings-language">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{% url 'clients:portal' %}#settings">
+          <label for="client-settings-language">{% if current_client_lang == "ru" %}Язык{% else %}Idioma{% endif %}</label>
+          <select id="client-settings-language" name="language" class="input" onchange="this.form.submit()">
+            {% for code, label in available_client_languages %}
+              <option value="{{ code }}" {% if code == current_client_lang %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </article>
+
+      <article class="panel-card client-settings-card">
+        <h2>{% if current_client_lang == "ru" %}Действия{% else %}Acciones{% endif %}</h2>
+        <div class="client-settings-actions">
+          <a class="btn btn-light" href="{% url 'home' %}">{% ct "site_home" %}</a>
+          <a class="btn btn-danger" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  </div>
+
 {{ portal_services|json_script:"portal-services-data" }}
 {% client_lang as current_client_lang %}
 {% ct "select_master" as t_select_master %}
@@ -347,6 +407,50 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  const portalViews = Array.from(document.querySelectorAll("[data-client-view]"));
+  const portalTabs = Array.from(document.querySelectorAll("[data-client-tab]"));
+  const validTabs = ["home", "booking", "settings"];
+
+  window.setClientPortalTab = function (tab, updateHash = true) {
+    const selected = validTabs.includes(tab) ? tab : "home";
+    portalViews.forEach(function (view) {
+      view.classList.toggle("is-active", view.dataset.clientView === selected);
+    });
+    portalTabs.forEach(function (button) {
+      const active = button.dataset.clientTab === selected;
+      button.classList.toggle("is-active", active);
+      if (active) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
+    if (updateHash) history.replaceState(null, "", `#${selected}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  portalTabs.forEach(function (button) {
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
+      window.setClientPortalTab(button.dataset.clientTab || "home");
+    });
+  });
+
+  const savedTheme = localStorage.getItem("brimoon-client-theme") || "dark";
+  document.body.classList.toggle("client-theme-light", savedTheme === "light");
+  document.querySelectorAll("[data-client-theme]").forEach(function (button) {
+    const theme = button.dataset.clientTheme || "dark";
+    button.classList.toggle("is-selected", theme === savedTheme);
+    button.addEventListener("click", function () {
+      localStorage.setItem("brimoon-client-theme", theme);
+      document.body.classList.toggle("client-theme-light", theme === "light");
+      document.querySelectorAll("[data-client-theme]").forEach(function (item) {
+        item.classList.toggle("is-selected", item === button);
+      });
+    });
+  });
+
+  const requestedTab = window.location.hash.replace("#", "");
+  const bookingHasErrors = Boolean(document.querySelector("[data-portal-booking-form] .errorlist, [data-portal-booking-form] .form-errors"));
+  window.setClientPortalTab(bookingHasErrors ? "booking" : requestedTab, false);
+
   const serviceSelect = document.getElementById("id_service");
   const employeeSelect = document.getElementById("id_employee");
   const zoneSelect = document.getElementById("id_zone");
@@ -625,6 +729,7 @@ document.querySelectorAll("[data-repeat-service]").forEach(function (btn) {
     const serviceSelect = document.getElementById("id_service");
     const section = document.getElementById("nueva-reserva");
     if (!serviceSelect || !serviceId) return;
+    if (window.setClientPortalTab) window.setClientPortalTab("booking");
     serviceSelect.value = serviceId;
     serviceSelect.dispatchEvent(new Event("change"));
     if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });

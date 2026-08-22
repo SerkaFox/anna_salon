@@ -76,3 +76,22 @@ class ClientAdminWebTests(TestCase):
         response = self.client.post(reverse("clients:portal"), {})
 
         self.assertRedirects(response, reverse("clients:portal"))
+
+    def test_client_portal_uses_mobile_app_navigation(self):
+        client_user = User.objects.create_user(
+            username="portal-client",
+            password="testpass123",
+            role=User.ROLE_CLIENT,
+        )
+        Client.objects.create(user=client_user, first_name="Portal")
+        self.client.force_login(client_user)
+
+        response = self.client.get(reverse("clients:portal"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-client-tab="home"')
+        self.assertContains(response, 'data-client-tab="booking"')
+        self.assertContains(response, 'data-client-tab="settings"')
+        self.assertContains(response, 'data-client-view="home"')
+        self.assertContains(response, 'data-client-view="booking"')
+        self.assertContains(response, 'data-client-view="settings"')
