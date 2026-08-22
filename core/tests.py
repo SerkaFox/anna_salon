@@ -113,6 +113,7 @@ class PublicBookingTests(TestCase):
         self.assertContains(response, reverse("mobile_api:password_recovery"))
         self.assertContains(response, "¿Olvidaste la contraseña?")
         self.assertContains(response, "data-password-recovery-modal")
+        self.assertContains(response, "password-visibility__toggle")
 
     def test_public_waitlist_accepts_date_range_and_notes(self):
         date_to = (datetime.strptime(self.date, "%Y-%m-%d").date() + timedelta(days=4)).isoformat()
@@ -270,6 +271,12 @@ class PublicBookingTests(TestCase):
 
 
 class ClientIdentityLoginTests(TestCase):
+    def test_login_page_has_password_visibility_toggle(self):
+        response = self.client.get(reverse("accounts:login"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "password-visibility__toggle")
+
     def test_login_form_accepts_client_email(self):
         user = User.objects.create_user(
             username="client_email",
