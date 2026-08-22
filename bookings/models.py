@@ -332,6 +332,7 @@ class BookingWaitlistEntry(models.Model):
         verbose_name="Empleado",
     )
     desired_date = models.DateField("Fecha deseada")
+    desired_date_to = models.DateField("Fecha deseada hasta", null=True, blank=True)
     time_range = models.CharField("Rango horario", max_length=20, blank=True)
     name = models.CharField("Nombre", max_length=180)
     phone = models.CharField("Telefono", max_length=40, blank=True)

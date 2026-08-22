@@ -222,6 +222,9 @@ PUBLIC_TRANSLATIONS["es"].update({
     "public_waitlist_submit": "Apuntarme a la lista",
     "public_waitlist_success": "Te hemos apuntado a la lista de espera.",
     "public_waitlist_contact_required": "Indica telefono o email para poder avisarte.",
+    "public_waitlist_until": "Hasta (opcional)",
+    "public_waitlist_notes": "Comentario",
+    "public_waitlist_notes_hint": "Por ejemplo: llamarme si alguien cancela",
 })
 PUBLIC_TRANSLATIONS["ru"].update({
     "public_waitlist_title": "Лист ожидания",
@@ -230,6 +233,9 @@ PUBLIC_TRANSLATIONS["ru"].update({
     "public_waitlist_submit": "Встать в очередь",
     "public_waitlist_success": "Мы добавили вас в лист ожидания.",
     "public_waitlist_contact_required": "Укажите телефон или email, чтобы мы могли связаться.",
+    "public_waitlist_until": "До даты (необязательно)",
+    "public_waitlist_notes": "Комментарий",
+    "public_waitlist_notes_hint": "Например: позвонить, если кто-то отменит запись",
 })
 PUBLIC_TRANSLATIONS["en"].update({
     "public_waitlist_title": "Waitlist",
@@ -238,6 +244,9 @@ PUBLIC_TRANSLATIONS["en"].update({
     "public_waitlist_submit": "Join waitlist",
     "public_waitlist_success": "You have been added to the waitlist.",
     "public_waitlist_contact_required": "Enter phone or email so we can notify you.",
+    "public_waitlist_until": "Until (optional)",
+    "public_waitlist_notes": "Comment",
+    "public_waitlist_notes_hint": "For example: call me if someone cancels",
 })
 PUBLIC_TRANSLATIONS["de"].update({
     "public_waitlist_title": "Warteliste",
@@ -246,6 +255,9 @@ PUBLIC_TRANSLATIONS["de"].update({
     "public_waitlist_submit": "Auf Warteliste setzen",
     "public_waitlist_success": "Sie wurden auf die Warteliste gesetzt.",
     "public_waitlist_contact_required": "Geben Sie Telefon oder Email an, damit wir Sie informieren konnen.",
+    "public_waitlist_until": "Bis (optional)",
+    "public_waitlist_notes": "Kommentar",
+    "public_waitlist_notes_hint": "Zum Beispiel: anrufen, wenn jemand absagt",
 })
 PUBLIC_TRANSLATIONS["fr"].update({
     "public_waitlist_title": "Liste d'attente",
@@ -254,6 +266,9 @@ PUBLIC_TRANSLATIONS["fr"].update({
     "public_waitlist_submit": "Rejoindre la liste",
     "public_waitlist_success": "Vous avez ete ajoutee a la liste d'attente.",
     "public_waitlist_contact_required": "Indiquez telephone ou email pour que nous puissions vous prevenir.",
+    "public_waitlist_until": "Jusqu'au (facultatif)",
+    "public_waitlist_notes": "Commentaire",
+    "public_waitlist_notes_hint": "Par exemple : appelez-moi en cas d'annulation",
 })
 
 PUBLIC_TRANSLATIONS["es"].update({

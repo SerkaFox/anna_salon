@@ -2527,9 +2527,16 @@ class WaitlistEntryListView(MobileApiMixin, APIView):
         entries = BookingWaitlistEntry.objects.select_related('client', 'service', 'employee')
         selected_date = request.query_params.get('date')
         if selected_date:
-            entries = entries.filter(desired_date=_parse_mobile_date(selected_date))
+            date_value = _parse_mobile_date(selected_date)
+            entries = entries.filter(desired_date__lte=date_value).filter(
+                Q(desired_date_to__isnull=True) | Q(desired_date_to__gte=date_value)
+            )
         else:
-            entries = entries.filter(desired_date__gte=timezone.localdate())
+            today = timezone.localdate()
+            entries = entries.filter(
+                Q(desired_date_to__gte=today)
+                | Q(desired_date_to__isnull=True, desired_date__gte=today)
+            )
 
         status_value = (request.query_params.get('status') or '').strip()
         if status_value == 'all':
@@ -2545,6 +2552,22 @@ class WaitlistEntryListView(MobileApiMixin, APIView):
                 BookingWaitlistEntry.Statuses.NOTIFIED,
             ])
         return Response(BookingWaitlistEntrySerializer(entries, many=True).data)
+
+    def post(self, request):
+        _mobile_admin_required(request.user)
+        serializer = BookingWaitlistEntrySerializer(
+            data=request.data,
+            context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        entry = serializer.save(
+            source=Booking.Sources.MANUAL,
+            status=BookingWaitlistEntry.Statuses.ACTIVE,
+        )
+        return Response(
+            BookingWaitlistEntrySerializer(entry, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class WaitlistEntryDetailView(MobileApiMixin, APIView):

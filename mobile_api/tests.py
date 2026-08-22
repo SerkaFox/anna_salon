@@ -1520,6 +1520,33 @@ class MobileApiMvpTests(TestCase):
         entry.refresh_from_db()
         self.assertEqual(entry.status, BookingWaitlistEntry.Statuses.BOOKED)
 
+    def test_owner_can_add_waitlist_entry_for_date_range(self):
+        date_from = timezone.localdate() + timedelta(days=3)
+        date_to = date_from + timedelta(days=5)
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse('mobile_api:waitlist'),
+            {
+                'client': self.client_obj.pk,
+                'service': self.service.pk,
+                'employee': self.employee.pk,
+                'desired_date': date_from.isoformat(),
+                'desired_date_to': date_to.isoformat(),
+                'phone': '+34600111222',
+                'time_range': '10:00-16:00',
+                'notes': 'Llamar si alguien cancela',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201, response.json())
+        entry = BookingWaitlistEntry.objects.get(pk=response.json()['id'])
+        self.assertEqual(entry.client, self.client_obj)
+        self.assertEqual(entry.name, self.client_obj.full_name)
+        self.assertEqual(entry.desired_date_to, date_to)
+        self.assertEqual(entry.source, Booking.Sources.MANUAL)
+
     def test_employee_cannot_access_waitlist(self):
         self._auth(self.employee_user)
         response = self.api_client.get(reverse('mobile_api:waitlist'))

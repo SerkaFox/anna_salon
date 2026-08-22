@@ -926,10 +926,38 @@ class BookingWaitlistEntrySerializer(serializers.ModelSerializer):
         model = BookingWaitlistEntry
         fields = [
             'id', 'client', 'service', 'service_name', 'employee',
-            'employee_name', 'desired_date', 'time_range', 'name', 'phone',
+            'employee_name', 'desired_date', 'desired_date_to', 'time_range', 'name', 'phone',
             'email', 'status', 'status_label', 'source', 'notes',
             'notified_at', 'created_at', 'updated_at',
         ]
+        read_only_fields = ['status_label', 'notified_at', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'name': {'required': False, 'allow_blank': True},
+            'phone': {'required': False, 'allow_blank': True},
+            'email': {'required': False, 'allow_blank': True},
+            'status': {'required': False},
+            'source': {'required': False},
+        }
+
+    def validate(self, attrs):
+        client = attrs.get('client')
+        if client:
+            attrs['name'] = (attrs.get('name') or client.full_name).strip()
+            attrs['phone'] = (attrs.get('phone') or client.phone).strip()
+            attrs['email'] = (attrs.get('email') or client.email).strip()
+        if not (attrs.get('name') or '').strip():
+            raise serializers.ValidationError({'name': ['Indica el nombre del cliente.']})
+        if not (attrs.get('phone') or '').strip() and not (attrs.get('email') or '').strip():
+            raise serializers.ValidationError({'phone': ['Indica telefono o email para contactar.']})
+        date_from = attrs.get('desired_date')
+        date_to = attrs.get('desired_date_to')
+        if date_from and date_to and date_to < date_from:
+            raise serializers.ValidationError({'desired_date_to': ['La fecha final no puede ser anterior a la inicial.']})
+        employee = attrs.get('employee')
+        service = attrs.get('service')
+        if employee and service and not employee.services.filter(pk=service.pk).exists():
+            raise serializers.ValidationError({'employee': ['Este empleado no realiza el servicio seleccionado.']})
+        return attrs
 
 
 class BookingWriteSerializer(serializers.Serializer):

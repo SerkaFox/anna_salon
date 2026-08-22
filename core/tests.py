@@ -1,4 +1,4 @@
-from datetime import timedelta, time
+from datetime import datetime, timedelta, time
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from accounts.models import User
-from bookings.models import Booking
+from bookings.models import Booking, BookingWaitlistEntry
 from clients.models import Client
 from employees.models import Employee, EmployeeWeeklyShift
 from services_app.models import Service
@@ -113,6 +113,28 @@ class PublicBookingTests(TestCase):
         self.assertContains(response, reverse("mobile_api:password_recovery"))
         self.assertContains(response, "¿Olvidaste la contraseña?")
         self.assertContains(response, "data-password-recovery-modal")
+
+    def test_public_waitlist_accepts_date_range_and_notes(self):
+        date_to = (datetime.strptime(self.date, "%Y-%m-%d").date() + timedelta(days=4)).isoformat()
+
+        response = self.browser.post(
+            reverse("public_waitlist"),
+            {
+                "service": self.service.pk,
+                "employee": self.employee.pk,
+                "date": self.date,
+                "date_to": date_to,
+                "name": "Maria",
+                "phone": "+34600111222",
+                "notes": "Llamar si alguien cancela",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        entry = BookingWaitlistEntry.objects.get(pk=response.json()["waitlist_id"])
+        self.assertEqual(entry.desired_date_to.isoformat(), date_to)
+        self.assertEqual(entry.notes, "Llamar si alguien cancela")
 
     def test_public_booking_slots_returns_employee_options(self):
         response = self.browser.get(

@@ -881,10 +881,12 @@ def public_waitlist(request):
     service_id = request.POST.get("service")
     employee_id = request.POST.get("employee")
     desired_date_text = request.POST.get("date")
+    desired_date_to_text = request.POST.get("date_to")
     name = (request.POST.get("name") or "").strip()
     email = (request.POST.get("email") or "").strip()
     phone = (request.POST.get("phone") or "").strip()
     time_range = (request.POST.get("time_range") or "").strip()
+    notes = (request.POST.get("notes") or "").strip()
 
     errors = {}
     if not name:
@@ -912,6 +914,14 @@ def public_waitlist(request):
 
     if desired_date and desired_date < timezone.localdate():
         errors["date"] = [t["public_booking_error_future"]]
+    desired_date_to = None
+    if desired_date_to_text:
+        try:
+            desired_date_to = datetime.strptime(desired_date_to_text, "%Y-%m-%d").date()
+        except ValueError:
+            errors["date_to"] = [t["public_booking_error_future"]]
+    if desired_date and desired_date_to and desired_date_to < desired_date:
+        errors["date_to"] = [t["public_booking_error_future"]]
     if service and employee and not employee.services.filter(pk=service.pk).exists():
         errors["employee"] = [t["public_booking_error_employee"]]
 
@@ -922,11 +932,13 @@ def public_waitlist(request):
         service=service,
         employee=employee,
         desired_date=desired_date,
+        desired_date_to=desired_date_to,
         time_range=time_range,
         name=name,
         email=email,
         phone=phone,
         source=Booking.Sources.WEBSITE,
+        notes=notes,
     )
     try:
         from whatsapp_bot.services import notify_waitlist_entry_created

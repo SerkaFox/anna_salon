@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db.models import Q
 from django.utils import timezone
 
 from payments.models import Payment as OnlinePayment
@@ -67,14 +68,16 @@ def refresh_booking_prepayments(bookings):
 def notify_waitlist_for_booking_opening(booking):
     from whatsapp_bot.services import notify_waitlist_slot_available
 
+    booking_date = timezone.localtime(booking.start_at).date()
     entries = list(
         BookingWaitlistEntry.objects.select_related("employee", "service")
         .filter(
             status=BookingWaitlistEntry.Statuses.ACTIVE,
             employee=booking.employee,
             service=booking.service,
-            desired_date=timezone.localtime(booking.start_at).date(),
+            desired_date__lte=booking_date,
         )
+        .filter(Q(desired_date_to__isnull=True) | Q(desired_date_to__gte=booking_date))
         .order_by("created_at")
     )
     if not entries:

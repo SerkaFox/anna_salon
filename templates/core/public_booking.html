@@ -191,6 +191,10 @@
         <input type="hidden" name="date" data-waitlist-date>
         <input type="hidden" name="time_range" data-waitlist-range>
         <label class="lux-field">
+          <span>{{ t.public_waitlist_until }}</span>
+          <input class="lux-input" type="date" name="date_to">
+        </label>
+        <label class="lux-field">
           <span>{{ t.public_waitlist_master }}</span>
           <select class="lux-input" name="employee" data-waitlist-employee required></select>
         </label>
@@ -205,6 +209,10 @@
         <label class="lux-field">
           <span>{{ t.public_booking_phone }}</span>
           <input class="lux-input" type="tel" name="phone" data-waitlist-phone>
+        </label>
+        <label class="lux-field">
+          <span>{{ t.public_waitlist_notes }}</span>
+          <textarea class="lux-input" name="notes" rows="2" placeholder="{{ t.public_waitlist_notes_hint }}"></textarea>
         </label>
         <div class="booking-alert" data-waitlist-message hidden></div>
         <button class="btn-lux btn-lux-outline btn-lux-large" type="submit">{{ t.public_waitlist_submit }}</button>
