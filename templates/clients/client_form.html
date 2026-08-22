@@ -88,6 +88,15 @@
         </div>
       {% endif %}
 
+      {% if form.pricing_category %}
+        <div class="field">
+          <label for="{{ form.pricing_category.id_for_label }}">Categoría de precios</label>
+          {{ form.pricing_category }}
+          <p class="muted-text">Servicio gratuito pone el total de todas las reservas en 0 €.</p>
+          {{ form.pricing_category.errors }}
+        </div>
+      {% endif %}
+
       <div class="field field-checkbox">
         <label for="{{ form.is_active.id_for_label }}">Cliente activo</label>
         <div class="checkbox-row">

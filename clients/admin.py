@@ -10,6 +10,7 @@ class ClientAdmin(admin.ModelAdmin):
         "phone",
         "email",
         "is_blacklisted",
+        "pricing_category",
         "external_source",
         "is_active",
         "created_at",
@@ -22,7 +23,13 @@ class ClientAdmin(admin.ModelAdmin):
         "email",
         "external_id",
     )
-    list_filter = ("is_blacklisted", "external_source", "is_active", "created_at")
+    list_filter = (
+        "pricing_category",
+        "is_blacklisted",
+        "external_source",
+        "is_active",
+        "created_at",
+    )
 
 
 @admin.register(ClientRewardRule)

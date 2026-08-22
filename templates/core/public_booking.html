@@ -940,6 +940,10 @@
             showMandatoryPrepayment(result.data);
             return;
           }
+          if (result.ok && result.data.ok && result.data.redirect) {
+            window.location.href = result.data.redirect;
+            return;
+          }
           showErrors(result.data.errors || { __all__: [messages.error] });
           submitButton.disabled = false;
           submitButton.textContent = originalText;

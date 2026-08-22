@@ -20,7 +20,15 @@ class EmployeeRecurringTimeBlockInline(admin.TabularInline):
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "phone", "email", "commission_percent", "is_active")
+    list_display = (
+        "full_name",
+        "phone",
+        "email",
+        "commission_percent",
+        "vacation_days_used",
+        "vacation_days_remaining",
+        "is_active",
+    )
     list_filter = ("is_active",)
     search_fields = ("first_name", "last_name", "phone", "email")
     inlines = [EmployeeWeeklyShiftInline, EmployeeScheduleOverrideInline, EmployeeRecurringTimeBlockInline]

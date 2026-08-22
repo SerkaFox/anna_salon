@@ -650,6 +650,39 @@ class MobileApiMvpTests(TestCase):
         )
         self.assertEqual(booking.client_price_snapshot, Decimal("50.00"))
 
+    @patch("mobile_api.views.request_booking_prepayment")
+    def test_complimentary_client_booking_is_free_without_prepayment(
+        self, request_prepayment
+    ):
+        self.client_obj.pricing_category = Client.PricingCategories.COMPLIMENTARY
+        self.client_obj.save(update_fields=["pricing_category"])
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(
+                zone=None,
+                start_at="2026-04-27T16:00:00+02:00",
+                services=[self.service.pk, self.no_zone_service.pk],
+                prepayment_required=True,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(booking.original_client_price_snapshot, Decimal("80.00"))
+        self.assertEqual(booking.discount_amount_snapshot, Decimal("80.00"))
+        self.assertEqual(booking.client_price_snapshot, Decimal("0.00"))
+        self.assertEqual(booking.employee_amount_snapshot, Decimal("0.00"))
+        self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.EXEMPT)
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
+        self.assertEqual(
+            [item["client_price"] for item in booking.service_items_snapshot],
+            ["0.00", "0.00"],
+        )
+        request_prepayment.assert_not_called()
+
     def test_staff_can_book_outside_employee_shift(self):
         self._auth(self.owner_user)
 
@@ -959,6 +992,25 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(override.start_time, time(10, 0))
         self.assertEqual(override.end_time, time(14, 0))
         self.assertEqual(override.label, "Especial")
+
+    def test_owner_can_update_employee_vacation_counter(self):
+        self._auth(self.owner_user)
+        response = self.api_client.patch(
+            reverse("mobile_api:employee_detail", args=[self.other_employee.pk]),
+            {
+                "vacation_year": 2026,
+                "vacation_days_allowance": 30,
+                "vacation_days_used": 18,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        employee = response.json()["employee"]
+        self.assertEqual(employee["vacation_year"], 2026)
+        self.assertEqual(employee["vacation_days_allowance"], 30)
+        self.assertEqual(employee["vacation_days_used"], 18)
+        self.assertEqual(employee["vacation_days_remaining"], 12)
 
     def test_employee_cannot_update_schedule(self):
         self._auth(self.employee_user)

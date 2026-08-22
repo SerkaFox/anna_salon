@@ -43,6 +43,7 @@ class ClientForm(forms.ModelForm):
             self.fields.pop("password", None)
             self.fields.pop("is_blacklisted", None)
             self.fields.pop("prepayment_exempt", None)
+            self.fields.pop("pricing_category", None)
 
     def clean_username(self):
         username = (self.cleaned_data.get("username") or "").strip()
@@ -115,6 +116,7 @@ class ClientForm(forms.ModelForm):
             "notes",
             "is_blacklisted",
             "prepayment_exempt",
+            "pricing_category",
             "is_active",
             "username",
             "password",
@@ -133,6 +135,7 @@ class ClientForm(forms.ModelForm):
             "notes": forms.Textarea(attrs={"class": "textarea", "rows": 5}),
             "is_blacklisted": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "prepayment_exempt": forms.CheckboxInput(attrs={"class": "checkbox"}),
+            "pricing_category": forms.Select(attrs={"class": "input"}),
             "is_active": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 

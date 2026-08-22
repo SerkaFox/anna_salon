@@ -70,6 +70,24 @@
         {{ form.commission_percent.errors }}
       </div>
 
+      <div class="field">
+        <label for="{{ form.vacation_year.id_for_label }}">Año de vacaciones</label>
+        {{ form.vacation_year }}
+        {{ form.vacation_year.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.vacation_days_allowance.id_for_label }}">Días asignados</label>
+        {{ form.vacation_days_allowance }}
+        {{ form.vacation_days_allowance.errors }}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.vacation_days_used.id_for_label }}">Días usados</label>
+        {{ form.vacation_days_used }}
+        {{ form.vacation_days_used.errors }}
+      </div>
+
       <div class="field field-checkbox">
         <label for="{{ form.is_active.id_for_label }}">Empleado activo</label>
         <div class="checkbox-row">

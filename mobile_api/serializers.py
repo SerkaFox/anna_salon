@@ -101,6 +101,10 @@ class ClientSerializer(serializers.ModelSerializer):
     total_orders = serializers.SerializerMethodField()
     total_spent = serializers.SerializerMethodField()
     is_online_client = serializers.SerializerMethodField()
+    prepayment_exempt = serializers.SerializerMethodField()
+    pricing_category_label = serializers.CharField(
+        source="get_pricing_category_display", read_only=True
+    )
 
     class Meta:
         model = Client
@@ -130,6 +134,8 @@ class ClientSerializer(serializers.ModelSerializer):
             "appointments_frequency",
             "is_blacklisted",
             "prepayment_exempt",
+            "pricing_category",
+            "pricing_category_label",
             "is_active",
             "created_at",
             "updated_at",
@@ -167,6 +173,9 @@ class ClientSerializer(serializers.ModelSerializer):
                 "internet",
             }
         )
+
+    def get_prepayment_exempt(self, obj):
+        return obj.prepayment_exempt or obj.is_complimentary
 
 
 class ClientRewardRuleSerializer(serializers.ModelSerializer):
@@ -221,6 +230,7 @@ class ClientWriteSerializer(serializers.ModelSerializer):
             "how_we_met",
             "is_blacklisted",
             "prepayment_exempt",
+            "pricing_category",
             "referred_by",
             "username",
             "password",
@@ -237,6 +247,7 @@ class ClientWriteSerializer(serializers.ModelSerializer):
             )
             self.fields.pop("username", None)
             self.fields.pop("password", None)
+            self.fields.pop("pricing_category", None)
 
     def validate(self, attrs):
         request = self.context.get("request")
@@ -297,6 +308,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     zone_ids = serializers.PrimaryKeyRelatedField(source="zones", many=True, read_only=True)
     zone_names = serializers.SerializerMethodField()
     username = serializers.CharField(source="user.username", read_only=True, allow_null=True)
+    vacation_days_remaining = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Employee
@@ -309,6 +321,10 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "email",
             "calendar_color",
             "commission_percent",
+            "vacation_year",
+            "vacation_days_allowance",
+            "vacation_days_used",
+            "vacation_days_remaining",
             "service_ids",
             "service_names",
             "zone_ids",
@@ -361,6 +377,9 @@ class EmployeeWriteSerializer(serializers.ModelSerializer):
             "zones",
             "calendar_color",
             "commission_percent",
+            "vacation_year",
+            "vacation_days_allowance",
+            "vacation_days_used",
             "is_active",
             "notes",
             "username",
@@ -1038,6 +1057,7 @@ class BookingWriteSerializer(serializers.Serializer):
             "extra_duration_minutes",
             instance.extra_duration_minutes if instance else 0,
         )
+
         cleanup_duration = attrs.get(
             "cleanup_duration_minutes",
             instance.cleanup_duration_minutes if instance else 0,
@@ -1105,7 +1125,11 @@ class BookingWriteSerializer(serializers.Serializer):
         self._extra_duration_minutes = extra_duration
         self._cleanup_duration_minutes = cleanup_duration
         self._prepayment_required_supplied = "prepayment_required" in attrs
-        self._prepayment_required = True if client_profile else attrs.get("prepayment_required", False)
+        self._prepayment_required = (
+            False
+            if values["client"].is_complimentary
+            else (True if client_profile else attrs.get("prepayment_required", False))
+        )
         return attrs
 
     def create(self, validated_data):
@@ -1126,6 +1150,8 @@ class BookingWriteSerializer(serializers.Serializer):
             if base_original > 0
             else Decimal("0.00")
         )
+        if booking.client.is_complimentary:
+            discount_rate = Decimal("1.00")
         discount_total = (original_total * discount_rate).quantize(Decimal("0.01"))
         client_total = original_total - discount_total
         employee_percent = booking.employee_percent_snapshot

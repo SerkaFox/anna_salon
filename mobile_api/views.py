@@ -1108,6 +1108,8 @@ class BookingPrepaymentView(MobileApiMixin, APIView):
         if not _mobile_can_access_booking(request.user, booking):
             raise PermissionDenied("Sin acceso a esta reserva.")
         required = serializers.BooleanField().run_validation(request.data.get("required"))
+        if booking.client.is_complimentary:
+            required = False
         if required:
             booking.whatsapp_messages.filter(
                 kind__in=[

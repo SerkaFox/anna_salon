@@ -305,7 +305,7 @@ def booking_create(request):
         )
         if form.is_valid():
             booking = form.save()
-            if form.cleaned_data.get("prepayment_required"):
+            if form.cleaned_data.get("prepayment_required") and not booking.client.is_complimentary:
                 request_booking_prepayment(booking, request)
             else:
                 booking.prepayment_policy = Booking.PrepaymentPolicies.EXEMPT

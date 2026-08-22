@@ -3,6 +3,10 @@ from django.db import models
 
 
 class Client(models.Model):
+    class PricingCategories(models.TextChoices):
+        STANDARD = "standard", "Normal"
+        COMPLIMENTARY = "complimentary", "Servicio gratuito"
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -85,6 +89,12 @@ class Client(models.Model):
         "No requiere prepago; paga en el salon",
         default=False,
     )
+    pricing_category = models.CharField(
+        "Categoria de precios",
+        max_length=20,
+        choices=PricingCategories.choices,
+        default=PricingCategories.STANDARD,
+    )
     created_at = models.DateTimeField("Creado", auto_now_add=True)
     updated_at = models.DateTimeField("Actualizado", auto_now=True)
 
@@ -110,6 +120,10 @@ class Client(models.Model):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
+
+    @property
+    def is_complimentary(self):
+        return self.pricing_category == self.PricingCategories.COMPLIMENTARY
 
 
 class ClientRewardRule(models.Model):

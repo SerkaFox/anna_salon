@@ -313,6 +313,11 @@ class BookingForm(forms.ModelForm):
                 discount_amount = (original_price * discount_percent) / Decimal("100")
                 reward_applied = True
 
+            if booking.client.is_complimentary:
+                discount_amount = original_price
+                reward_applied = False
+                booking.reward_rule = None
+
             client_price = original_price - discount_amount
 
             employee_percent = getattr(booking.employee, "commission_percent", Decimal("40.00")) or Decimal("40.00")

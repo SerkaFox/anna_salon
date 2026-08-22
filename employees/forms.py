@@ -45,6 +45,9 @@ class EmployeeForm(forms.ModelForm):
             "zones",
             "calendar_color",
             "commission_percent",
+            "vacation_year",
+            "vacation_days_allowance",
+            "vacation_days_used",
             "is_active",
             "notes",
         ]
@@ -55,6 +58,9 @@ class EmployeeForm(forms.ModelForm):
             "email": forms.EmailInput(attrs={"class": "input", "placeholder": "Email"}),
             "calendar_color": forms.TextInput(attrs={"class": "input", "type": "color"}),
             "commission_percent": forms.NumberInput(attrs={"class": "input", "min": "0", "max": "100", "step": "0.01"}),
+            "vacation_year": forms.NumberInput(attrs={"class": "input", "min": "2020", "max": "2100"}),
+            "vacation_days_allowance": forms.NumberInput(attrs={"class": "input", "min": "0"}),
+            "vacation_days_used": forms.NumberInput(attrs={"class": "input", "min": "0"}),
             "notes": forms.Textarea(attrs={"class": "textarea", "placeholder": "Notas internas", "rows": 5}),
             "is_active": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }

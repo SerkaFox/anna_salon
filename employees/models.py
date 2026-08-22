@@ -15,6 +15,10 @@ class Weekday(models.IntegerChoices):
     SUNDAY = 6, _("Domingo")
 
 
+def current_year():
+    return date.today().year
+
+
 class Employee(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -47,6 +51,15 @@ class Employee(models.Model):
         decimal_places=2,
         default=40
     )
+    vacation_year = models.PositiveSmallIntegerField(
+        "Ano de vacaciones", default=current_year
+    )
+    vacation_days_allowance = models.PositiveSmallIntegerField(
+        "Dias de vacaciones asignados", default=30
+    )
+    vacation_days_used = models.PositiveSmallIntegerField(
+        "Dias de vacaciones usados", default=0
+    )
     is_active = models.BooleanField("Activo", default=True)
     notes = models.TextField("Notas", blank=True)
     created_at = models.DateTimeField("Creado", auto_now_add=True)
@@ -63,6 +76,10 @@ class Employee(models.Model):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
+
+    @property
+    def vacation_days_remaining(self):
+        return self.vacation_days_allowance - self.vacation_days_used
 
     def get_shift_for_date(self, target_date: date):
         override = self.schedule_overrides.filter(date=target_date).first()

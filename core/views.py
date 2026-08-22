@@ -516,8 +516,16 @@ def _build_public_booking_form(client, service, employee, zone, start_at, end_at
     if not form.is_valid():
         raise PublicBookingError({field: [str(item) for item in errs] for field, errs in form.errors.items()})
     booking = form.save()
-    booking.prepayment_policy = Booking.PrepaymentPolicies.REQUIRED
-    booking.status = Booking.Statuses.PENDING
+    booking.prepayment_policy = (
+        Booking.PrepaymentPolicies.EXEMPT
+        if client.is_complimentary
+        else Booking.PrepaymentPolicies.REQUIRED
+    )
+    booking.status = (
+        Booking.Statuses.CONFIRMED
+        if client.is_complimentary
+        else Booking.Statuses.PENDING
+    )
     booking.save(update_fields=["prepayment_policy", "status", "updated_at"])
     return booking
 
@@ -839,7 +847,11 @@ def public_booking(request):
         except Exception:
             logger.exception("Could not send welcome credentials notification for booking %s", booking.pk)
 
-    payment = request_booking_prepayment(booking, request)
+    payment = (
+        None
+        if booking.client.is_complimentary
+        else request_booking_prepayment(booking, request)
+    )
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     language = detect_public_language(request)
@@ -853,7 +865,7 @@ def public_booking(request):
                 "redirect": redirect_url,
                 "username": user.username,
                 "booking_id": booking.pk,
-                "checkout_url": payment.checkout_url,
+                "checkout_url": payment.checkout_url if payment else "",
                 "whatsapp_action": reverse(
                     "mobile_api:booking_prepayment", args=[booking.pk]
                 ),
