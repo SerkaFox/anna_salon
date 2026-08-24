@@ -72,6 +72,11 @@ def send_message(connection, *, to_phone, body):
     )
 
 
+def request_pairing_code(connection, phone):
+    """Request a WhatsApp pairing code (no-QR linking). Returns {"code": "XXXX-XXXX"} or raises."""
+    return _request(f"/sessions/{connection.name}/pairing-code", {"phone": phone}, timeout=30)
+
+
 def send_buttons_message(connection, *, to_phone, body, buttons, title="", footer=""):
     """Send an interactive button message. buttons is a list of {"id": str, "body": str}."""
     return _request(

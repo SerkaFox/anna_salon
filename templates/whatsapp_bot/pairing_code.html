@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WhatsApp · Código de vinculación</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #111; color: #eee;
+           display: flex; align-items: center; justify-content: center;
+           min-height: 100vh; padding: 24px; }
+    .card { background: #1a1a1a; border: 1px solid #333; border-radius: 20px;
+            padding: 36px; max-width: 420px; width: 100%; text-align: center; }
+    h1 { font-size: 18px; font-weight: 600; margin-bottom: 6px; color: #fff; }
+    .sub { font-size: 13px; color: #888; margin-bottom: 28px; }
+    .code-box { background: #0a3d22; border: 2px solid #25d366; border-radius: 14px;
+                padding: 24px; margin: 20px 0; }
+    .code-box .code { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.15em;
+                      color: #25d366; font-family: monospace; }
+    .code-box .hint { font-size: 13px; color: #aaa; margin-top: 10px; }
+    .steps { text-align: left; background: #222; border-radius: 12px; padding: 18px 20px;
+             margin: 20px 0; font-size: 14px; line-height: 2; color: #ccc; }
+    .steps strong { color: #fff; }
+    .field-block { text-align: left; margin-top: 8px; }
+    .field-block label { display: block; font-size: 12px; color: #888; margin-bottom: 6px; }
+    .field-block input { width: 100%; background: #111; border: 1px solid #333;
+                         border-radius: 10px; padding: 12px 14px; color: #eee;
+                         font-size: 1.1rem; letter-spacing: 0.08em; outline: none; }
+    .field-block input:focus { border-color: #25d366; }
+    .btn { width: 100%; margin-top: 16px; background: #25d366; color: #000;
+           border: none; border-radius: 10px; padding: 13px; font-size: 15px;
+           font-weight: 700; cursor: pointer; }
+    .btn:hover { background: #1ebe59; }
+    .err { background: #3d0a0a; color: #fc8181; border-radius: 10px;
+           padding: 12px 16px; font-size: 13px; margin-top: 14px; }
+    .back { display: block; margin-top: 22px; font-size: 13px; color: #555;
+            text-decoration: none; }
+    .back:hover { color: #888; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>WhatsApp · {{ name }}</h1>
+
+  {% if pairing_code and pairing_code != "already connected" %}
+    <p class="sub">Introduce este código en tu teléfono</p>
+    <div class="code-box">
+      <div class="code">{{ pairing_code }}</div>
+      <div class="hint">El código caduca en unos minutos</div>
+    </div>
+    <div class="steps">
+      1. Abre <strong>WhatsApp</strong> en tu teléfono<br>
+      2. <strong>Tres puntos → Dispositivos vinculados</strong><br>
+      3. <strong>Vincular con número de teléfono</strong><br>
+      4. Introduce el código de arriba
+    </div>
+    <a class="back" href="/whatsapp/connect/{{ name }}/">← Volver a la página principal</a>
+
+  {% elif pairing_code == "already connected" %}
+    <p class="sub" style="color:#25d366;font-size:15px;">✓ Ya está conectado</p>
+    <a class="back" href="/whatsapp/connect/{{ name }}/">← Volver</a>
+
+  {% else %}
+    <p class="sub">Introduce el número del teléfono a vincular</p>
+    <form method="post" class="field-block">
+      {% csrf_token %}
+      <label for="phone">Número de teléfono (con prefijo, sin +)</label>
+      <input id="phone" type="tel" name="phone" placeholder="34643996431" value="34643996431" autofocus>
+      <button type="submit" class="btn">Obtener código →</button>
+      {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    </form>
+    <a class="back" href="/whatsapp/connect/{{ name }}/">← Usar QR en su lugar</a>
+  {% endif %}
+</div>
+</body>
+</html>

@@ -440,6 +440,19 @@ app.post("/messages/buttons", async (req, res) => {
   }
 });
 
+app.post("/sessions/:session/pairing-code", async (req, res) => {
+  const state = getSession(req.params.session);
+  const phone = String(req.body?.phone || "").replace(/\D/g, "");
+  if (!phone) return res.status(400).json({ error: "phone is required" });
+  if (state.status === "ready") return res.json({ code: null, note: "already connected" });
+  try {
+    const code = await state.client.requestPairingCode(phone);
+    res.json({ code });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`WhatsApp bridge listening on 0.0.0.0:${PORT}`);
 });

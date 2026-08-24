@@ -30,10 +30,11 @@
     {% else %}
       {% if qr_payload.qr_image %}
         <img src="{{ qr_payload.qr_image }}" alt="WhatsApp QR">
+        <p style="margin-top:10px;font-size:13px;color:#666;">Si no ves la imagen, ve a <a href="/whatsapp/connect/main/">esta página</a> e introduce el PIN <strong>1234</strong>.</p>
       {% elif qr_payload.qr %}
-        <pre>{{ qr_payload.qr }}</pre>
+        <p class="muted">La imagen QR no se generó correctamente. Ve a <a href="/whatsapp/connect/main/">/whatsapp/connect/main/</a> e introduce el PIN <strong>1234</strong>.</p>
       {% else %}
-        <p class="muted">Bridge responded, but did not return <code>qr_image</code> or <code>qr</code>.</p>
+        <p class="muted">Bridge no devolvió QR. Ve a <a href="/whatsapp/connect/main/">/whatsapp/connect/main/</a>.</p>
       {% endif %}
       <form method="post">
         {% csrf_token %}

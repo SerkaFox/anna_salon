@@ -67,6 +67,34 @@ def whatsapp_connect(request, name):
     })
 
 
+def whatsapp_pairing_code(request, name):
+    """Request a WhatsApp pairing code (no-QR alternative)."""
+    pin = getattr(settings, "WHATSAPP_CONNECT_PIN", "1234")
+    session_key = f"wa_connect_auth_{name}"
+    if not request.session.get(session_key) and not request.user.is_authenticated:
+        return HttpResponse(status=403)
+
+    connection, _ = WhatsAppConnection.objects.get_or_create(name=name)
+    pairing_code = None
+    error = ""
+
+    if request.method == "POST":
+        phone = request.POST.get("phone", "").strip().replace(" ", "").replace("+", "")
+        try:
+            result = bridge.request_pairing_code(connection, phone)
+            pairing_code = result.get("code") or result.get("note")
+        except bridge.WhatsAppBridgeError as exc:
+            error = str(exc)
+
+    return render(request, "whatsapp_bot/pairing_code.html", {
+        "name": name,
+        "connection": connection,
+        "pairing_code": pairing_code,
+        "error": error,
+        "now": timezone.now(),
+    })
+
+
 def whatsapp_qr_image(request, name):
     """Return the current QR code as a PNG image."""
     pin = getattr(settings, "WHATSAPP_CONNECT_PIN", "1234")
