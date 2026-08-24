@@ -18,20 +18,20 @@ logger = logging.getLogger(__name__)
 
 def whatsapp_connect(request, name):
     login_error = ""
+    pin = getattr(settings, "WHATSAPP_CONNECT_PIN", "1234")
+    session_key = f"wa_connect_auth_{name}"
 
-    # Handle login form submission
-    if request.method == "POST" and not request.user.is_authenticated:
-        username = request.POST.get("username", "").strip()
-        password = request.POST.get("password", "")
-        user = authenticate(request, username=username, password=password)
-        if user is not None and user.is_active:
-            login(request, user)
+    # PIN login form submission
+    if request.method == "POST" and not request.session.get(session_key):
+        entered = request.POST.get("pin", "").strip()
+        if entered == pin:
+            request.session[session_key] = True
             return redirect(request.path)
         else:
-            login_error = "Usuario o contraseña incorrectos."
+            login_error = "PIN incorrecto."
 
-    # Show login form if not authenticated
-    if not request.user.is_authenticated:
+    # Show PIN form if not authenticated via session or Django
+    if not request.session.get(session_key) and not request.user.is_authenticated:
         return render(request, "whatsapp_bot/connect.html", {
             "show_login": True,
             "login_error": login_error,
@@ -40,11 +40,11 @@ def whatsapp_connect(request, name):
 
     connection, _ = WhatsAppConnection.objects.get_or_create(name=name)
 
-    qr_image = ""
+    has_qr = False
     bridge_error = ""
     try:
         data = bridge.get_qr(connection)
-        qr_image = data.get("qr_image", "")
+        has_qr = bool(data.get("qr", ""))
         status = data.get("status", connection.status)
         phone = data.get("phone", connection.phone or "")
         connection.status = status
@@ -60,10 +60,35 @@ def whatsapp_connect(request, name):
     return render(request, "whatsapp_bot/connect.html", {
         "show_login": False,
         "connection": connection,
-        "qr_image": qr_image,
+        "has_qr": has_qr,
         "bridge_error": bridge_error,
+        "name": name,
         "now": timezone.now(),
     })
+
+
+def whatsapp_qr_image(request, name):
+    """Return the current QR code as a PNG image."""
+    pin = getattr(settings, "WHATSAPP_CONNECT_PIN", "1234")
+    session_key = f"wa_connect_auth_{name}"
+    if not request.session.get(session_key) and not request.user.is_authenticated:
+        return HttpResponse(status=403)
+
+    try:
+        data = bridge.get_qr(WhatsAppConnection.objects.get_or_create(name=name)[0])
+    except bridge.WhatsAppBridgeError:
+        return HttpResponse(status=503)
+
+    raw_qr = data.get("qr", "")
+    if not raw_qr:
+        return HttpResponse(status=204)
+
+    import io
+    import qrcode
+    img = qrcode.make(raw_qr)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return HttpResponse(buf.getvalue(), content_type="image/png")
 
 
 @csrf_exempt

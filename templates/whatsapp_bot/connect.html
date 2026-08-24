@@ -53,13 +53,12 @@
   <h1>WhatsApp · {{ name }}</h1>
 
   {% if show_login %}
-    <p class="sub">Introduce tus credenciales para ver el QR</p>
+    <p class="sub">Introduce el PIN de acceso</p>
     <form method="post" class="login-block">
       {% csrf_token %}
-      <label for="wa_user">Usuario</label>
-      <input id="wa_user" type="text" name="username" autocomplete="username" autofocus>
-      <label for="wa_pass">Contraseña</label>
-      <input id="wa_pass" type="password" name="password" autocomplete="current-password">
+      <label for="wa_pin">PIN</label>
+      <input id="wa_pin" type="password" name="pin" inputmode="numeric" pattern="[0-9]*"
+             autocomplete="off" autofocus placeholder="····" style="font-size:2rem;letter-spacing:0.4em;text-align:center;">
       <button type="submit">Entrar →</button>
       {% if login_error %}<div class="login-err">{{ login_error }}</div>{% endif %}
     </form>
@@ -76,10 +75,10 @@
     <div class="status error">✗ Error de bridge</div>
     <div class="err">{{ bridge_error }}</div>
 
-  {% elif qr_image %}
+  {% elif has_qr %}
     <div class="status qr">Escanea el QR</div>
     <div class="qr-wrap">
-      <img src="{{ qr_image }}" alt="QR WhatsApp">
+      <img src="{% url 'whatsapp_bot:qr_image' name %}?t={{ now|date:'U' }}" alt="QR WhatsApp" width="240" height="240">
     </div>
     <p class="hint">
       Abre WhatsApp → tres puntos → <strong>Dispositivos vinculados</strong><br>
