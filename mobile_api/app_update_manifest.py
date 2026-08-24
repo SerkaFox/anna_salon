@@ -1,16 +1,14 @@
 ANDROID_APP_UPDATE = {
-    "version_code": 35,
-    "version_name": "0.1.34",
-    "apk_url": "https://brimoon.es/media/brimoon-release-0.1.34-35.apk",
-    "sha256": "fbdba3deab47199c2f58059ccf3a032470c3530f42fb3c84e9cdffca2366552c",
+    "version_code": 36,
+    "version_name": "0.1.35",
+    "apk_url": "https://brimoon.es/media/brimoon-release-0.1.35-36.apk",
+    "sha256": "12960b39eaf7609ef077fbee5e4f8bbb7c603119f9b9ed71ef61fcc4d85ea74c",
     "size_bytes": 64824457,
     "required": False,
     "notes_ru": [
-        "Установка продолжается автоматически после выдачи разрешения.",
-        "Приложение повторно запускается после успешного обновления.",
+        "Перезапуск после обновления адаптирован для ограничений Android 14–16.",
     ],
     "notes_es": [
-        "La instalacion continua automaticamente despues del permiso.",
-        "La aplicacion vuelve a abrirse despues de actualizarse.",
+        "Reinicio tras actualizar adaptado a las restricciones de Android 14–16.",
     ],
 }

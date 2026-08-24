@@ -171,8 +171,8 @@ class MobileApiMvpTests(TestCase):
         response = self.api_client.get(reverse("mobile_api:app_update"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["version_code"], 35)
-        self.assertEqual(response.json()["version_name"], "0.1.34")
+        self.assertEqual(response.json()["version_code"], 36)
+        self.assertEqual(response.json()["version_name"], "0.1.35")
         self.assertEqual(len(response.json()["sha256"]), 64)
         self.assertGreater(response.json()["size_bytes"], 0)
         self.assertIn("no-store", response["Cache-Control"])
