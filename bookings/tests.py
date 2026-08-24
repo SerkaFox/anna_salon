@@ -28,6 +28,7 @@ class CalendarScaleTests(SimpleTestCase):
         self.assertEqual(lines[0]["label"], "09:00")
         self.assertEqual(lines[1]["label"], "09:30")
         self.assertEqual(lines[1]["top"], calendar_pixels(30))
+        self.assertEqual(lines[-1]["label"], "20:30")
         self.assertEqual(calendar_pixels(60), 90)
 
 
