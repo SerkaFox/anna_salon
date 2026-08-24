@@ -6,6 +6,7 @@ from . import views
 app_name = "mobile_api"
 
 urlpatterns = [
+    path("app-update/", views.AppUpdateView.as_view(), name="app_update"),
     path("password-recovery/", views.PasswordRecoveryView.as_view(), name="password_recovery"),
     path("me/", views.MeView.as_view(), name="me"),
     path("whatsapp/status/", views.WhatsAppStatusView.as_view(), name="whatsapp_status"),

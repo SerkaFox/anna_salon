@@ -167,6 +167,16 @@ class MobileApiMvpTests(TestCase):
         )
         self.assertEqual(response.json(), {"detail": ["Необходимо войти в приложение."]})
 
+    def test_app_update_manifest_is_public_and_not_cached(self):
+        response = self.api_client.get(reverse("mobile_api:app_update"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["version_code"], 33)
+        self.assertEqual(response.json()["version_name"], "0.1.32")
+        self.assertEqual(len(response.json()["sha256"]), 64)
+        self.assertGreater(response.json()["size_bytes"], 0)
+        self.assertIn("no-store", response["Cache-Control"])
+
     def test_authenticated_user_can_access_me(self):
         self._auth(self.owner_user)
 

@@ -63,6 +63,7 @@ from whatsapp_bot.models import WhatsAppMessage
 from whatsapp_bot.monitoring import refresh_connection_status
 
 from .permissions import IsAuthenticatedMobileUser
+from .app_update_manifest import ANDROID_APP_UPDATE
 from .serializers import (
     AvailabilityCheckSerializer,
     AvailabilitySlotsQuerySerializer,
@@ -436,6 +437,16 @@ def _employee_detail_payload(employee, request):
 
 class MobileApiMixin:
     permission_classes = [IsAuthenticatedMobileUser]
+
+
+class AppUpdateView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        response = Response(ANDROID_APP_UPDATE)
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return response
 
 
 class WhatsAppStatusView(MobileApiMixin, APIView):
