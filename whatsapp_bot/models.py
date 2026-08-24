@@ -145,9 +145,7 @@ TEMPLATE_DEFAULTS = {
     WhatsAppMessage.Kinds.REMINDER_24H: (
         "Hola {client_name} 👋 Te recordamos tu cita en {salon_name} mañana "
         "{date} a las {time} para {service_name}.\n\n"
-        "Confirma tu asistencia:\n"
-        "✅ Voy: {attend_url}\n"
-        "❌ No voy: {decline_url}"
+        "¿Vas a poder venir?"
     ),
     WhatsAppMessage.Kinds.REMINDER_2H: (
         "Hola {client_name} 👋 Te esperamos en {salon_name} en 2 horas, "

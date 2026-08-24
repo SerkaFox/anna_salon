@@ -11,7 +11,7 @@ from bookings.client_actions import cancel_booking
 from bookings.utils import booking_payment_summary
 
 from . import bridge
-from .bridge import WhatsAppNumberNotFound
+from .bridge import WhatsAppNumberNotFound, WhatsAppBridgeError
 from .models import WhatsAppConnection, WhatsAppMessage, WhatsAppTemplate
 
 logger = logging.getLogger(__name__)
@@ -75,16 +75,6 @@ def booking_message(booking, *, kind, extra_context=None):
             f"Hola {ctx['client_name']}. Tu cita en {ctx['salon_name']} esta confirmada para "
             f"el {ctx['date']} a las {ctx['time']}: {ctx['service_name']}."
         )
-    if kind == WhatsAppMessage.Kinds.REMINDER_24H:
-        missing_actions = []
-        if ctx["attend_url"] not in message:
-            missing_actions.append(f"✅ Voy: {ctx['attend_url']}")
-        if ctx["decline_url"] not in message:
-            missing_actions.append(f"❌ No voy: {ctx['decline_url']}")
-        if missing_actions:
-            message += "\n\nConfirma tu asistencia:\n" + "\n".join(
-                missing_actions
-            )
     return message
 
 
@@ -438,6 +428,27 @@ def process_expired_prepayment_requests():
     return {"cancelled": cancelled, "failed": failed}
 
 
+def _send_reminder_24h_buttons(message):
+    """Send the 24h reminder as an interactive button message. Returns True on success."""
+    booking = message.booking
+    if not booking:
+        return False
+    buttons = [
+        {"id": f"attend_{booking.pk}", "body": "✅ Sí, voy"},
+        {"id": f"decline_{booking.pk}", "body": "❌ No puedo ir"},
+    ]
+    try:
+        bridge.send_buttons_message(
+            message.connection,
+            to_phone=message.to_phone,
+            body=message.body,
+            buttons=buttons,
+        )
+        return True
+    except (WhatsAppBridgeError, WhatsAppNumberNotFound):
+        return False
+
+
 def send_whatsapp_message(message):
     claimed = WhatsAppMessage.objects.filter(
         pk=message.pk,
@@ -462,6 +473,19 @@ def send_whatsapp_message(message):
         message.save(update_fields=["status", "provider_message_id", "sent_at", "error", "updated_at"])
         return message
 
+    # 24h reminders use interactive buttons; fall back to plain text if bridge
+    # returns an error (e.g. WhatsApp restricts buttons for personal accounts).
+    if message.kind == WhatsAppMessage.Kinds.REMINDER_24H:
+        sent_as_buttons = _send_reminder_24h_buttons(message)
+        if sent_as_buttons:
+            message.status = WhatsAppMessage.Statuses.SENT
+            message.provider_message_id = "buttons"
+            message.sent_at = timezone.now()
+            message.error = ""
+            message.save(update_fields=["status", "provider_message_id", "sent_at", "error", "updated_at"])
+            return message
+        # Fall through to plain text
+
     try:
         result = bridge.send_message(message.connection, to_phone=message.to_phone, body=message.body)
     except WhatsAppNumberNotFound as exc:
@@ -469,7 +493,7 @@ def send_whatsapp_message(message):
         message.error = str(exc)
         message.save(update_fields=["status", "error", "updated_at"])
         return message
-    except bridge.WhatsAppBridgeError as exc:
+    except WhatsAppBridgeError as exc:
         message.status = WhatsAppMessage.Statuses.FAILED
         message.error = str(exc)
         message.save(update_fields=["status", "error", "updated_at"])

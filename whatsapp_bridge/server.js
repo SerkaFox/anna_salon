@@ -2,11 +2,12 @@ import express from "express";
 import qrcode from "qrcode";
 import pkg from "whatsapp-web.js";
 
-const { Client, LocalAuth } = pkg;
+const { Client, LocalAuth, Buttons } = pkg;
 
 const PORT = Number(process.env.WHATSAPP_BRIDGE_PORT || 8125);
 const TOKEN = process.env.WHATSAPP_BRIDGE_TOKEN || "";
 const CHROME_PATH = process.env.WHATSAPP_CHROME_PATH || "";
+const BUTTON_REPLY_WEBHOOK_URL = process.env.WHATSAPP_BUTTON_REPLY_WEBHOOK_URL || "";
 
 // Self-healing tuning. A "soft" restart recreates the Puppeteer/browser
 // client but keeps the LocalAuth session folder on disk, so it reconnects
@@ -86,6 +87,41 @@ function attachClientEvents(client, state) {
   client.on("disconnected", (reason) => {
     state.status = "disconnected";
     state.lastError = String(reason || "");
+  });
+
+  client.on("message", async (msg) => {
+    if (msg.type !== "buttons_response" || !BUTTON_REPLY_WEBHOOK_URL) return;
+    const payload = {
+      session: state.name,
+      from_phone: msg.from?.replace("@c.us", "").replace("@lid", "") || "",
+      button_id: msg.selectedButtonId || "",
+      button_text: msg.body || "",
+    };
+    try {
+      const { default: https } = await import(BUTTON_REPLY_WEBHOOK_URL.startsWith("https") ? "https" : "http");
+      const url = new URL(BUTTON_REPLY_WEBHOOK_URL);
+      const data = JSON.stringify(payload);
+      const reqOptions = {
+        hostname: url.hostname, port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: url.pathname + url.search, method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(data),
+          ...(TOKEN ? { "Authorization": `Bearer ${TOKEN}` } : {}),
+        },
+      };
+      await new Promise((resolve, reject) => {
+        const req = https.request(reqOptions, (res) => {
+          res.resume();
+          resolve(res.statusCode);
+        });
+        req.on("error", reject);
+        req.write(data);
+        req.end();
+      });
+    } catch (err) {
+      console.warn(`[whatsapp:${state.name}] button reply webhook error:`, err?.message || err);
+    }
   });
 }
 
@@ -346,6 +382,61 @@ app.post("/messages", async (req, res) => {
     } catch (error2) {
       return res.status(500).json({ error: error2?.message || String(error2) });
     }
+  }
+});
+
+app.post("/messages/buttons", async (req, res) => {
+  const state = getSession(req.body?.session);
+  const digits = String(req.body?.to || "").replace(/\D/g, "");
+  const body = String(req.body?.body || "");
+  const rawButtons = Array.isArray(req.body?.buttons) ? req.body.buttons : [];
+  const title = String(req.body?.title || "");
+  const footer = String(req.body?.footer || "");
+  if (!digits || !body || rawButtons.length === 0) {
+    return res.status(400).json({ error: "to, body and buttons[] are required." });
+  }
+  if (state.status !== "ready") {
+    return res.status(409).json({ error: `Session is not ready: ${state.status}` });
+  }
+
+  let onWhatsApp;
+  try {
+    onWhatsApp = await state.client.getNumberId(digits);
+  } catch (_) { onWhatsApp = null; }
+  if (!onWhatsApp) {
+    return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
+  }
+  const lid = onWhatsApp._serialized;
+
+  const buttonObjects = rawButtons.map((b) => ({ id: String(b.id || b.body), body: String(b.body) }));
+  const buttonsMsg = new Buttons(body, buttonObjects, title, footer);
+
+  try {
+    const primed = await state.client.pupPage.evaluate(async (digitsArg, lidArg) => {
+      const WAWebWidFactory = window.require("WAWebWidFactory");
+      const WAWebFindChatAction = window.require("WAWebFindChatAction");
+      const Chat = window.require("WAWebCollections").Chat;
+      if (lidArg) {
+        const lidWid = WAWebWidFactory.createWid(lidArg);
+        let chat = Chat.get(lidWid);
+        if (chat) return { serialized: lidArg };
+        const res = await WAWebFindChatAction.findOrCreateLatestChat(lidWid);
+        chat = res?.chat || res;
+        if (chat && chat.id) return { serialized: chat.id._serialized };
+      }
+      const phoneWid = WAWebWidFactory.createWid(`${digitsArg}@c.us`);
+      const res2 = await WAWebFindChatAction.findOrCreateLatestChat(phoneWid);
+      const chat2 = res2?.chat || res2;
+      return { serialized: chat2?.id?._serialized || `${digitsArg}@c.us` };
+    }, digits, lid);
+
+    const result = await state.client.sendMessage(primed.serialized, buttonsMsg, { sendSeen: false });
+    const msgId = result?.id?._serialized || "";
+    console.log(`[whatsapp:${state.name}] sent buttons to ${digits}, msgId=${msgId}`);
+    return res.json({ id: msgId, message_id: msgId });
+  } catch (error) {
+    console.error(`[whatsapp:${state.name}] buttons send error:`, error?.message || error);
+    return res.status(500).json({ error: error?.message || String(error) });
   }
 });
 

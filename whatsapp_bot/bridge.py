@@ -70,3 +70,19 @@ def send_message(connection, *, to_phone, body):
         },
         timeout=30,
     )
+
+
+def send_buttons_message(connection, *, to_phone, body, buttons, title="", footer=""):
+    """Send an interactive button message. buttons is a list of {"id": str, "body": str}."""
+    return _request(
+        "/messages/buttons",
+        {
+            "session": connection.name,
+            "to": to_phone,
+            "body": body,
+            "buttons": buttons,
+            "title": title,
+            "footer": footer,
+        },
+        timeout=30,
+    )
