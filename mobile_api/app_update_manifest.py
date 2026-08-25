@@ -1,16 +1,18 @@
 ANDROID_APP_UPDATE = {
-    "version_code": 41,
-    "version_name": "0.1.40",
-    "apk_url": "https://brimoon.es/media/brimoon-release-0.1.40-41.apk",
-    "sha256": "defd7d85d35778f7710e43f43c9c0538fb24c334fc31e08751172748ad320edc",
-    "size_bytes": 65518635,
+    "version_code": 42,
+    "version_name": "0.1.41",
+    "apk_url": "https://brimoon.es/media/brimoon-release-0.1.41-42.apk",
+    "sha256": "b210ec2a0253f28172a01cd6204b5133c1e50554b53829895472faf9e874e297",
+    "size_bytes": 65518727,
     "required": False,
     "notes_ru": [
-        "В настройках появился статус уведомлений и кнопка их включения.",
-        "Время услуги можно увеличить или сократить шагом 15 минут; минимум — 15 минут.",
+        "Сотрудники сами могут взять день отпуска и поставить себе обед прямо в приложении.",
+        "Штриховку нерабочего времени в календаре можно снять одним нажатием.",
+        "Касса открыта для сотрудников: можно выставлять счета и закрывать кассу, но общую выручку и Stripe видит только Анна.",
     ],
     "notes_es": [
-        "Los ajustes muestran el estado de los avisos y permiten activarlos.",
-        "La duración del servicio se puede aumentar o reducir en pasos de 15 minutos; mínimo 15 minutos.",
+        "Los empleados ya pueden pedir su día de vacaciones y poner su hora de comida desde la app.",
+        "Se puede liberar de un toque el horario bloqueado del calendario.",
+        "La caja está disponible para el equipo: pueden facturar y cerrar caja, pero el total del día y Stripe solo los ve Anna.",
     ],
 }
