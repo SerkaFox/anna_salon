@@ -64,6 +64,7 @@ from whatsapp_bot.monitoring import refresh_connection_status
 
 from .permissions import IsAuthenticatedMobileUser
 from .app_update_manifest import ANDROID_APP_UPDATE
+from .models import PushDevice
 from .serializers import (
     AvailabilityCheckSerializer,
     AvailabilitySlotsQuerySerializer,
@@ -437,6 +438,47 @@ def _employee_detail_payload(employee, request):
 
 class MobileApiMixin:
     permission_classes = [IsAuthenticatedMobileUser]
+
+
+class PushDeviceView(MobileApiMixin, APIView):
+    def post(self, request):
+        employee = get_employee_profile(request.user)
+        if employee is None:
+            raise PermissionDenied("Solo los empleados pueden activar avisos de reservas.")
+
+        token = serializers.CharField(max_length=4096).run_validation(
+            request.data.get("registration_token")
+        )
+        platform = serializers.ChoiceField(
+            choices=PushDevice.Platforms.values
+        ).run_validation(request.data.get("platform", PushDevice.Platforms.ANDROID))
+        locale = serializers.ChoiceField(
+            choices=PushDevice.Locales.values
+        ).run_validation(request.data.get("locale", PushDevice.Locales.SPANISH))
+
+        device, created = PushDevice.objects.update_or_create(
+            registration_token=token,
+            defaults={
+                "user": request.user,
+                "platform": platform,
+                "locale": locale,
+                "is_active": True,
+            },
+        )
+        return Response(
+            {"id": device.pk, "active": device.is_active},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    def delete(self, request):
+        token = serializers.CharField(max_length=4096).run_validation(
+            request.data.get("registration_token")
+        )
+        PushDevice.objects.filter(
+            user=request.user,
+            registration_token=token,
+        ).update(is_active=False)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AppUpdateView(APIView):
