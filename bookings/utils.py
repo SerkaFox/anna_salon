@@ -604,3 +604,89 @@ def booking_layout_data(booking):
         "payment_label": payment_summary["label"],
         "payment_status_class": payment_summary["status_class"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Multi-service consecutive slot finder
+# ---------------------------------------------------------------------------
+
+def find_multi_service_slots(date_obj, services, step_minutes=MOBILE_SLOT_STEP_MINUTES):
+    """
+    Return time blocks on date_obj where all services can be scheduled back-to-back.
+    Each block is a dict with start_at, label, end_at, total_duration_minutes, items.
+    """
+    if not services:
+        return []
+
+    from employees.models import Employee as _Employee
+
+    total_minutes = sum(s.duration_minutes for s in services)
+    work_start, work_end = get_work_bounds(date_obj)
+
+    service_employees = {}
+    for service in services:
+        service_employees[service.pk] = list(
+            _Employee.objects.filter(is_active=True, services=service)
+            .order_by("first_name", "last_name")
+        )
+
+    results = []
+    t = work_start
+    step = timedelta(minutes=step_minutes)
+    now = timezone.now()
+
+    while t + timedelta(minutes=total_minutes) <= work_end:
+        if t > now:
+            plan = _try_schedule_block(services, service_employees, t)
+            if plan:
+                local_t = timezone.localtime(t)
+                results.append({
+                    "start_at": t.isoformat(),
+                    "label": local_t.strftime("%H:%M"),
+                    "end_at": (t + timedelta(minutes=total_minutes)).isoformat(),
+                    "total_duration_minutes": total_minutes,
+                    "items": [
+                        {
+                            "service_id": item["service"].pk,
+                            "service_name": item["service"].name,
+                            "start_at": item["start_at"].isoformat(),
+                            "end_at": item["end_at"].isoformat(),
+                            "duration_minutes": item["service"].duration_minutes,
+                            "employee_id": item["employee"].pk,
+                            "employee_name": item["employee"].full_name,
+                            "zone_id": item["zone"].pk if item["zone"] else None,
+                        }
+                        for item in plan
+                    ],
+                })
+        t += step
+    return results
+
+
+def _try_schedule_block(services, service_employees, start_at):
+    """Try scheduling services consecutively from start_at. Returns plan list or None."""
+    current = start_at
+    committed = []  # (employee_pk, block_start, block_end)
+    plan = []
+    for service in services:
+        end = current + timedelta(minutes=service.duration_minutes)
+        emp = None
+        for candidate in service_employees[service.pk]:
+            already_used = any(
+                eid == candidate.pk and cs < end and ce > current
+                for eid, cs, ce in committed
+            )
+            if already_used:
+                continue
+            if is_slot_available(candidate, service, None, current, end):
+                emp = candidate
+                break
+        if emp is None:
+            return None
+        zone = find_available_zone(service, current, end, employee=emp) if service.requires_zone else None
+        if service.requires_zone and zone is None:
+            return None
+        committed.append((emp.pk, current, end))
+        plan.append({"service": service, "employee": emp, "zone": zone, "start_at": current, "end_at": end})
+        current = end
+    return plan

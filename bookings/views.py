@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+from django.core.signing import BadSignature, SignatureExpired, Signer, TimestampSigner
 from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse
@@ -537,33 +537,8 @@ def booking_pay(request, pk):
     )
 
 
-def booking_response(request, token):
-    signer = TimestampSigner(salt="booking-response")
-    try:
-        payload = signer.unsign_object(token, max_age=60 * 60 * 72)
-        booking_id = int(payload["booking"])
-        action = payload["action"]
-    except (BadSignature, SignatureExpired, KeyError, TypeError, ValueError):
-        return render(
-            request,
-            "bookings/booking_response.html",
-            {
-                "title": "Enlace no valido",
-                "message": "El enlace ha caducado o no es valido.",
-            },
-            status=400,
-        )
-    if action not in {
-        Booking.ClientResponses.ATTENDING,
-        Booking.ClientResponses.DECLINED,
-    }:
-        return render(
-            request,
-            "bookings/booking_response.html",
-            {"title": "Respuesta no valida", "message": "No se pudo registrar la respuesta."},
-            status=400,
-        )
-
+def _apply_booking_response(request, booking_id, action):
+    """Core logic for client booking response (attending / declined). Called by both URL variants."""
     with transaction.atomic():
         booking = get_object_or_404(
             Booking.objects.select_for_update()
@@ -594,11 +569,7 @@ def booking_response(request, token):
             return render(
                 request,
                 "bookings/booking_response.html",
-                {
-                    "title": "Reserva cancelada",
-                    "message": message,
-                    "booking": booking,
-                },
+                {"title": "Reserva cancelada", "message": message, "booking": booking},
             )
 
         if booking.status in {
@@ -656,6 +627,55 @@ def booking_response(request, token):
             "booking": booking,
         },
     )
+
+
+def booking_response(request, token):
+    signer = TimestampSigner(salt="booking-response")
+    try:
+        payload = signer.unsign_object(token, max_age=60 * 60 * 72)
+        booking_id = int(payload["booking"])
+        action = payload["action"]
+    except (BadSignature, SignatureExpired, KeyError, TypeError, ValueError):
+        return render(
+            request,
+            "bookings/booking_response.html",
+            {"title": "Enlace no valido", "message": "El enlace ha caducado o no es valido."},
+            status=400,
+        )
+    if action not in {Booking.ClientResponses.ATTENDING, Booking.ClientResponses.DECLINED}:
+        return render(
+            request,
+            "bookings/booking_response.html",
+            {"title": "Respuesta no valida", "message": "No se pudo registrar la respuesta."},
+            status=400,
+        )
+    return _apply_booking_response(request, booking_id, action)
+
+
+def booking_short_response(request, action, token):
+    """Short-URL variant: /voy/<token>/ (attending) or /no/<token>/ (declined)."""
+    action_map = {
+        "voy": Booking.ClientResponses.ATTENDING,
+        "no": Booking.ClientResponses.DECLINED,
+    }
+    if action not in action_map:
+        return render(
+            request,
+            "bookings/booking_response.html",
+            {"title": "Respuesta no valida", "message": "No se pudo registrar la respuesta."},
+            status=400,
+        )
+    signer = Signer(salt=f"wa-{action}")
+    try:
+        booking_id = int(signer.unsign(token))
+    except (BadSignature, ValueError, TypeError):
+        return render(
+            request,
+            "bookings/booking_response.html",
+            {"title": "Enlace no valido", "message": "El enlace ha caducado o no es valido."},
+            status=400,
+        )
+    return _apply_booking_response(request, booking_id, action_map[action])
 
 
 @login_required

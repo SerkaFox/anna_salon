@@ -2,7 +2,7 @@ from datetime import timedelta
 import logging
 
 from django.conf import settings
-from django.core.signing import TimestampSigner
+from django.core.signing import Signer, TimestampSigner
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -46,10 +46,12 @@ def _portal_url():
 
 
 def booking_response_url(booking, action):
-    signer = TimestampSigner(salt="booking-response")
-    token = signer.sign_object({"booking": booking.pk, "action": action})
+    # action is "attending" or "declined" — map to short path segment
+    path = "voy" if action == "attending" else "no"
+    signer = Signer(salt=f"wa-{path}")
+    token = signer.sign(str(booking.pk))
     base = getattr(settings, "PUBLIC_BASE_URL", "").rstrip("/")
-    return f"{base}/confirmar-cita/{token}/"
+    return f"{base}/{path}/{token}/"
 
 
 def booking_message(booking, *, kind, extra_context=None):
@@ -429,7 +431,7 @@ def process_expired_prepayment_requests():
 
 
 def _send_reminder_24h_buttons(message):
-    """Send the 24h reminder as an interactive button message. Returns True on success."""
+    """Send the 24h reminder as a poll (preferred) or button message. Returns True on success."""
     booking = message.booking
     if not booking:
         return False
@@ -437,6 +439,18 @@ def _send_reminder_24h_buttons(message):
         {"id": f"attend_{booking.pk}", "body": "✅ Sí, voy"},
         {"id": f"decline_{booking.pk}", "body": "❌ No puedo ir"},
     ]
+    # Try native poll first — works on personal accounts; Buttons are deprecated.
+    try:
+        bridge.send_poll_message(
+            message.connection,
+            to_phone=message.to_phone,
+            body="¿Confirmas tu cita de mañana?",
+            buttons=buttons,
+        )
+        return True
+    except (WhatsAppBridgeError, WhatsAppNumberNotFound):
+        pass
+    # Fallback to old Buttons format (works on WhatsApp Business accounts).
     try:
         bridge.send_buttons_message(
             message.connection,
@@ -473,18 +487,8 @@ def send_whatsapp_message(message):
         message.save(update_fields=["status", "provider_message_id", "sent_at", "error", "updated_at"])
         return message
 
-    # 24h reminders use interactive buttons; fall back to plain text if bridge
-    # returns an error (e.g. WhatsApp restricts buttons for personal accounts).
-    if message.kind == WhatsAppMessage.Kinds.REMINDER_24H:
-        sent_as_buttons = _send_reminder_24h_buttons(message)
-        if sent_as_buttons:
-            message.status = WhatsAppMessage.Statuses.SENT
-            message.provider_message_id = "buttons"
-            message.sent_at = timezone.now()
-            message.error = ""
-            message.save(update_fields=["status", "provider_message_id", "sent_at", "error", "updated_at"])
-            return message
-        # Fall through to plain text
+    # WhatsApp deprecated interactive buttons on personal accounts; reminders
+    # are sent as plain text with confirmation links (attend_url / decline_url).
 
     try:
         result = bridge.send_message(message.connection, to_phone=message.to_phone, body=message.body)

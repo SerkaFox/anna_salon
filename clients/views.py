@@ -43,6 +43,7 @@ from payments.stripe_service import (
     get_booking_checkout_amount,
     get_booking_deposit_amount,
     get_booking_full_amount,
+    request_booking_prepayment,
 )
 from reviews.forms import ClientReviewForm
 from reviews.models import ClientReview, GoogleReview
@@ -329,6 +330,11 @@ def client_portal(request):
                 instance=booking,
                 message=f"Solicitud de reserva creada desde portal cliente: {client.full_name}.",
             )
+            if not client.is_complimentary:
+                try:
+                    request_booking_prepayment(booking, request)
+                except Exception:
+                    pass
             try:
                 notify_booking_confirmation(booking)
             except Exception:

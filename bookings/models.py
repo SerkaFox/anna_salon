@@ -145,6 +145,14 @@ class Booking(models.Model):
     employee_amount_snapshot = models.DecimalField("Importe empleado", max_digits=10, decimal_places=2, default=0)
     salon_amount_snapshot = models.DecimalField("Importe salón", max_digits=10, decimal_places=2, default=0)
 
+    booking_group_id = models.UUIDField(
+        "ID de grupo",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Agrupa varias reservas creadas juntas (ej. multiples servicios en una misma sesion).",
+    )
+
     created_at = models.DateTimeField("Creada", auto_now_add=True)
     updated_at = models.DateTimeField("Actualizada", auto_now=True)
 

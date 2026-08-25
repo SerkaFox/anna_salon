@@ -91,3 +91,18 @@ def send_buttons_message(connection, *, to_phone, body, buttons, title="", foote
         },
         timeout=30,
     )
+
+
+def send_poll_message(connection, *, to_phone, body, buttons):
+    """Send a native WhatsApp poll. buttons is a list of {"id": str, "body": str}.
+    Works on personal accounts where Buttons are deprecated."""
+    return _request(
+        "/messages/poll",
+        {
+            "session": connection.name,
+            "to": to_phone,
+            "body": body,
+            "buttons": buttons,
+        },
+        timeout=30,
+    )

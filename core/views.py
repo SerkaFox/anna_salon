@@ -24,6 +24,7 @@ from bookings.utils import (
     PUBLIC_BOOKING_MAX_DAYS_AHEAD,
     build_available_slots_for_day,
     find_available_zone,
+    find_multi_service_slots,
 )
 from clients.models import Client
 from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
@@ -476,6 +477,7 @@ def _public_booking_context(request, values=None, errors=None):
             "booking_last_date": _last_booking_date().isoformat(),
             "booking_search_days": PUBLIC_BOOKING_MAX_DAYS_AHEAD,
             "slot_endpoint": reverse("public_booking_slots"),
+            "multi_slot_endpoint": reverse("public_multi_booking_slots"),
             "waitlist_employees": [
                 {
                     "id": employee.pk,
@@ -496,6 +498,165 @@ def _slot_matches(selected_start, slots):
         if slot_local == selected_local:
             return slot
     return None
+
+
+def _public_booking_post_multi(request, post, t):
+    """Handle multi-service cart submission (cart_json field)."""
+    import uuid as _uuid
+
+    values = {
+        "name": post.get("name", "").strip(),
+        "password": post.get("password", ""),
+        "contact": post.get("contact", "").strip(),
+        "secondary_contact_enabled": "on" if post.get("secondary_contact_enabled") == "on" else "",
+        "secondary_contact": post.get("secondary_contact", "").strip(),
+    }
+    errors = {}
+
+    if not values["name"]:
+        errors["name"] = [t["public_booking_error_name"]]
+    if not values["password"]:
+        errors["password"] = [t["public_booking_error_password_required"]]
+    elif len(values["password"]) < 6:
+        errors["password"] = [t["public_booking_error_password_min"]]
+
+    contact_values, contact_errors = _resolve_client_contact_values(
+        values["contact"],
+        values["secondary_contact"] if values["secondary_contact_enabled"] else "",
+    )
+    if contact_errors:
+        errors.update(contact_errors)
+        contact_values = {"phone": "", "email": ""}
+    values["phone"] = contact_values["phone"]
+    values["email"] = contact_values["email"]
+
+    try:
+        cart_items = json.loads(post.get("cart_json", "[]"))
+        if not cart_items or not isinstance(cart_items, list):
+            raise ValueError
+    except (ValueError, TypeError):
+        errors["__all__"] = ["Seleccion de servicios no valida. Vuelve a elegir."]
+
+    if errors:
+        return JsonResponse({"ok": False, "errors": errors}, status=400) if _public_wants_json(request) else render(
+            request, "core/public_booking.html", _public_booking_context(request, {**values, "errors": errors})
+        )
+
+    # Resolve / create client
+    candidate = resolve_user_by_identity(values["contact"])
+    if candidate and candidate.role != User.ROLE_CLIENT:
+        candidate = None
+
+    if not candidate:
+        existing_contact_type = _client_contact_exists(email=values["email"], phone=values["phone"])
+        if existing_contact_type == "email":
+            key = "contact" if values["email"] == (classify_contact(values["contact"]) or {}).get("value") else "secondary_contact"
+            errors[key] = [t["public_booking_error_email_exists"]]
+        elif existing_contact_type == "phone":
+            primary_kind = (classify_contact(values["contact"]) or {}).get("kind", "")
+            errors["contact" if primary_kind == "phone" else "secondary_contact"] = [t["public_booking_error_phone_exists"]]
+        if errors:
+            return JsonResponse({"ok": False, "errors": errors}, status=400) if _public_wants_json(request) else render(
+                request, "core/public_booking.html", _public_booking_context(request, {**values, "errors": errors})
+            )
+
+    group_id = _uuid.uuid4()
+
+    def _make_booking(client):
+        bookings_created = []
+        with transaction.atomic():
+            for i, item in enumerate(cart_items):
+                try:
+                    service = Service.objects.prefetch_related("allowed_zones", "employees").get(pk=item["service"], is_active=True)
+                    employee = Employee.objects.get(pk=item["employee"], is_active=True, services=service)
+                except (Service.DoesNotExist, Employee.DoesNotExist, KeyError, ValueError, TypeError):
+                    raise PublicBookingError({"__all__": [f"Servicio #{i+1} no disponible. Vuelve a buscar horario."]})
+                zone = None
+                if item.get("zone"):
+                    try:
+                        zone = Zone.objects.get(pk=item["zone"], is_active=True)
+                    except (Zone.DoesNotExist, ValueError, TypeError):
+                        pass
+                start_at = parse_datetime(item.get("start_at") or "")
+                if not start_at:
+                    raise PublicBookingError({"__all__": [f"Hora invalida en servicio #{i+1}."]})
+                if timezone.is_naive(start_at):
+                    start_at = timezone.make_aware(start_at)
+                start_at = timezone.localtime(start_at).replace(second=0, microsecond=0)
+                end_at = start_at + timedelta(minutes=service.duration_minutes)
+                if service.requires_zone and zone is None:
+                    zone = find_available_zone(service, start_at, end_at)
+                booking = _build_public_booking_form(client, service, employee, zone, start_at, end_at)
+                booking.booking_group_id = group_id
+                booking.save(update_fields=["booking_group_id", "updated_at"])
+                bookings_created.append(booking)
+        return bookings_created
+
+    if candidate:
+        authenticated_user = authenticate(request, username=candidate.username, password=values["password"])
+        if authenticated_user is None:
+            return JsonResponse({"ok": False, "errors": {"password": [t["public_booking_error_wrong_password"]]}}, status=400) if _public_wants_json(request) else render(
+                request, "core/public_booking.html", _public_booking_context(request, {**values, "errors": {"password": [t["public_booking_error_wrong_password"]]}})
+            )
+        client = get_client_profile(authenticated_user)
+        if not client:
+            return JsonResponse({"ok": False, "errors": {"__all__": [t["public_booking_error_no_client_profile"]]}}, status=400)
+        if client.is_blacklisted:
+            return JsonResponse({"ok": False, "errors": {"__all__": ["Este cliente no puede crear reservas online."]}}, status=400)
+        try:
+            bookings = _make_booking(client)
+        except PublicBookingError as exc:
+            return JsonResponse({"ok": False, "errors": exc.errors}, status=400)
+        user = authenticated_user
+    else:
+        try:
+            with transaction.atomic():
+                name = values["name"].strip()
+                parts = name.split(None, 1)
+                first_name = parts[0]
+                last_name = parts[1] if len(parts) > 1 else ""
+                user = User(
+                    username=_generate_client_username(name),
+                    first_name=first_name, last_name=last_name,
+                    email=values["email"], phone=values["phone"], role=User.ROLE_CLIENT,
+                )
+                user.set_password(values["password"])
+                user.save()
+                client = Client.objects.create(
+                    user=user, first_name=first_name, last_name=last_name,
+                    phone=values["phone"], email=values["email"], is_active=True,
+                )
+                bookings = _make_booking(client)
+        except PublicBookingError as exc:
+            return JsonResponse({"ok": False, "errors": exc.errors}, status=400)
+        try:
+            notify_welcome_credentials(bookings[0], username=user.username, password=values["password"])
+        except Exception:
+            logger.exception("Could not send welcome credentials for multi-booking group %s", group_id)
+
+    # Prepayment only for the first booking in the group
+    payment = (
+        None
+        if bookings[0].client.is_complimentary
+        else request_booking_prepayment(bookings[0], request)
+    )
+
+    login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    language = detect_public_language(request)
+    request.session[PUBLIC_LANGUAGE_SESSION_KEY] = language
+    request.session[CLIENT_LANGUAGE_SESSION_KEY] = language
+
+    redirect_url = reverse("clients:portal")
+    if _public_wants_json(request):
+        return JsonResponse({
+            "ok": True,
+            "redirect": redirect_url,
+            "username": user.username,
+            "booking_ids": [b.pk for b in bookings],
+            "checkout_url": payment.checkout_url if payment else "",
+            "whatsapp_action": reverse("mobile_api:booking_prepayment", args=[bookings[0].pk]),
+        })
+    return redirect(redirect_url)
 
 
 def _build_public_booking_form(client, service, employee, zone, start_at, end_at):
@@ -707,6 +868,10 @@ def public_booking(request):
     _language, t, _services, _articles = _localized_context(request)
     post = request.POST
 
+    # Multi-service cart submission (cart_json present)
+    if post.get("cart_json"):
+        return _public_booking_post_multi(request, post, t)
+
     values = {
         "service": post.get("service", ""),
         "employee": post.get("employee", ""),
@@ -872,6 +1037,40 @@ def public_booking(request):
             }
         )
     return redirect(redirect_url)
+
+
+def public_multi_booking_slots(request):
+    """GET /reservar/multi-slots/?services=1,2,3&date=YYYY-MM-DD"""
+    service_ids_raw = request.GET.get("services", "")
+    date_text = request.GET.get("date")
+    if not service_ids_raw or not date_text:
+        return JsonResponse({"ok": False, "message": "Indica los servicios y la fecha."}, status=400)
+    try:
+        service_ids = [int(x) for x in service_ids_raw.split(",") if x.strip()]
+        date_value = datetime.strptime(date_text, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "message": "Datos invalidos."}, status=400)
+    if not service_ids:
+        return JsonResponse({"ok": False, "message": "Selecciona al menos un servicio."}, status=400)
+    if len(service_ids) > 6:
+        return JsonResponse({"ok": False, "message": "Maximo 6 servicios a la vez."}, status=400)
+    if not _date_within_booking_window(date_value):
+        return JsonResponse({"ok": False, "message": "Fecha fuera del rango permitido."}, status=400)
+    try:
+        services = [
+            Service.objects.prefetch_related("allowed_zones", "employees").get(pk=sid, is_active=True)
+            for sid in service_ids
+        ]
+    except (Service.DoesNotExist, ValueError):
+        return JsonResponse({"ok": False, "message": "Uno de los servicios no existe."}, status=400)
+    blocks = find_multi_service_slots(date_value, services)
+    return JsonResponse({
+        "ok": True,
+        "date": date_value.isoformat(),
+        "services": [{"id": s.pk, "name": s.name, "duration": s.duration_minutes} for s in services],
+        "total_duration": sum(s.duration_minutes for s in services),
+        "blocks": blocks,
+    })
 
 
 @require_POST

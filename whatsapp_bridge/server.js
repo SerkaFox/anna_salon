@@ -2,7 +2,19 @@ import express from "express";
 import qrcode from "qrcode";
 import pkg from "whatsapp-web.js";
 
-const { Client, LocalAuth, Buttons } = pkg;
+// whatsapp-web.js calls requestPairingCode() without await inside initialize(),
+// so a WhatsApp API rejection becomes an unhandled promise rejection that would
+// crash Node. Catch it here so the bridge stays alive.
+process.on("unhandledRejection", (reason) => {
+  console.error("[bridge] unhandled rejection (suppressed crash):", reason?.message || reason);
+});
+
+const { Client, LocalAuth, Buttons, List, Poll } = pkg;
+
+// Maps poll message ID → {bookingId, attendName, declineName} so vote_update
+// events can be matched back to a booking. Lost on restart but acceptable since
+// reminders are only active for ~24h and restarts are rare.
+const pollMappings = new Map();
 
 const PORT = Number(process.env.WHATSAPP_BRIDGE_PORT || 8125);
 const TOKEN = process.env.WHATSAPP_BRIDGE_TOKEN || "";
@@ -47,13 +59,16 @@ function buildClient(sessionName) {
   if (CHROME_PATH) {
     puppeteer.executablePath = CHROME_PATH;
   }
-
   return new Client({
     authStrategy: new LocalAuth({
       clientId: sessionName,
       dataPath: process.env.WHATSAPP_AUTH_DATA_PATH || "./sessions"
     }),
-    puppeteer
+    puppeteer,
+    // Pin to the latest locally-cached WhatsApp Web version so initialize()
+    // doesn't stall trying to download the outdated default (2.3000.1017054665).
+    webVersion: "2.3000.1045866108",
+    webVersionCache: { type: "local" },
   });
 }
 
@@ -63,6 +78,22 @@ function attachClientEvents(client, state) {
     state.qrImage = await qrcode.toDataURL(qr);
     state.status = "qr";
     state.lastError = "";
+
+    // If a pairing code was requested, call requestPairingCode now that the
+    // page is in the correct auth-needed state (qr event confirms this).
+    if (state.pairingPhone) {
+      const phone = state.pairingPhone;
+      state.pairingPhone = null; // clear now so subsequent QR events don't re-trigger
+      console.log(`[whatsapp:${state.name}] QR ready — requesting pairing code for ${phone}`);
+      try {
+        const code = await client.requestPairingCode(phone);
+        state.pairingCode = code;
+        console.log(`[whatsapp:${state.name}] pairing code: ${code}`);
+      } catch (err) {
+        console.error(`[whatsapp:${state.name}] requestPairingCode error:`, err?.message || err);
+        state.lastError = err?.message || String(err);
+      }
+    }
   });
 
   client.on("ready", () => {
@@ -77,6 +108,7 @@ function attachClientEvents(client, state) {
 
   client.on("authenticated", () => {
     state.status = "authenticated";
+    state.authenticatedAt = Date.now();
   });
 
   client.on("auth_failure", (message) => {
@@ -89,12 +121,63 @@ function attachClientEvents(client, state) {
     state.lastError = String(reason || "");
   });
 
+  client.on("code", (code) => {
+    state.pairingCode = code;
+    console.log(`[whatsapp:${state.name}] pairing code received: ${code}`);
+  });
+
+  client.on("vote_update", async (vote) => {
+    const pollMsgId = vote.pollCreationMsgId?._serialized;
+    const voterPhone = (vote.voter || "").replace("@c.us", "").replace("@lid", "").replace(/\D/g, "");
+    console.log(`[whatsapp:${state.name}] vote_update: voter=${voterPhone} pollMsgId=${pollMsgId} options=${JSON.stringify(vote.selectedOptions?.map(o=>o.name))}`);
+    if (!BUTTON_REPLY_WEBHOOK_URL) return;
+    const mapping = (pollMsgId ? pollMappings.get(pollMsgId) : null)
+                 || (voterPhone ? pollMappings.get(`phone_${voterPhone}`) : null);
+    if (!mapping) {
+      console.log(`[whatsapp:${state.name}] vote_update: no mapping for pollMsgId=${pollMsgId} phone=${voterPhone}`);
+      return;
+    }
+    const selectedName = vote.selectedOptions?.[0]?.name || "";
+    const isAttend = selectedName === mapping.attendName;
+    const payload = {
+      session: state.name,
+      from_phone: vote.voter?.replace("@c.us", "").replace("@lid", "") || "",
+      button_id: isAttend ? `attend_${mapping.bookingId}` : `decline_${mapping.bookingId}`,
+      button_text: selectedName,
+    };
+    console.log(`[whatsapp:${state.name}] poll vote for booking ${mapping.bookingId}: ${selectedName}`);
+    try {
+      const { default: https } = await import(BUTTON_REPLY_WEBHOOK_URL.startsWith("https") ? "https" : "http");
+      const url = new URL(BUTTON_REPLY_WEBHOOK_URL);
+      const data = JSON.stringify(payload);
+      const reqOptions = {
+        hostname: url.hostname, port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: url.pathname + url.search, method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(data),
+          ...(TOKEN ? { "Authorization": `Bearer ${TOKEN}` } : {}),
+        },
+      };
+      await new Promise((resolve, reject) => {
+        const req = https.request(reqOptions, (r) => { r.resume(); resolve(r.statusCode); });
+        req.on("error", reject);
+        req.write(data);
+        req.end();
+      });
+    } catch (err) {
+      console.warn(`[whatsapp:${state.name}] poll vote webhook error:`, err?.message || err);
+    }
+  });
+
   client.on("message", async (msg) => {
-    if (msg.type !== "buttons_response" || !BUTTON_REPLY_WEBHOOK_URL) return;
+    const isButtonReply = msg.type === "buttons_response";
+    const isListReply = msg.type === "list_response";
+    if ((!isButtonReply && !isListReply) || !BUTTON_REPLY_WEBHOOK_URL) return;
     const payload = {
       session: state.name,
       from_phone: msg.from?.replace("@c.us", "").replace("@lid", "") || "",
-      button_id: msg.selectedButtonId || "",
+      button_id: isListReply ? (msg.selectedRowId || "") : (msg.selectedButtonId || ""),
       button_text: msg.body || "",
     };
     try {
@@ -143,7 +226,10 @@ function getSession(name) {
     readyAt: null,
     restarting: false,
     lastRestartAt: 0,
-    restartCount: 0
+    restartCount: 0,
+    pairingCode: null,
+    pairingPhone: null,
+    authenticatedAt: null,
   };
 
   const client = buildClient(sessionName);
@@ -205,6 +291,7 @@ async function restartClient(state, { wipeAuth = false, reason = "" } = {}) {
   state.qr = "";
   state.qrImage = "";
   state.lastError = "";
+  state.pairingCode = null;
 
   const client = buildClient(state.name);
   attachClientEvents(client, state);
@@ -213,6 +300,7 @@ async function restartClient(state, { wipeAuth = false, reason = "" } = {}) {
   client.initialize().catch((error) => {
     state.status = "error";
     state.lastError = error?.message || String(error);
+    console.error(`[whatsapp:${state.name}] initialize error:`, state.lastError);
   });
 
   state.restarting = false;
@@ -252,11 +340,50 @@ app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/sessions/:session/debug-pairing", async (req, res) => {
+  const state = sessions.get(normalizeSession(req.params.session));
+  if (!state?.client?.pupPage) return res.status(404).json({ error: "no page" });
+  const phone = String(req.body?.phone || "34643996431").replace(/\D/g, "");
+  try {
+    const result = await state.client.pupPage.evaluate(async (phone) => {
+      try {
+        const api = window.require("WAWebAltDeviceLinkingApi");
+        const apiKeys = Object.keys(api);
+        let stepError = null;
+        try { api.setPairingType("ALT_DEVICE_LINKING"); } catch(e) { stepError = "setPairingType: " + e?.message; }
+        if (!stepError) {
+          try { await api.initializeAltDeviceLinking(); } catch(e) { stepError = "initializeAltDeviceLinking: " + e?.message; }
+        }
+        if (!stepError) {
+          try {
+            const code = await api.startAltLinkingFlow(phone, false);
+            return { ok: true, code, apiKeys };
+          } catch(e) { stepError = "startAltLinkingFlow: " + (e?.message || JSON.stringify(e)); }
+        }
+        return { ok: false, stepError, apiKeys };
+      } catch(e) {
+        return { ok: false, error: "require failed: " + e?.message };
+      }
+    }, phone);
+    res.json(result);
+  } catch(err) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
 app.get("/sessions/:session/state", async (req, res) => {
   const state = getSession(req.params.session);
   if (!state.client) return res.json({ error: "no client" });
   try {
     const waState = await state.client.getState();
+    // If WhatsApp is CONNECTED but the bridge event never fired, sync the status.
+    if (waState === "CONNECTED" && state.status === "authenticated") {
+      state.status = "ready";
+      state.readyAt = new Date().toISOString();
+      const info = state.client.info || {};
+      state.phone = info.wid?.user || "";
+      console.log(`[whatsapp:${state.name}] force-synced status to ready (wa_state=CONNECTED)`);
+    }
     res.json({ wa_state: waState, bridge_status: state.status });
   } catch (err) {
     res.json({ error: err?.message || String(err), bridge_status: state.status });
@@ -440,17 +567,170 @@ app.post("/messages/buttons", async (req, res) => {
   }
 });
 
+// List message — works where Buttons are deprecated.
+// sections: [{ title, rows: [{ id, title, description }] }]
+app.post("/messages/list", async (req, res) => {
+  const state = getSession(req.body?.session);
+  const digits = String(req.body?.to || "").replace(/\D/g, "");
+  const body = String(req.body?.body || "");
+  const buttonText = String(req.body?.button_text || "Ver opciones");
+  const rawSections = Array.isArray(req.body?.sections) ? req.body.sections : [];
+  if (!digits || !body || rawSections.length === 0) {
+    return res.status(400).json({ error: "to, body and sections[] are required." });
+  }
+  if (state.status !== "ready") {
+    return res.status(409).json({ error: `Session is not ready: ${state.status}` });
+  }
+  let onWhatsApp;
+  try { onWhatsApp = await state.client.getNumberId(digits); } catch (_) { onWhatsApp = null; }
+  if (!onWhatsApp) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
+  const lid = onWhatsApp._serialized;
+  const title = String(req.body?.title || "");
+  const footer = String(req.body?.footer || "");
+  const listMsg = new List(body, buttonText, rawSections, title, footer);
+  try {
+    const primed = await state.client.pupPage.evaluate(async (digitsArg, lidArg) => {
+      const WAWebWidFactory = window.require("WAWebWidFactory");
+      const WAWebFindChatAction = window.require("WAWebFindChatAction");
+      const Chat = window.require("WAWebCollections").Chat;
+      if (lidArg) {
+        const lidWid = WAWebWidFactory.createWid(lidArg);
+        let chat = Chat.get(lidWid);
+        if (chat) return { serialized: lidArg };
+        const r = await WAWebFindChatAction.findOrCreateLatestChat(lidWid);
+        chat = r?.chat || r;
+        if (chat && chat.id) return { serialized: chat.id._serialized };
+      }
+      const phoneWid = WAWebWidFactory.createWid(`${digitsArg}@c.us`);
+      const r2 = await WAWebFindChatAction.findOrCreateLatestChat(phoneWid);
+      const chat2 = r2?.chat || r2;
+      return { serialized: chat2?.id?._serialized || `${digitsArg}@c.us` };
+    }, digits, lid);
+    const result = await state.client.sendMessage(primed.serialized, listMsg, { sendSeen: false });
+    const msgId = result?.id?._serialized || "";
+    console.log(`[whatsapp:${state.name}] sent list to ${digits}, msgId=${msgId}`);
+    return res.json({ id: msgId, message_id: msgId });
+  } catch (error) {
+    console.error(`[whatsapp:${state.name}] list send error:`, error?.message || error);
+    return res.status(500).json({ error: error?.message || String(error) });
+  }
+});
+
+// Poll message — works on personal and business accounts. buttons[] is the
+// same format as /messages/buttons so Django can reuse the same payload.
+// The first button with id starting "attend_" maps to a "yes" vote, the rest
+// to "no". Poll votes arrive via vote_update and are forwarded to the webhook.
+app.post("/messages/poll", async (req, res) => {
+  const state = getSession(req.body?.session);
+  const digits = String(req.body?.to || "").replace(/\D/g, "");
+  const body = String(req.body?.body || "");
+  const rawButtons = Array.isArray(req.body?.buttons) ? req.body.buttons : [];
+  if (!digits || !body || rawButtons.length < 2) {
+    return res.status(400).json({ error: "to, body and at least 2 buttons[] are required." });
+  }
+  if (state.status !== "ready") {
+    return res.status(409).json({ error: `Session is not ready: ${state.status}` });
+  }
+  let onWhatsApp;
+  try { onWhatsApp = await state.client.getNumberId(digits); } catch (_) { onWhatsApp = null; }
+  if (!onWhatsApp) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
+  const lid = onWhatsApp._serialized;
+
+  const pollOptions = rawButtons.map((b) => String(b.body));
+  const attendName = pollOptions[0];
+  // Extract booking ID from first button id, e.g. "attend_42" → 42
+  const bookingId = String(rawButtons[0]?.id || "").split("_")[1] || "";
+
+  const pollMsg = new Poll(body, pollOptions, { allowMultipleAnswers: false });
+  try {
+    const primed = await state.client.pupPage.evaluate(async (digitsArg, lidArg) => {
+      const WAWebWidFactory = window.require("WAWebWidFactory");
+      const WAWebFindChatAction = window.require("WAWebFindChatAction");
+      const Chat = window.require("WAWebCollections").Chat;
+      if (lidArg) {
+        const lidWid = WAWebWidFactory.createWid(lidArg);
+        let chat = Chat.get(lidWid);
+        if (chat) return { serialized: lidArg };
+        const r = await WAWebFindChatAction.findOrCreateLatestChat(lidWid);
+        chat = r?.chat || r;
+        if (chat && chat.id) return { serialized: chat.id._serialized };
+      }
+      const phoneWid = WAWebWidFactory.createWid(`${digitsArg}@c.us`);
+      const r2 = await WAWebFindChatAction.findOrCreateLatestChat(phoneWid);
+      const chat2 = r2?.chat || r2;
+      return { serialized: chat2?.id?._serialized || `${digitsArg}@c.us` };
+    }, digits, lid);
+
+    const result = await state.client.sendMessage(primed.serialized, pollMsg, { sendSeen: false });
+    const msgId = result?.id?._serialized || "";
+    if (bookingId) {
+      const mapping = { bookingId, attendName, declineName: pollOptions[1] || "", toDigits: digits };
+      // Index by message ID when available; always index by phone as fallback
+      // (LID-addressed sends return empty msgId but vote_update has the voter's phone).
+      if (msgId) pollMappings.set(msgId, mapping);
+      pollMappings.set(`phone_${digits}`, mapping);
+      console.log(`[whatsapp:${state.name}] poll sent to ${digits}, booking=${bookingId} msgId=${msgId || "(empty)"}`);
+    } else {
+      console.log(`[whatsapp:${state.name}] poll sent to ${digits}, msgId=${msgId || "(empty)"}`);
+    }
+    return res.json({ id: msgId, message_id: msgId });
+  } catch (error) {
+    console.error(`[whatsapp:${state.name}] poll send error:`, error?.message || error);
+    return res.status(500).json({ error: error?.message || String(error) });
+  }
+});
+
+// Clears pairingPhone so QR scanning works again (requestPairingCode would
+// otherwise deactivate the QR every time it fires).
+app.post("/sessions/:session/cancel-pairing", async (req, res) => {
+  const sessionName = normalizeSession(req.params.session);
+  const state = sessions.get(sessionName);
+  if (!state) return res.status(404).json({ error: "session not found" });
+  state.pairingPhone = null;
+  state.pairingCode = null;
+  // Soft-restart to get a clean WhatsApp Web page in pure QR mode.
+  await restartClient(state, { wipeAuth: false, reason: "cancel_pairing" });
+  res.json({ ok: true, status: state.status });
+});
+
 app.post("/sessions/:session/pairing-code", async (req, res) => {
-  const state = getSession(req.params.session);
+  const sessionName = normalizeSession(req.params.session);
   const phone = String(req.body?.phone || "").replace(/\D/g, "");
   if (!phone) return res.status(400).json({ error: "phone is required" });
+
+  const state = getSession(sessionName);
   if (state.status === "ready") return res.json({ code: null, note: "already connected" });
-  try {
-    const code = await state.client.requestPairingCode(phone);
-    res.json({ code });
-  } catch (err) {
-    res.status(500).json({ error: err?.message || String(err) });
+
+  // Clear any stale code and set the phone so the qr event handler fires requestPairingCode.
+  state.pairingCode = null;
+  state.pairingPhone = phone;
+
+  // If already in QR state, call requestPairingCode immediately (page is ready).
+  if (state.status === "qr" && state.client) {
+    console.log(`[whatsapp:${sessionName}] already in QR state — requesting pairing code for ${phone}`);
+    state.client.requestPairingCode(phone).then((code) => {
+      state.pairingCode = code;
+      state.pairingPhone = null; // clear so QR events don't re-trigger
+      console.log(`[whatsapp:${sessionName}] pairing code: ${code}`);
+    }).catch((err) => {
+      console.error(`[whatsapp:${sessionName}] requestPairingCode error:`, err?.message || err);
+      state.lastError = err?.message || String(err);
+    });
+  } else if (state.status !== "starting") {
+    // Not in a usable state — do a fresh reset so QR event fires.
+    await restartClient(state, { wipeAuth: true, reason: "pairing_code_request" });
   }
+  // If status is "starting", just wait — the qr event will trigger requestPairingCode.
+
+  // Wait up to 120 s for the code to arrive.
+  const deadline = Date.now() + 120000;
+  while (Date.now() < deadline) {
+    if (state.pairingCode) {
+      return res.json({ code: state.pairingCode });
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return res.status(504).json({ error: "timeout waiting for pairing code" });
 });
 
 app.listen(PORT, "0.0.0.0", () => {
@@ -462,9 +742,38 @@ app.listen(PORT, "0.0.0.0", () => {
 // instead of only reacting after a send has already failed.
 setInterval(async () => {
   for (const state of sessions.values()) {
-    if (state.status !== "ready" || state.restarting) {
+    if (state.restarting) continue;
+
+    // If stuck in authenticated, check the actual WA state and auto-promote to ready.
+    // If stuck for >90s it means initialize() stalled — restart to retry.
+    if (state.status === "authenticated" && state.client) {
+      const stuckMs = state.authenticatedAt ? Date.now() - state.authenticatedAt : 0;
+      try {
+        const waState = await Promise.race([
+          state.client.getState(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), HEALTH_CHECK_TIMEOUT_MS))
+        ]);
+        if (waState === "CONNECTED") {
+          state.status = "ready";
+          state.readyAt = new Date().toISOString();
+          const info = state.client.info || {};
+          state.phone = info.wid?.user || "";
+          console.log(`[whatsapp:${state.name}] healthcheck promoted authenticated → ready`);
+        } else if (stuckMs > 90000) {
+          console.warn(`[whatsapp:${state.name}] stuck in authenticated for ${Math.round(stuckMs/1000)}s, soft-restarting`);
+          await restartClient(state, { reason: "authenticated_stuck" });
+        }
+      } catch (_) {
+        if (stuckMs > 90000) {
+          console.warn(`[whatsapp:${state.name}] authenticated getState failed after ${Math.round(stuckMs/1000)}s, soft-restarting`);
+          await restartClient(state, { reason: "authenticated_stuck" });
+        }
+      }
       continue;
     }
+
+    if (state.status !== "ready") continue;
+
     try {
       await Promise.race([
         state.client.getState(),
