@@ -79,6 +79,25 @@
           <a class="nav-link {% if active_section == 'auditlog' %}active{% endif %}" href="{% url 'auditlog:list' %}">Auditoría</a>
         </div>
       </div>
+    {% elif request.user.is_employee_role %}
+      <div class="sidebar-group" data-sidebar-group>
+        <button
+          type="button"
+          class="sidebar-group__toggle"
+          data-sidebar-group-toggle
+          aria-expanded="{% if active_section == 'cashbox' %}true{% else %}false{% endif %}"
+        >
+          <span class="sidebar-group__title">Caja</span>
+          <span class="sidebar-group__chevron">⌄</span>
+        </button>
+        <div
+          class="sidebar-group__content"
+          data-sidebar-group-content
+          {% if not active_section == 'cashbox' %}hidden{% endif %}
+        >
+          <a class="nav-link {% if active_section == 'cashbox' %}active{% endif %}" href="{% url 'documents:cashbox' %}">Caja</a>
+        </div>
+      </div>
     {% endif %}
   </nav>
 

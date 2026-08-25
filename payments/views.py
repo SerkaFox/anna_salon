@@ -209,5 +209,11 @@ def demo_pay(request, pk):
     except Exception:
         pass
 
+    try:
+        from whatsapp_bot.services import queue_payment_receipt
+        queue_payment_receipt(booking, payment)
+    except Exception:
+        pass
+
     messages.success(request, f"✅ Pago de {amount:.2f} € recibido. ¡Tu reserva está confirmada!")
     return redirect("clients:booking_detail", pk=pk)

@@ -320,6 +320,81 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(response.json()["declared_cash_amount"], "47.50")
         self.assertEqual(response.json()["cash_difference"], "-2.50")
 
+    def test_employee_sees_cashbox_payments_without_aggregate_totals(self):
+        booking = self._create_booking()
+        document = FiscalDocument.objects.create(
+            booking=booking,
+            document_type=FiscalDocument.DocumentTypes.RECEIPT,
+            issue_date=self.base_start.date(),
+        )
+        ManualPayment.objects.create(
+            fiscal_document=document,
+            booking=booking,
+            paid_at=self.base_start,
+            amount=Decimal("50.00"),
+            method=ManualPayment.Methods.CASH,
+        )
+        self._auth(self.employee_user)
+
+        response = self.api_client.get(
+            reverse("mobile_api:cashbox"),
+            {"date": self.base_start.date().isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertEqual(len(data["payments"]), 1)
+        self.assertEqual(data["payments"][0]["amount"], "50.00")
+        for hidden_key in ("payments_total", "totals_by_method", "pending_total", "stripe", "stripe_payouts"):
+            self.assertNotIn(hidden_key, data)
+
+    def test_owner_still_sees_cashbox_aggregate_totals(self):
+        booking = self._create_booking()
+        document = FiscalDocument.objects.create(
+            booking=booking,
+            document_type=FiscalDocument.DocumentTypes.RECEIPT,
+            issue_date=self.base_start.date(),
+        )
+        ManualPayment.objects.create(
+            fiscal_document=document,
+            booking=booking,
+            paid_at=self.base_start,
+            amount=Decimal("50.00"),
+            method=ManualPayment.Methods.CASH,
+        )
+        self._auth(self.owner_user)
+
+        response = self.api_client.get(
+            reverse("mobile_api:cashbox"),
+            {"date": self.base_start.date().isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertEqual(data["payments_total"], "50.00")
+        self.assertIn("stripe", data)
+
+    def test_employee_can_close_cashbox_and_take_quick_payment(self):
+        booking = self._create_booking()
+        self._auth(self.employee_user)
+
+        payment_response = self.api_client.post(
+            reverse("mobile_api:booking_quick_payment", args=[booking.pk]),
+            {"method": "cash"},
+            format="json",
+        )
+        self.assertEqual(payment_response.status_code, 201, payment_response.content)
+
+        close_response = self.api_client.post(
+            reverse("mobile_api:cashbox_close"),
+            {
+                "date": timezone.localdate().isoformat(),
+                "declared_cash_amount": "50.00",
+            },
+            format="json",
+        )
+        self.assertEqual(close_response.status_code, 201, close_response.content)
+
     def test_cashbox_filters_payment_methods_across_date_range(self):
         booking = self._create_booking()
         document = FiscalDocument.objects.create(
@@ -1080,6 +1155,238 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(employee["vacation_days_allowance"], 30)
         self.assertEqual(employee["vacation_days_used"], 18)
         self.assertEqual(employee["vacation_days_remaining"], 12)
+
+    def test_employee_can_set_and_clear_own_vacation_day(self):
+        self._auth(self.employee_user)
+        url = reverse("mobile_api:employee_vacation_day", args=[self.employee.pk])
+        target_date = (timezone.localdate() + timedelta(days=10)).isoformat()
+
+        response = self.api_client.post(url, {"date": target_date}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertEqual(data["vacation_days_used"], 1)
+        self.assertEqual(data["vacation_days_remaining"], 29)
+
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.vacation_days_used, 1)
+        override = EmployeeScheduleOverride.objects.get(employee=self.employee, date=target_date)
+        self.assertTrue(override.is_day_off)
+        self.assertTrue(override.is_vacation)
+
+        # Calling set again on the same date is idempotent (no double counting).
+        response = self.api_client.post(url, {"date": target_date}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.vacation_days_used, 1)
+
+        response = self.api_client.post(
+            url, {"date": target_date, "action": "clear"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.vacation_days_used, 0)
+        self.assertFalse(
+            EmployeeScheduleOverride.objects.filter(employee=self.employee, date=target_date).exists()
+        )
+
+    def test_employee_cannot_set_vacation_for_another_employee(self):
+        self._auth(self.employee_user)
+        url = reverse("mobile_api:employee_vacation_day", args=[self.other_employee.pk])
+        response = self.api_client.post(
+            url,
+            {"date": (timezone.localdate() + timedelta(days=5)).isoformat()},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_vacation_day_blocked_once_allowance_exhausted(self):
+        self.employee.vacation_days_allowance = 1
+        self.employee.save(update_fields=["vacation_days_allowance"])
+        self._auth(self.employee_user)
+        url = reverse("mobile_api:employee_vacation_day", args=[self.employee.pk])
+
+        first = self.api_client.post(
+            url, {"date": (timezone.localdate() + timedelta(days=1)).isoformat()}, format="json"
+        )
+        self.assertEqual(first.status_code, 200)
+
+        second = self.api_client.post(
+            url, {"date": (timezone.localdate() + timedelta(days=2)).isoformat()}, format="json"
+        )
+        self.assertEqual(second.status_code, 400)
+        self.assertIn("no quedan días", str(second.json()).lower())
+
+    def test_vacation_day_rejects_past_date_and_existing_override(self):
+        self._auth(self.employee_user)
+        url = reverse("mobile_api:employee_vacation_day", args=[self.employee.pk])
+
+        past = self.api_client.post(
+            url, {"date": (timezone.localdate() - timedelta(days=1)).isoformat()}, format="json"
+        )
+        self.assertEqual(past.status_code, 400)
+
+        special_date = timezone.localdate() + timedelta(days=20)
+        EmployeeScheduleOverride.objects.create(
+            employee=self.employee,
+            date=special_date,
+            is_day_off=False,
+            start_time=time(10, 0),
+            end_time=time(14, 0),
+            label="Especial",
+        )
+        conflict = self.api_client.post(url, {"date": special_date.isoformat()}, format="json")
+        self.assertEqual(conflict.status_code, 400)
+
+    def test_employee_can_set_and_clear_own_lunch_break(self):
+        self._auth(self.employee_user)
+        url = reverse("mobile_api:employee_break", args=[self.employee.pk])
+        target_date = (timezone.localdate() + timedelta(days=3)).isoformat()
+
+        response = self.api_client.patch(
+            url,
+            {"date": target_date, "break_start": "13:00", "break_end": "14:00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        override = EmployeeScheduleOverride.objects.get(employee=self.employee, date=target_date)
+        self.assertEqual(override.break_start, time(13, 0))
+        self.assertEqual(override.break_end, time(14, 0))
+        # Cloned from the weekly shift, not altered by this narrow endpoint.
+        self.assertEqual(override.start_time, time(9, 0))
+        self.assertEqual(override.end_time, time(18, 0))
+        self.assertFalse(override.is_day_off)
+
+        clear_response = self.api_client.patch(
+            url, {"date": target_date, "break_start": None, "break_end": None}, format="json"
+        )
+        self.assertEqual(clear_response.status_code, 200)
+        override.refresh_from_db()
+        self.assertIsNone(override.break_start)
+        self.assertIsNone(override.break_end)
+
+    def test_lunch_break_must_stay_inside_working_hours(self):
+        self._auth(self.employee_user)
+        url = reverse("mobile_api:employee_break", args=[self.employee.pk])
+        target_date = (timezone.localdate() + timedelta(days=4)).isoformat()
+
+        response = self.api_client.patch(
+            url,
+            {"date": target_date, "break_start": "18:30", "break_end": "19:00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_employee_cannot_set_lunch_break_on_day_off(self):
+        self._auth(self.employee_user)
+        sunday = timezone.localdate() + timedelta(days=(6 - timezone.localdate().weekday()) % 7)
+        url = reverse("mobile_api:employee_break", args=[self.employee.pk])
+
+        response = self.api_client.patch(
+            url,
+            {"date": sunday.isoformat(), "break_start": "13:00", "break_end": "14:00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_employee_cannot_set_lunch_break_for_another_employee(self):
+        self._auth(self.employee_user)
+        url = reverse("mobile_api:employee_break", args=[self.other_employee.pk])
+        response = self.api_client.patch(
+            url,
+            {
+                "date": (timezone.localdate() + timedelta(days=3)).isoformat(),
+                "break_start": "13:00",
+                "break_end": "14:00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_employee_can_extend_hours_past_hatched_slot(self):
+        self._auth(self.employee_user)
+        url = reverse("mobile_api:employee_schedule_extend_slot", args=[self.employee.pk])
+        target_date = (timezone.localdate() + timedelta(days=6)).isoformat()
+
+        response = self.api_client.post(
+            url,
+            {"date": target_date, "slot_start": "18:00", "slot_end": "18:30"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        override = EmployeeScheduleOverride.objects.get(employee=self.employee, date=target_date)
+        self.assertEqual(override.start_time, time(9, 0))
+        self.assertEqual(override.end_time, time(18, 30))
+        self.assertFalse(override.is_day_off)
+
+        # Tapping the next hatched slot extends it further.
+        response2 = self.api_client.post(
+            url,
+            {"date": target_date, "slot_start": "18:30", "slot_end": "19:00"},
+            format="json",
+        )
+        self.assertEqual(response2.status_code, 200)
+        override.refresh_from_db()
+        self.assertEqual(override.end_time, time(19, 0))
+
+        # A slot already inside working hours is a no-op.
+        response3 = self.api_client.post(
+            url,
+            {"date": target_date, "slot_start": "10:00", "slot_end": "10:30"},
+            format="json",
+        )
+        self.assertEqual(response3.status_code, 200)
+        override.refresh_from_db()
+        self.assertEqual(override.start_time, time(9, 0))
+        self.assertEqual(override.end_time, time(19, 0))
+
+    def test_employee_can_open_a_full_day_off_by_extending_a_slot(self):
+        self._auth(self.employee_user)
+        sunday = timezone.localdate() + timedelta(days=(6 - timezone.localdate().weekday()) % 7)
+        url = reverse("mobile_api:employee_schedule_extend_slot", args=[self.employee.pk])
+
+        response = self.api_client.post(
+            url,
+            {"date": sunday.isoformat(), "slot_start": "11:00", "slot_end": "12:00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        override = EmployeeScheduleOverride.objects.get(employee=self.employee, date=sunday)
+        self.assertFalse(override.is_day_off)
+        self.assertEqual(override.start_time, time(11, 0))
+        self.assertEqual(override.end_time, time(12, 0))
+
+    def test_cannot_extend_slot_on_vacation_day(self):
+        self._auth(self.employee_user)
+        target_date = timezone.localdate() + timedelta(days=7)
+        EmployeeScheduleOverride.objects.create(
+            employee=self.employee,
+            date=target_date,
+            is_day_off=True,
+            is_vacation=True,
+            label="Vacaciones",
+        )
+        url = reverse("mobile_api:employee_schedule_extend_slot", args=[self.employee.pk])
+
+        response = self.api_client.post(
+            url,
+            {"date": target_date.isoformat(), "slot_start": "10:00", "slot_end": "10:30"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_employee_cannot_extend_slot_for_another_employee(self):
+        self._auth(self.employee_user)
+        url = reverse("mobile_api:employee_schedule_extend_slot", args=[self.other_employee.pk])
+        response = self.api_client.post(
+            url,
+            {
+                "date": (timezone.localdate() + timedelta(days=6)).isoformat(),
+                "slot_start": "18:00",
+                "slot_end": "18:30",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_employee_cannot_update_schedule(self):
         self._auth(self.employee_user)

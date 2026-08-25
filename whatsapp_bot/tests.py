@@ -25,6 +25,7 @@ from .services import (
     queue_booking_message,
     queue_booking_confirmation,
     queue_due_reminders,
+    queue_payment_receipt,
     send_password_reset_credentials,
     send_due_messages,
     send_whatsapp_message,
@@ -119,6 +120,31 @@ class WhatsAppBotTests(TestCase):
         self.assertFalse(second_created)
         self.assertEqual(first.pk, second.pk)
         self.assertEqual(WhatsAppMessage.objects.count(), 1)
+
+    def test_queue_payment_receipt_is_idempotent_and_contains_amount(self):
+        booking = self._booking(timezone.now() + timedelta(days=1))
+        payment = Payment.objects.create(
+            booking=booking,
+            amount=Decimal("15.00"),
+            order_number=f"test-{booking.pk}",
+            provider=Payment.Providers.STRIPE,
+            status=Payment.Statuses.PAID,
+        )
+
+        first, first_created = queue_payment_receipt(booking, payment)
+        second, second_created = queue_payment_receipt(booking, payment)
+
+        self.assertTrue(first_created)
+        self.assertFalse(second_created)
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(first.kind, WhatsAppMessage.Kinds.PAYMENT_RECEIPT)
+        self.assertIn("15.00", first.body)
+        self.assertEqual(
+            WhatsAppMessage.objects.filter(
+                booking=booking, kind=WhatsAppMessage.Kinds.PAYMENT_RECEIPT
+            ).count(),
+            1,
+        )
 
     def test_queue_and_send_24h_reminder(self):
         self._booking(timezone.now() + timedelta(hours=24, minutes=5))

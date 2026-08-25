@@ -137,6 +137,42 @@ def queue_welcome_credentials(booking, *, username, password):
     return message, True
 
 
+def queue_payment_receipt(booking, payment):
+    client = booking.client
+    local_start = timezone.localtime(booking.start_at)
+    ctx = {
+        "client_name": client.first_name or client.full_name or "hola",
+        "salon_name": _salon_name(),
+        "date": local_start.strftime("%d/%m/%Y"),
+        "time": local_start.strftime("%H:%M"),
+        "service_name": booking.service.name,
+        "amount": f"{payment.amount:.2f}",
+        "portal_url": _portal_url(),
+    }
+    tmpl = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.PAYMENT_RECEIPT)
+    body = tmpl.format_map(ctx) if tmpl else (
+        f"Hola {ctx['client_name']} 👋 Hemos recibido tu pago de {ctx['amount']} EUR y tu cita en "
+        f"{ctx['salon_name']} esta confirmada: {ctx['date']} a las {ctx['time']}, {ctx['service_name']}."
+    )
+    connection = get_default_connection()
+    phone = normalize_whatsapp_phone(client.phone)
+    message = WhatsAppMessage(
+        connection=connection,
+        booking=booking,
+        client=client,
+        kind=WhatsAppMessage.Kinds.PAYMENT_RECEIPT,
+        to_phone=phone,
+        body=body,
+        scheduled_for=timezone.now(),
+    )
+    try:
+        with transaction.atomic():
+            message.save()
+    except IntegrityError:
+        return WhatsAppMessage.objects.get(booking=booking, kind=WhatsAppMessage.Kinds.PAYMENT_RECEIPT), False
+    return message, True
+
+
 def queue_booking_cancellation(booking):
     return queue_booking_message(booking, kind=WhatsAppMessage.Kinds.BOOKING_CANCELLED)
 

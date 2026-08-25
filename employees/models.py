@@ -129,6 +129,7 @@ class EmployeeScheduleOverride(models.Model):
     break_end = models.TimeField("Fin pausa", null=True, blank=True)
     break_label = models.CharField("Motivo pausa", max_length=140, blank=True)
     label = models.CharField("Motivo", max_length=140, blank=True)
+    is_vacation = models.BooleanField("Vacaciones", default=False)
 
     class Meta:
         ordering = ["employee", "date"]

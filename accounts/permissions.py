@@ -35,6 +35,18 @@ def admin_required(view_func):
     return wrapped
 
 
+def staff_required(view_func):
+    """Admin/owner or employee — for staff actions (e.g. cashbox) that
+    employees may perform, as opposed to admin-only settings."""
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if not (is_admin_user(request.user) or is_employee_user(request.user)):
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
+
+
 def employee_profile_required(view_func):
     @wraps(view_func)
     def wrapped(request, *args, **kwargs):

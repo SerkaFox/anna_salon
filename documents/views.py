@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from accounts.permissions import admin_required, can_access_booking, get_client_profile, is_admin_user
+from accounts.permissions import admin_required, can_access_booking, get_client_profile, is_admin_user, staff_required
 from auditlog.services import log_event
 from bookings.models import Booking
 from payments.account_service import get_stripe_account_summary, request_stripe_payout
@@ -580,8 +580,9 @@ def booking_quick_payment(request, booking_pk):
 
 
 @login_required
-@admin_required
+@staff_required
 def cashbox(request):
+    can_see_totals = is_admin_user(request.user)
     date_from, date_to = _parse_cashbox_range(request)
     selected_date = date_to
     is_range = date_from != date_to
@@ -621,14 +622,17 @@ def cashbox(request):
     pending_documents = _pending_documents(pending_documents)
     pending_total = sum((document.balance_due for document in pending_documents), Decimal("0.00"))
     recent_closures = CashClosure.objects.select_related("closed_by")[:10]
-    stripe_summary = get_stripe_account_summary()
-    stripe_payouts = StripePayoutRequest.objects.select_related("requested_by")[:10]
+    stripe_summary = get_stripe_account_summary() if can_see_totals else None
+    stripe_payouts = (
+        StripePayoutRequest.objects.select_related("requested_by")[:10] if can_see_totals else []
+    )
 
     return render(
         request,
         "documents/cashbox.html",
         {
             "active_section": "cashbox",
+            "can_see_totals": can_see_totals,
             "selected_date": selected_date,
             "date_from": date_from,
             "date_to": date_to,
@@ -822,7 +826,7 @@ def payment_delete(request, pk):
 
 @login_required
 @require_POST
-@admin_required
+@staff_required
 def cashbox_close(request):
     date_str = request.POST.get("date", "").strip()
     notes = request.POST.get("notes", "").strip()

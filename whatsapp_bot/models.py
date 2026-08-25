@@ -201,6 +201,13 @@ TEMPLATE_DEFAULTS = {
         "Opinion privada en tu area personal: {review_url}\n"
         "Resena en Google: {google_review_url}"
     ),
+    WhatsAppMessage.Kinds.PAYMENT_RECEIPT: (
+        "Hola {client_name} 👋 Hemos recibido tu pago de {amount} EUR y tu cita en "
+        "{salon_name} está confirmada:\n"
+        "📅 {date} a las {time}\n"
+        "💅 {service_name}\n\n"
+        "Ver detalles: {portal_url}"
+    ),
 }
 
 TEMPLATE_NAMES = {
@@ -218,6 +225,7 @@ TEMPLATE_NAMES = {
     WhatsAppMessage.Kinds.WAITLIST_JOINED: 'Nueva persona en lista de espera',
     WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE: 'Hueco libre para lista de espera',
     WhatsAppMessage.Kinds.REVIEW_REQUEST: "Solicitud de resena despues de la cita",
+    WhatsAppMessage.Kinds.PAYMENT_RECEIPT: "Confirmación de pago recibido",
 }
 
 TEMPLATE_VARIABLES = {
@@ -235,6 +243,7 @@ TEMPLATE_VARIABLES = {
     WhatsAppMessage.Kinds.WAITLIST_JOINED: '{client_name} {salon_name} {service_name} {date} {time_range} {phone} {email}',
     WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE: '{client_name} {salon_name} {service_name} {employee_name} {date} {time} {booking_url}',
     WhatsAppMessage.Kinds.REVIEW_REQUEST: "{client_name} {salon_name} {service_name} {employee_name} {date} {review_url} {google_review_url}",
+    WhatsAppMessage.Kinds.PAYMENT_RECEIPT: "{client_name} {salon_name} {date} {time} {service_name} {amount} {portal_url}",
 }
 
 TEMPLATE_DELAYS = {

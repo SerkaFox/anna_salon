@@ -148,6 +148,15 @@ def _mobile_admin_required(user):
     return True
 
 
+def _mobile_staff_required(user):
+    """Admin/owner or any employee — used for cashbox actions employees can
+    perform (issue documents, take payments, close the register) but where
+    the aggregate money totals are still stripped for non-admins."""
+    if not (getattr(user, "can_manage_staff", False) or _is_mobile_employee_user(user)):
+        raise PermissionDenied("Sin permiso para gestionar caja.")
+    return True
+
+
 def _parse_mobile_date(value):
     if value:
         try:
@@ -155,6 +164,46 @@ def _parse_mobile_date(value):
         except ValueError as exc:
             raise serializers.ValidationError({"date": ["Fecha inválida."]}) from exc
     return timezone.localdate()
+
+
+def _parse_mobile_time(value):
+    if not value:
+        return None
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            return datetime.strptime(value, fmt).time()
+        except ValueError:
+            continue
+    raise serializers.ValidationError({"break_start": ["Hora inválida."]})
+
+
+def _cash_closure_payload(closure, *, can_see_totals):
+    if closure is None:
+        return None
+    if can_see_totals:
+        return CashClosureSerializer(closure).data
+    return {
+        "id": closure.pk,
+        "closure_date": closure.closure_date.isoformat(),
+        "closed_by": closure.closed_by_id,
+        "closed_by_name": closure.closed_by.get_full_name() if closure.closed_by else None,
+        "closed_at": _format_local_datetime(closure.closed_at),
+        "notes": closure.notes,
+    }
+
+
+def _clone_override_defaults_from_weekly_shift(employee, date_value):
+    shift = employee.weekly_shifts.filter(weekday=date_value.weekday()).first()
+    if not shift:
+        return {}
+    return {
+        "is_day_off": shift.is_day_off,
+        "start_time": shift.start_time,
+        "end_time": shift.end_time,
+        "break_start": shift.break_start,
+        "break_end": shift.break_end,
+        "break_label": shift.break_label,
+    }
 
 
 def _ensure_document_default_line(document):
@@ -986,6 +1035,217 @@ class EmployeeScheduleView(MobileApiMixin, APIView):
         return self.get(request, pk)
 
 
+class EmployeeVacationDayView(MobileApiMixin, APIView):
+    """Narrow self-service endpoint: mark/clear a single vacation day.
+
+    Deliberately separate from EmployeeScheduleSerializer (admin-only, full
+    schedule editor) so an employee can consume their own vacation allowance
+    without gaining access to editing arbitrary schedule fields.
+    """
+
+    def get_object(self, request, pk):
+        employee = generics.get_object_or_404(Employee, pk=pk)
+        if not can_access_employee(request.user, employee):
+            raise PermissionDenied("Sin acceso a este empleado.")
+        return employee
+
+    def post(self, request, pk):
+        if not request.data.get("date"):
+            raise serializers.ValidationError({"date": ["Este campo es obligatorio."]})
+        date_value = _parse_mobile_date(request.data.get("date"))
+        action = (request.data.get("action") or "set").strip()
+        if action not in {"set", "clear"}:
+            raise serializers.ValidationError({"action": ["Debe ser 'set' o 'clear'."]})
+
+        with transaction.atomic():
+            employee = generics.get_object_or_404(
+                Employee.objects.select_for_update(), pk=pk
+            )
+            if not can_access_employee(request.user, employee):
+                raise PermissionDenied("Sin acceso a este empleado.")
+
+            existing = EmployeeScheduleOverride.objects.filter(
+                employee=employee, date=date_value
+            ).first()
+
+            if action == "set":
+                if date_value < timezone.localdate():
+                    raise serializers.ValidationError(
+                        {"date": ["No se pueden pedir vacaciones en una fecha pasada."]}
+                    )
+                if existing and not existing.is_vacation:
+                    raise serializers.ValidationError(
+                        {"date": ["Ese día ya tiene un horario especial asignado por el salón."]}
+                    )
+                if existing and existing.is_vacation:
+                    return self._response(employee, existing)
+                if employee.vacation_days_used >= employee.vacation_days_allowance:
+                    raise serializers.ValidationError(
+                        {"non_field_errors": ["No quedan días de vacaciones disponibles."]}
+                    )
+                override = EmployeeScheduleOverride.objects.create(
+                    employee=employee,
+                    date=date_value,
+                    is_day_off=True,
+                    is_vacation=True,
+                    label="Vacaciones",
+                )
+                employee.vacation_days_used = employee.vacation_days_used + 1
+                employee.save(update_fields=["vacation_days_used", "updated_at"])
+                log_event(
+                    actor=request.user,
+                    section="employee",
+                    action="vacation_set",
+                    instance=employee,
+                    message=f"Vacación marcada para {employee.full_name} el {date_value:%d/%m/%Y}.",
+                )
+                return self._response(employee, override)
+
+            # action == "clear"
+            if not existing or not existing.is_vacation:
+                raise serializers.ValidationError(
+                    {"date": ["No hay vacaciones registradas en esa fecha."]}
+                )
+            existing.delete()
+            employee.vacation_days_used = max(0, employee.vacation_days_used - 1)
+            employee.save(update_fields=["vacation_days_used", "updated_at"])
+            log_event(
+                actor=request.user,
+                section="employee",
+                action="vacation_clear",
+                instance=employee,
+                message=f"Vacación eliminada para {employee.full_name} el {date_value:%d/%m/%Y}.",
+            )
+            return self._response(employee, None)
+
+    def _response(self, employee, override):
+        return Response(
+            {
+                "employee": employee.pk,
+                "vacation_year": employee.vacation_year,
+                "vacation_days_allowance": employee.vacation_days_allowance,
+                "vacation_days_used": employee.vacation_days_used,
+                "vacation_days_remaining": employee.vacation_days_remaining,
+                "override": EmployeeScheduleOverrideSerializer(override).data if override else None,
+            }
+        )
+
+
+class EmployeeBreakView(MobileApiMixin, APIView):
+    """Narrow self-service endpoint: set/clear the lunch break for one date,
+    without touching start/end hours or day-off status (admin-only fields)."""
+
+    def patch(self, request, pk):
+        if not request.data.get("date"):
+            raise serializers.ValidationError({"date": ["Este campo es obligatorio."]})
+        date_value = _parse_mobile_date(request.data.get("date"))
+        break_start = _parse_mobile_time(request.data.get("break_start"))
+        break_end = _parse_mobile_time(request.data.get("break_end"))
+        if bool(break_start) != bool(break_end):
+            raise serializers.ValidationError(
+                {"break_start": ["Indica inicio y fin de la pausa, o deja ambos vacíos."]}
+            )
+
+        with transaction.atomic():
+            employee = generics.get_object_or_404(
+                Employee.objects.select_for_update(), pk=pk
+            )
+            if not can_access_employee(request.user, employee):
+                raise PermissionDenied("Sin acceso a este empleado.")
+
+            override, _created = EmployeeScheduleOverride.objects.get_or_create(
+                employee=employee,
+                date=date_value,
+                defaults=_clone_override_defaults_from_weekly_shift(employee, date_value),
+            )
+            if override.is_day_off or not override.start_time or not override.end_time:
+                raise serializers.ValidationError(
+                    {"date": ["Ese día no tiene horario de trabajo asignado."]}
+                )
+            if break_start and break_end:
+                if break_end <= break_start:
+                    raise serializers.ValidationError(
+                        {"break_end": ["La pausa debe terminar después de empezar."]}
+                    )
+                if break_start < override.start_time or break_end > override.end_time:
+                    raise serializers.ValidationError(
+                        {"break_start": ["La pausa debe estar dentro del horario laboral."]}
+                    )
+
+            override.break_start = break_start
+            override.break_end = break_end
+            override.save(update_fields=["break_start", "break_end"])
+            log_event(
+                actor=request.user,
+                section="employee",
+                action="break_update",
+                instance=employee,
+                message=f"Pausa actualizada desde API móvil para {employee.full_name} el {date_value:%d/%m/%Y}.",
+            )
+
+        return Response(EmployeeScheduleOverrideSerializer(override).data)
+
+
+class EmployeeScheduleSlotExtendView(MobileApiMixin, APIView):
+    """Narrow self-service endpoint: absorb one hatched (non-working) slot
+    into the working hours for that single date, so it becomes bookable.
+    Only touches start_time/end_time for that date's override — nothing else."""
+
+    def post(self, request, pk):
+        for field in ("date", "slot_start", "slot_end"):
+            if not request.data.get(field):
+                raise serializers.ValidationError({field: ["Este campo es obligatorio."]})
+        date_value = _parse_mobile_date(request.data.get("date"))
+        slot_start = _parse_mobile_time(request.data.get("slot_start"))
+        slot_end = _parse_mobile_time(request.data.get("slot_end"))
+        if slot_end <= slot_start:
+            raise serializers.ValidationError(
+                {"slot_end": ["El fin del hueco debe ser posterior al inicio."]}
+            )
+
+        with transaction.atomic():
+            employee = generics.get_object_or_404(
+                Employee.objects.select_for_update(), pk=pk
+            )
+            if not can_access_employee(request.user, employee):
+                raise PermissionDenied("Sin acceso a este empleado.")
+
+            override, created = EmployeeScheduleOverride.objects.get_or_create(
+                employee=employee,
+                date=date_value,
+                defaults=_clone_override_defaults_from_weekly_shift(employee, date_value),
+            )
+            if override.is_vacation:
+                raise serializers.ValidationError(
+                    {"date": ["Ese día está marcado como vacaciones."]}
+                )
+
+            if override.is_day_off or not override.start_time or not override.end_time:
+                override.is_day_off = False
+                override.start_time = slot_start
+                override.end_time = slot_end
+            else:
+                if slot_start < override.start_time:
+                    override.start_time = slot_start
+                if slot_end > override.end_time:
+                    override.end_time = slot_end
+                # Slot already fully inside the working window: nothing to extend.
+
+            override.save()
+            log_event(
+                actor=request.user,
+                section="calendar",
+                action="schedule_extend",
+                instance=employee,
+                message=(
+                    f"Horario ampliado desde API móvil para {employee.full_name} "
+                    f"el {date_value:%d/%m/%Y} ({slot_start:%H:%M}-{slot_end:%H:%M})."
+                ),
+            )
+
+        return Response(EmployeeScheduleOverrideSerializer(override).data)
+
+
 class ServiceListView(MobileApiMixin, generics.ListCreateAPIView):
     serializer_class = ServiceSerializer
 
@@ -1387,7 +1647,7 @@ class BookingEditServicesView(MobileApiMixin, APIView):
 
 class CashboxSummaryView(MobileApiMixin, APIView):
     def get(self, request):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         selected_date = _parse_mobile_date(request.query_params.get("date"))
         date_from_value = request.query_params.get("date_from")
         date_to_value = request.query_params.get("date_to")
@@ -1470,49 +1730,56 @@ class CashboxSummaryView(MobileApiMixin, APIView):
                 closure_date=selected_date
             ).select_related("closed_by").first()
 
-        return Response(
-            {
-                "date": selected_date.isoformat(),
-                "date_from": date_from.isoformat(),
-                "date_to": date_to.isoformat(),
-                "is_range": date_from != date_to,
-                "payments_total": str(payments_total),
-                "payments_count": len(payments),
-                "totals_by_method": totals_by_method,
-                "pending_total": str(pending_total),
-                "payments": ManualPaymentSerializer(payments, many=True).data,
-                "paid_documents": FiscalDocumentSerializer(
-                    paid_documents,
-                    many=True,
-                ).data,
-                "pending_documents": FiscalDocumentSerializer(pending_documents[:50], many=True).data,
-                "closure": CashClosureSerializer(closure).data if closure else None,
-                "payment_method_choices": [
-                    {"value": value, "label": label}
-                    for value, label in ManualPayment.Methods.choices
-                ],
-                "entry_type_choices": [
-                    {"value": value, "label": label}
-                    for value, label in ManualPayment.EntryTypes.choices
-                ],
-                "deposit_percent": f"{get_deposit_percent():.2f}",
-                "stripe": get_stripe_account_summary(),
-                "stripe_payouts": [
-                    {
-                        "id": payout.pk,
-                        "amount": str(payout.amount),
-                        "currency": payout.currency,
-                        "method": payout.method,
-                        "method_label": payout.get_method_display(),
-                        "status": payout.status,
-                        "status_label": payout.get_status_display(),
-                        "arrival_date": payout.arrival_date.isoformat() if payout.arrival_date else None,
-                        "created_at": _format_local_datetime(payout.created_at),
-                    }
-                    for payout in StripePayoutRequest.objects.select_related("requested_by")[:10]
-                ],
-            }
-        )
+        can_see_totals = getattr(request.user, "can_manage_staff", False)
+        closure_payload = _cash_closure_payload(closure, can_see_totals=can_see_totals)
+
+        payload = {
+            "date": selected_date.isoformat(),
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "is_range": date_from != date_to,
+            "payments": ManualPaymentSerializer(payments, many=True).data,
+            "paid_documents": FiscalDocumentSerializer(
+                paid_documents,
+                many=True,
+            ).data,
+            "pending_documents": FiscalDocumentSerializer(pending_documents[:50], many=True).data,
+            "closure": closure_payload,
+            "payment_method_choices": [
+                {"value": value, "label": label}
+                for value, label in ManualPayment.Methods.choices
+            ],
+            "entry_type_choices": [
+                {"value": value, "label": label}
+                for value, label in ManualPayment.EntryTypes.choices
+            ],
+            "deposit_percent": f"{get_deposit_percent():.2f}",
+        }
+        if can_see_totals:
+            payload.update(
+                {
+                    "payments_total": str(payments_total),
+                    "payments_count": len(payments),
+                    "totals_by_method": totals_by_method,
+                    "pending_total": str(pending_total),
+                    "stripe": get_stripe_account_summary(),
+                    "stripe_payouts": [
+                        {
+                            "id": payout.pk,
+                            "amount": str(payout.amount),
+                            "currency": payout.currency,
+                            "method": payout.method,
+                            "method_label": payout.get_method_display(),
+                            "status": payout.status,
+                            "status_label": payout.get_status_display(),
+                            "arrival_date": payout.arrival_date.isoformat() if payout.arrival_date else None,
+                            "created_at": _format_local_datetime(payout.created_at),
+                        }
+                        for payout in StripePayoutRequest.objects.select_related("requested_by")[:10]
+                    ],
+                }
+            )
+        return Response(payload)
 
     def patch(self, request):
         _mobile_admin_required(request.user)
@@ -1714,7 +1981,7 @@ class ReceiptTemplateResetView(MobileApiMixin, APIView):
 
 class BookingCashDocumentView(MobileApiMixin, APIView):
     def post(self, request, pk):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         booking = generics.get_object_or_404(
             Booking.objects.select_related("client", "employee", "service").prefetch_related("fiscal_documents", "fiscal_documents__lines", "fiscal_documents__payments"),
             pk=pk,
@@ -1739,7 +2006,7 @@ class BookingCashDocumentView(MobileApiMixin, APIView):
 
 class CashDocumentDetailView(MobileApiMixin, APIView):
     def get_object(self, request, pk):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         document = generics.get_object_or_404(
             FiscalDocument.objects.select_related(
                 "booking",
@@ -1761,7 +2028,7 @@ class CashDocumentDetailView(MobileApiMixin, APIView):
 
 class CashDocumentLineCreateView(MobileApiMixin, APIView):
     def post(self, request, pk):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         document = generics.get_object_or_404(
             FiscalDocument.objects.select_related("booking", "booking__client").prefetch_related("lines", "payments"),
             pk=pk,
@@ -1792,7 +2059,7 @@ class CashDocumentLineCreateView(MobileApiMixin, APIView):
 
 class CashDocumentLineDetailView(MobileApiMixin, APIView):
     def get_object(self, request, pk):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         line = generics.get_object_or_404(
             FiscalDocumentLine.objects.select_related(
                 "fiscal_document", "fiscal_document__booking"
@@ -1843,7 +2110,7 @@ class CashDocumentLineDetailView(MobileApiMixin, APIView):
 
 class CashDocumentPaymentCreateView(MobileApiMixin, APIView):
     def post(self, request, pk):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         document = generics.get_object_or_404(
             FiscalDocument.objects.select_related("booking", "booking__client").prefetch_related("payments"),
             pk=pk,
@@ -1893,7 +2160,7 @@ class CashDocumentPaymentCreateView(MobileApiMixin, APIView):
 
 class CashPaymentDetailView(MobileApiMixin, APIView):
     def patch(self, request, pk):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         payment = generics.get_object_or_404(
             ManualPayment.objects.select_related(
                 "booking",
@@ -1951,7 +2218,7 @@ class CashPaymentDetailView(MobileApiMixin, APIView):
 
 class CashDocumentShareView(MobileApiMixin, APIView):
     def post(self, request, pk):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         document = generics.get_object_or_404(
             FiscalDocument.objects.select_related(
                 "booking",
@@ -2017,7 +2284,7 @@ class CashDocumentShareView(MobileApiMixin, APIView):
 
 class BookingQuickPaymentView(MobileApiMixin, APIView):
     def post(self, request, pk):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         booking = generics.get_object_or_404(
             Booking.objects.select_related("client", "employee", "service").prefetch_related("fiscal_documents__payments", "fiscal_documents__lines"),
             pk=pk,
@@ -2076,7 +2343,7 @@ class BookingQuickPaymentView(MobileApiMixin, APIView):
 
 class CashboxCloseView(MobileApiMixin, APIView):
     def post(self, request):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         serializer = CashClosureWriteSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         closure_date = serializer.validated_data.get("date") or timezone.localdate()
@@ -2116,7 +2383,11 @@ class CashboxCloseView(MobileApiMixin, APIView):
             message=f"Cierre de caja desde API móvil para {closure_date:%d/%m/%Y}.",
             metadata={"payments_count": len(payments), "total_amount": str(total_amount)},
         )
-        return Response(CashClosureSerializer(closure).data, status=status.HTTP_201_CREATED)
+        can_see_totals = getattr(request.user, "can_manage_staff", False)
+        return Response(
+            _cash_closure_payload(closure, can_see_totals=can_see_totals),
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class BookingAvailabilityCheckView(MobileApiMixin, APIView):

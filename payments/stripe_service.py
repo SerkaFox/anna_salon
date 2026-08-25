@@ -224,6 +224,11 @@ def expire_booking_prepayment(booking):
                         booking.status = Booking.Statuses.CONFIRMED
                         booking.save(update_fields=["status", "updated_at"])
                     create_booking_prepayment(booking, payment)
+                    try:
+                        from whatsapp_bot.services import queue_payment_receipt
+                        queue_payment_receipt(booking, payment)
+                    except Exception:
+                        pass
                     continue
                 if _object_get(session, "status", "") != "expired":
                     raise expire_error
@@ -411,6 +416,11 @@ def _mark_paid(payment, event, *, session=None, intent=None):
         booking.status = Booking.Statuses.CONFIRMED
         booking.save(update_fields=["status", "updated_at"])
     create_booking_prepayment(booking, payment)
+    try:
+        from whatsapp_bot.services import queue_payment_receipt
+        queue_payment_receipt(booking, payment)
+    except Exception:
+        pass
     return payment
 
 

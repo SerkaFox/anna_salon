@@ -13,6 +13,7 @@
 {% endblock %}
 
 {% block panel_content %}
+{% if can_see_totals %}
 <section class="panel-card">
   <div class="dashboard-section-head">
     <div>
@@ -90,6 +91,7 @@
     {% endif %}
   {% endif %}
 </section>
+{% endif %}
 
 <section class="panel-card">
   <form method="get" class="search-bar">
@@ -134,16 +136,19 @@
     <span class="stat-label">Pagos</span>
     <strong class="stat-value">{{ payments_count }}</strong>
   </article>
+  {% if can_see_totals %}
   <article class="stat-card">
     <span class="stat-label">Total cobrado</span>
     <strong class="stat-value">{{ payments_total }} €</strong>
   </article>
+  {% endif %}
   <article class="stat-card">
     <span class="stat-label">Pendiente</span>
     <strong class="stat-value">{{ pending_total }} €</strong>
   </article>
 </section>
 
+{% if can_see_totals %}
 <section class="stats-grid">
   <article class="stat-card">
     <span class="stat-label">Efectivo</span>
@@ -162,6 +167,7 @@
     <strong class="stat-value">{{ totals_by_method.transfer }} €</strong>
   </article>
 </section>
+{% endif %}
 
 {% if not is_range %}
 <section class="panel-card">

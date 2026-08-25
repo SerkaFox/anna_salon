@@ -78,6 +78,63 @@ class CashboxAdminWebTests(TestCase):
         self.assertNotContains(response, "Cerrar caja")
 
 
+class CashboxEmployeeWebTests(TestCase):
+    def setUp(self):
+        self.employee_user = User.objects.create_user(
+            username="cashbox-employee",
+            password="testpass123",
+            role=User.ROLE_EMPLOYEE,
+        )
+        client = Client.objects.create(first_name="Maria")
+        employee = Employee.objects.create(first_name="Anna")
+        service = Service.objects.create(
+            name="Corte",
+            duration_minutes=60,
+            price=Decimal("50.00"),
+        )
+        start = timezone.make_aware(datetime(2026, 7, 20, 10, 0))
+        booking = Booking.objects.create(
+            client=client,
+            employee=employee,
+            service=service,
+            start_at=start,
+            end_at=start + timedelta(hours=1),
+            status=Booking.Statuses.DONE,
+            client_price_snapshot=Decimal("50.00"),
+        )
+        document = FiscalDocument.objects.create(booking=booking, issue_date=start.date())
+        Payment.objects.create(
+            fiscal_document=document,
+            booking=booking,
+            paid_at=start,
+            amount=Decimal("20.00"),
+            method=Payment.Methods.CASH,
+        )
+        self.start = start
+        self.client.force_login(self.employee_user)
+
+    def test_employee_can_open_cashbox_but_totals_are_hidden(self):
+        response = self.client.get(
+            reverse("documents:cashbox"), {"date": self.start.date().isoformat()}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["can_see_totals"])
+        self.assertNotContains(response, "Total cobrado")
+        self.assertNotContains(response, "Saldo Stripe")
+        # The individual payment row is still visible (needed to issue invoices).
+        self.assertContains(response, "Maria")
+
+    def test_employee_can_close_cashbox(self):
+        response = self.client.post(
+            reverse("documents:cashbox_close"),
+            {"date": self.start.date().isoformat(), "notes": "Cerrado por empleada"},
+        )
+        self.assertEqual(response.status_code, 302)
+        from documents.models import CashClosure
+
+        self.assertTrue(CashClosure.objects.filter(closure_date=self.start.date()).exists())
+
+
 class FiscalDocumentLineEditingTests(TestCase):
     def setUp(self):
         client = Client.objects.create(first_name="Maria")
