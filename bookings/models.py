@@ -115,8 +115,8 @@ class Booking(models.Model):
 
     price_snapshot = models.DecimalField("Precio guardado", max_digits=10, decimal_places=2, default=0)
     duration_snapshot = models.PositiveIntegerField("Duración guardada (min)", default=60)
-    extra_duration_minutes = models.PositiveIntegerField(
-        "Tiempo adicional (min)", default=0
+    extra_duration_minutes = models.IntegerField(
+        "Ajuste de tiempo (min)", default=0
     )
     cleanup_duration_minutes = models.PositiveIntegerField(
         "Tiempo de limpieza (min)", default=0

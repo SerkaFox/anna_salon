@@ -980,11 +980,16 @@ class BookingWriteSerializer(serializers.Serializer):
     reward_rule = serializers.PrimaryKeyRelatedField(queryset=ClientRewardRule.objects.filter(is_active=True), allow_null=True, required=False)
     prepayment_required = serializers.BooleanField(required=False)
     extra_duration_minutes = serializers.IntegerField(
-        required=False, min_value=0, max_value=180
+        required=False, min_value=-1440, max_value=180
     )
     cleanup_duration_minutes = serializers.IntegerField(
         required=False, min_value=0, max_value=90
     )
+
+    def validate_extra_duration_minutes(self, value):
+        if value % 15:
+            raise serializers.ValidationError("El ajuste debe hacerse en pasos de 15 minutos.")
+        return value
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -1095,6 +1100,18 @@ class BookingWriteSerializer(serializers.Serializer):
             + extra_duration
             + cleanup_duration
         )
+        adjusted_service_duration = (
+            sum(item.duration_minutes for item in selected_services)
+            + extra_duration
+        )
+        if adjusted_service_duration < 15:
+            raise serializers.ValidationError(
+                {
+                    "extra_duration_minutes": [
+                        "La duración de los servicios no puede ser inferior a 15 minutos."
+                    ]
+                }
+            )
         if (
             not values.get("end_at")
             or "start_at" in attrs

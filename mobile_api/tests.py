@@ -20,6 +20,7 @@ from employees.models import (
     EmployeeWeeklyShift,
 )
 from mobile_api.serializers import BookingSerializer
+from mobile_api.app_update_manifest import ANDROID_APP_UPDATE
 from payments.models import Payment, PaymentRefund
 from salon.models import SalonSettings, Zone
 from services_app.models import Service
@@ -171,8 +172,12 @@ class MobileApiMvpTests(TestCase):
         response = self.api_client.get(reverse("mobile_api:app_update"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["version_code"], 39)
-        self.assertEqual(response.json()["version_name"], "0.1.38")
+        self.assertEqual(
+            response.json()["version_code"], ANDROID_APP_UPDATE["version_code"]
+        )
+        self.assertEqual(
+            response.json()["version_name"], ANDROID_APP_UPDATE["version_name"]
+        )
         self.assertEqual(len(response.json()["sha256"]), 64)
         self.assertGreater(response.json()["size_bytes"], 0)
         self.assertIn("no-store", response["Cache-Control"])
@@ -659,6 +664,60 @@ class MobileApiMvpTests(TestCase):
             booking.start_at + timedelta(minutes=105),
         )
         self.assertEqual(booking.client_price_snapshot, Decimal("50.00"))
+
+    def test_staff_can_reduce_service_time_in_fifteen_minute_steps(self):
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(
+                zone=None,
+                start_at="2026-04-27T16:30:00+02:00",
+                extra_duration_minutes=-45,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(booking.extra_duration_minutes, -45)
+        self.assertEqual(booking.duration_snapshot, 15)
+        self.assertEqual(
+            booking.end_at,
+            booking.start_at + timedelta(minutes=15),
+        )
+
+    def test_time_reduction_cannot_make_service_shorter_than_fifteen_minutes(self):
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(
+                zone=None,
+                start_at="2026-04-27T17:00:00+02:00",
+                extra_duration_minutes=-60,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("15 minutos", str(response.json()))
+
+    def test_time_adjustment_must_use_fifteen_minute_steps(self):
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            self._booking_payload(
+                zone=None,
+                start_at="2026-04-27T17:30:00+02:00",
+                extra_duration_minutes=-10,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("15 minutos", str(response.json()))
 
     @patch("mobile_api.views.request_booking_prepayment")
     def test_complimentary_client_booking_is_free_without_prepayment(
