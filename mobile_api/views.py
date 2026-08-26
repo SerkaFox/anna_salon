@@ -17,6 +17,7 @@ from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework import generics, serializers, status
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -635,8 +636,20 @@ class MeView(MobileApiMixin, APIView):
         return Response(self._payload(request))
 
 
+class ClientListPagination(PageNumberPagination):
+    page_size = 10
+
+    def paginate_queryset(self, queryset, request, view=None):
+        # Existing selectors still request the complete list. The dedicated
+        # clients screen opts into pages by sending ?page=1.
+        if "page" not in request.query_params:
+            return None
+        return super().paginate_queryset(queryset, request, view=view)
+
+
 class ClientListView(MobileApiMixin, generics.ListCreateAPIView):
     serializer_class = ClientSerializer
+    pagination_class = ClientListPagination
 
     def get_queryset(self):
         queryset = Client.objects.filter(is_active=True).annotate(
@@ -670,6 +683,16 @@ class ClientListView(MobileApiMixin, generics.ListCreateAPIView):
                         "internet",
                     ]
                 )
+            )
+
+        search = self.request.query_params.get("search", "").strip()
+        for term in search.split():
+            queryset = queryset.filter(
+                Q(first_name__icontains=term)
+                | Q(last_name__icontains=term)
+                | Q(phone__icontains=term)
+                | Q(alternate_phone__icontains=term)
+                | Q(email__icontains=term)
             )
 
         ordering = self.request.query_params.get("ordering", "name").strip()

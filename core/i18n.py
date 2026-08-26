@@ -279,6 +279,10 @@ PUBLIC_TRANSLATIONS["es"].update({
     "public_booking_name_login": "Nombre o login",
     "public_booking_existing_hint": "El telefono o email sirven para entrar en tu cuenta en adelante.",
     "public_waitlist_inline_cta": "Podemos apuntarte a la lista de espera para este día si alguien cancela.",
+    "public_booking_name_reminder_title": "¿Cómo te llamas?",
+    "public_booking_name_reminder_text": "Escribe tu nombre, no tu número de teléfono. Si pones el número, tendremos que llamarte por el número de WhatsApp.",
+    "public_booking_name_reminder_action": "Volver y escribir mi nombre",
+    "public_booking_error_name_is_phone": "Escribe tu nombre en este campo, no el número de teléfono.",
 })
 PUBLIC_TRANSLATIONS["ru"].update({
     "public_booking_account_existing_title": "Если аккаунт уже есть,",
@@ -300,6 +304,10 @@ PUBLIC_TRANSLATIONS["ru"].update({
     "public_booking_contact_secondary_email_help": "Добавьте дополнительный email.",
     "public_booking_contact_secondary_invalid": "Дополнительный контакт должен быть другого типа и в корректном формате.",
     "public_waitlist_inline_cta": "Мы можем добавить вас в лист ожидания на этот день, если кто-то отменит запись.",
+    "public_booking_name_reminder_title": "Как вас зовут?",
+    "public_booking_name_reminder_text": "Напишите здесь своё имя, а не номер телефона. Иначе нам придётся обращаться к вам по номеру WhatsApp.",
+    "public_booking_name_reminder_action": "Вернуться и написать имя",
+    "public_booking_error_name_is_phone": "Напишите в этом поле имя, а не номер телефона.",
 })
 PUBLIC_TRANSLATIONS["en"].update({
     "public_booking_account_existing_title": "If you already have an account,",
@@ -321,6 +329,10 @@ PUBLIC_TRANSLATIONS["en"].update({
     "public_booking_contact_secondary_email_help": "Add an extra email.",
     "public_booking_contact_secondary_invalid": "The additional contact must be the other type and have a valid format.",
     "public_waitlist_inline_cta": "We can add you to the waitlist for this day if someone cancels.",
+    "public_booking_name_reminder_title": "What is your name?",
+    "public_booking_name_reminder_text": "Enter your name here, not your phone number. Otherwise we will have to call you by your WhatsApp number.",
+    "public_booking_name_reminder_action": "Go back and enter my name",
+    "public_booking_error_name_is_phone": "Enter your name in this field, not your phone number.",
 })
 PUBLIC_TRANSLATIONS["de"].update({
     "public_booking_account_existing_title": "Wenn Sie bereits ein Konto haben,",
@@ -342,6 +354,10 @@ PUBLIC_TRANSLATIONS["de"].update({
     "public_booking_contact_secondary_email_help": "Zusatzliche Email eingeben.",
     "public_booking_contact_secondary_invalid": "Der zusatzliche Kontakt muss vom anderen Typ sein und ein gultiges Format haben.",
     "public_waitlist_inline_cta": "Wir können Sie für diesen Tag auf die Warteliste setzen, falls jemand absagt.",
+    "public_booking_name_reminder_title": "Wie heißen Sie?",
+    "public_booking_name_reminder_text": "Geben Sie hier Ihren Namen ein, nicht Ihre Telefonnummer. Sonst müssen wir Sie mit Ihrer WhatsApp-Nummer ansprechen.",
+    "public_booking_name_reminder_action": "Zurück und Namen eingeben",
+    "public_booking_error_name_is_phone": "Geben Sie in diesem Feld Ihren Namen und nicht die Telefonnummer ein.",
 })
 PUBLIC_TRANSLATIONS["fr"].update({
     "public_booking_account_existing_title": "Si vous avez déjà un compte,",
@@ -363,6 +379,10 @@ PUBLIC_TRANSLATIONS["fr"].update({
     "public_booking_contact_secondary_email_help": "Ajoutez un email supplémentaire.",
     "public_booking_contact_secondary_invalid": "Le contact supplémentaire doit être de l'autre type et avoir un format valide.",
     "public_waitlist_inline_cta": "Nous pouvons vous ajouter à la liste d'attente pour ce jour si quelqu'un annule.",
+    "public_booking_name_reminder_title": "Comment vous appelez-vous ?",
+    "public_booking_name_reminder_text": "Indiquez ici votre nom, pas votre numéro de téléphone. Sinon, nous devrons vous appeler par votre numéro WhatsApp.",
+    "public_booking_name_reminder_action": "Revenir et saisir mon nom",
+    "public_booking_error_name_is_phone": "Indiquez votre nom dans ce champ, pas votre numéro de téléphone.",
 })
 
 PUBLIC_TRANSLATIONS["es"].update({

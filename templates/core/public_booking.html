@@ -172,6 +172,18 @@
 </section>
 {{ waitlist_employees|json_script:"waitlist-employees-data" }}
 
+<dialog class="waitlist-modal" data-name-reminder-modal>
+  <div class="waitlist-modal__panel">
+    <div class="waitlist-modal__body">
+      <h3>{{ t.public_booking_name_reminder_title }}</h3>
+      <p>{{ t.public_booking_name_reminder_text }}</p>
+      <button class="btn-lux btn-lux-primary btn-lux-large" type="button" data-close-name-reminder>
+        {{ t.public_booking_name_reminder_action }}
+      </button>
+    </div>
+  </div>
+</dialog>
+
 <dialog class="waitlist-modal" data-waitlist-modal>
   <div class="waitlist-modal__panel">
     <button class="waitlist-modal__close" type="button" data-close-waitlist aria-label="Cerrar">×</button>
@@ -303,6 +315,8 @@
     const prepaymentPay = document.querySelector('[data-prepayment-pay]');
     const prepaymentWhatsApp = document.querySelector('[data-prepayment-whatsapp]');
     const prepaymentStatus = document.querySelector('[data-prepayment-status]');
+    const nameReminderModal = document.querySelector('[data-name-reminder-modal]');
+    const closeNameReminder = document.querySelector('[data-close-name-reminder]');
     const waitlistEmployeesNode = document.getElementById('waitlist-employees-data');
     const waitlistEmployees = waitlistEmployeesNode ? JSON.parse(waitlistEmployeesNode.textContent || '[]') : [];
     // Cart state
@@ -351,6 +365,7 @@
       error: '{{ t.public_booking_slots_error|escapejs }}',
       passwordMin: '{{ t.public_booking_error_password_min|escapejs }}',
       nameRequired: '{{ t.public_booking_error_name|escapejs }}',
+      nameIsPhone: '{{ t.public_booking_error_name_is_phone|escapejs }}',
       timeRequired: '{{ t.public_booking_error_time|escapejs }}',
       submitting: '{{ t.public_booking_submitting|escapejs }}',
       contactRequired: '{{ t.public_booking_contact_required|escapejs }}',
@@ -369,6 +384,26 @@
     const passwordRecoveryError = '{{ t.public_booking_recovery_error|escapejs }}';
     let prepaymentRedirect = '';
     let prepaymentWhatsAppAction = '';
+
+    function looksLikePhoneName(value) {
+      const text = (value || '').trim();
+      const digits = text.replace(/\D+/g, '');
+      return /^[+\d\s()./\-]+$/.test(text) && digits.length >= 7 && digits.length <= 15;
+    }
+
+    function showNameReminder(nameInput) {
+      setFieldError('name', messages.nameIsPhone);
+      if (nameReminderModal && typeof nameReminderModal.showModal === 'function') {
+        nameReminderModal.showModal();
+      }
+      if (closeNameReminder) {
+        closeNameReminder.onclick = function () {
+          if (nameReminderModal && nameReminderModal.open) nameReminderModal.close();
+          nameInput.focus();
+          nameInput.select();
+        };
+      }
+    }
 
     if (prepaymentModal) {
       prepaymentModal.addEventListener('cancel', function (event) { event.preventDefault(); });
@@ -914,6 +949,10 @@
       const passwordInput = form.querySelector('[name="password"]');
       if (!cartJsonInput || !cartJsonInput.value) errors.start_at = [messages.timeRequired];
       if (!nameInput.value.trim()) errors.name = [messages.nameRequired];
+      else if (looksLikePhoneName(nameInput.value)) {
+        showNameReminder(nameInput);
+        return false;
+      }
       if (!passwordInput.value || passwordInput.value.length < 6) errors.password = [messages.passwordMin];
       const primaryType = classifyContactValue(contactInput ? contactInput.value : '');
       if (!contactInput.value.trim()) errors.contact = [messages.contactRequired];

@@ -560,7 +560,6 @@ class MobileApiMvpTests(TestCase):
         self._auth(self.owner_user)
 
         for url in (
-            reverse("mobile_api:clients"),
             reverse("mobile_api:services"),
             reverse("mobile_api:employees"),
             reverse("mobile_api:zones"),
@@ -569,6 +568,36 @@ class MobileApiMvpTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response["Content-Type"], "application/json")
             self.assertIsInstance(response.json(), list)
+
+        clients_response = self.api_client.get(reverse("mobile_api:clients"))
+        self.assertEqual(clients_response.status_code, 200)
+        self.assertIsInstance(clients_response.json(), list)
+
+    def test_clients_screen_uses_ten_item_server_pages_and_search(self):
+        for index in range(12):
+            Client.objects.create(
+                first_name=f"Pagination {index:02d}",
+                phone=f"+3460000{index:04d}",
+            )
+        self._auth(self.owner_user)
+        url = reverse("mobile_api:clients")
+
+        first_page = self.api_client.get(url, {"page": 1})
+        self.assertEqual(first_page.status_code, 200, first_page.content)
+        self.assertEqual(first_page.json()["count"], 14)
+        self.assertEqual(len(first_page.json()["results"]), 10)
+        self.assertIsNotNone(first_page.json()["next"])
+
+        second_page = self.api_client.get(url, {"page": 2})
+        self.assertEqual(len(second_page.json()["results"]), 4)
+        self.assertIsNotNone(second_page.json()["previous"])
+
+        search = self.api_client.get(
+            url,
+            {"page": 1, "search": "Pagination 07"},
+        )
+        self.assertEqual(search.json()["count"], 1)
+        self.assertEqual(search.json()["results"][0]["first_name"], "Pagination 07")
 
     def test_clients_can_be_filtered_and_include_orders_spent_and_online(self):
         self.client_obj.booking_count = 4
@@ -584,12 +613,12 @@ class MobileApiMvpTests(TestCase):
 
         response = self.api_client.get(
             reverse("mobile_api:clients"),
-            {"filter": "blacklisted"},
+            {"filter": "blacklisted", "page": 1},
         )
 
         self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(len(response.json()), 1)
-        client = response.json()[0]
+        self.assertEqual(len(response.json()["results"]), 1)
+        client = response.json()["results"][0]
         self.assertEqual(client["id"], self.client_obj.pk)
         self.assertEqual(client["total_orders"], 5)
         self.assertEqual(client["total_spent"], "150.00")
@@ -597,10 +626,10 @@ class MobileApiMvpTests(TestCase):
 
         online_response = self.api_client.get(
             reverse("mobile_api:clients"),
-            {"filter": "online"},
+            {"filter": "online", "page": 1},
         )
         self.assertEqual(
-            [item["id"] for item in online_response.json()],
+            [item["id"] for item in online_response.json()["results"]],
             [self.client_obj.pk],
         )
 

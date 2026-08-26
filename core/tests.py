@@ -185,6 +185,7 @@ class PublicBookingTests(TestCase):
         )
         self.assertIn("whatsapp_action", response.json())
         booking = Booking.objects.get(client__first_name="Nueva")
+        self.assertEqual(booking.client.phone, "+34600111222")
         self.assertEqual(booking.status, Booking.Statuses.PENDING)
         self.assertEqual(
             booking.prepayment_policy, Booking.PrepaymentPolicies.REQUIRED
@@ -192,6 +193,7 @@ class PublicBookingTests(TestCase):
         self.assertEqual(booking.source, Booking.Sources.WEBSITE)
         self.assertEqual(booking.service, self.service)
         user = User.objects.get(client_profile__first_name="Nueva")
+        self.assertEqual(user.phone, "+34600111222")
         self.assertEqual(user.role, User.ROLE_CLIENT)
         self.assertTrue(user.check_password("secret123"))
         self.assertTrue(Client.objects.filter(user=user).exists())
@@ -254,6 +256,30 @@ class PublicBookingTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertContains(response, "Indica telefono o email", status_code=400)
         self.assertFalse(User.objects.filter(first_name="Clienta").exists())
+
+    def test_public_booking_rejects_phone_number_as_client_name(self):
+        response = self.browser.post(
+            reverse("public_booking"),
+            {
+                "cart_json": '[{"service": 1}]',
+                "name": "+34 600 111 222",
+                "password": "secret123",
+                "contact": "+34600111222",
+            },
+            HTTP_ACCEPT="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("nombre", response.json()["errors"]["name"][0].lower())
+        self.assertFalse(Client.objects.filter(first_name__startswith="+34").exists())
+
+    def test_public_booking_page_has_name_reminder_modal(self):
+        response = self.browser.get(reverse("public_booking"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-name-reminder-modal")
+        self.assertContains(response, "¿Cómo te llamas?")
 
     def test_public_booking_slots_allow_dates_up_to_one_year_ahead(self):
         future_date = timezone.localdate() + timedelta(days=300)

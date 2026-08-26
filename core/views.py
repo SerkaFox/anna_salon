@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import secrets
 from datetime import datetime, timedelta
 
@@ -456,6 +457,12 @@ def _public_wants_json(request):
     return request.headers.get("x-requested-with") == "XMLHttpRequest" or "application/json" in request.headers.get("accept", "")
 
 
+def _looks_like_phone_name(value):
+    text = (value or "").strip()
+    digits = re.sub(r"\D", "", text)
+    return bool(re.fullmatch(r"[+\d\s()./-]+", text)) and 7 <= len(digits) <= 15
+
+
 def _public_booking_error_response(request, values, errors):
     if _public_wants_json(request):
         return JsonResponse({"ok": False, "errors": errors}, status=400)
@@ -515,6 +522,8 @@ def _public_booking_post_multi(request, post, t):
 
     if not values["name"]:
         errors["name"] = [t["public_booking_error_name"]]
+    elif _looks_like_phone_name(values["name"]):
+        errors["name"] = [t["public_booking_error_name_is_phone"]]
     if not values["password"]:
         errors["password"] = [t["public_booking_error_password_required"]]
     elif len(values["password"]) < 6:
@@ -888,6 +897,8 @@ def public_booking(request):
 
     if not values["name"]:
         errors["name"] = [t["public_booking_error_name"]]
+    elif _looks_like_phone_name(values["name"]):
+        errors["name"] = [t["public_booking_error_name_is_phone"]]
     if not values["password"]:
         errors["password"] = [t["public_booking_error_password_required"]]
     elif len(values["password"]) < 6:
@@ -1090,6 +1101,8 @@ def public_waitlist(request):
     errors = {}
     if not name:
         errors["name"] = [t["public_booking_error_name"]]
+    elif _looks_like_phone_name(name):
+        errors["name"] = [t["public_booking_error_name_is_phone"]]
     if not email and not phone:
         errors["__all__"] = [t["public_waitlist_contact_required"]]
 
