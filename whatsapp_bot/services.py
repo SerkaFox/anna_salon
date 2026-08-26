@@ -347,6 +347,23 @@ def queue_due_reminders(*, hours, window_minutes=15):
         message, created = queue_booking_message(booking, kind=kind)
         if created:
             queued.append(message)
+            try:
+                from mobile_api.push_notifications import (
+                    EVENT_REMINDER_2H,
+                    EVENT_REMINDER_24H,
+                    send_booking_notification,
+                )
+
+                send_booking_notification(
+                    booking.pk,
+                    EVENT_REMINDER_2H if hours == 2 else EVENT_REMINDER_24H,
+                )
+            except Exception:
+                logger.exception(
+                    "Could not send %sh employee push reminder for booking %s.",
+                    hours,
+                    booking.pk,
+                )
         else:
             skipped.append(message)
     return {"queued": queued, "skipped": skipped}

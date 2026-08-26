@@ -10,6 +10,11 @@ urlpatterns = [
     path("password-recovery/", views.PasswordRecoveryView.as_view(), name="password_recovery"),
     path("me/", views.MeView.as_view(), name="me"),
     path("push-devices/", views.PushDeviceView.as_view(), name="push_devices"),
+    path(
+        "push-devices/preferences/",
+        views.PushDevicePreferencesView.as_view(),
+        name="push_device_preferences",
+    ),
     path("whatsapp/status/", views.WhatsAppStatusView.as_view(), name="whatsapp_status"),
     path("clients/", views.ClientListView.as_view(), name="clients"),
     path("clients/<int:pk>/", views.ClientDetailView.as_view(), name="client_detail"),

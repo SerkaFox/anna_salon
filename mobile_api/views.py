@@ -531,6 +531,60 @@ class PushDeviceView(MobileApiMixin, APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class PushDevicePreferencesView(MobileApiMixin, APIView):
+    preference_fields = {
+        "new_booking": "notify_new_booking",
+        "booking_cancelled": "notify_booking_cancelled",
+        "booking_rescheduled": "notify_booking_rescheduled",
+        "employee_changed": "notify_employee_changed",
+        "prepayment_received": "notify_prepayment_received",
+        "reminder_24h": "notify_reminder_24h",
+        "reminder_2h": "notify_reminder_2h",
+    }
+
+    def _device(self, request):
+        token = serializers.CharField(max_length=4096).run_validation(
+            request.data.get("registration_token")
+        )
+        return generics.get_object_or_404(
+            PushDevice,
+            user=request.user,
+            registration_token=token,
+        )
+
+    def post(self, request):
+        device = self._device(request)
+        return Response(
+            {
+                "active": device.is_active,
+                "preferences": device.notification_preferences,
+            }
+        )
+
+    def patch(self, request):
+        device = self._device(request)
+        preferences = request.data.get("preferences")
+        if not isinstance(preferences, dict):
+            raise serializers.ValidationError(
+                {"preferences": ["Indica las preferencias de notificación."]}
+            )
+        update_fields = []
+        for key, model_field in self.preference_fields.items():
+            if key not in preferences:
+                continue
+            value = serializers.BooleanField().run_validation(preferences[key])
+            setattr(device, model_field, value)
+            update_fields.append(model_field)
+        if update_fields:
+            device.save(update_fields=[*update_fields, "updated_at"])
+        return Response(
+            {
+                "active": device.is_active,
+                "preferences": device.notification_preferences,
+            }
+        )
+
+
 class AppUpdateView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []

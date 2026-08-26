@@ -28,6 +28,13 @@ class PushDevice(models.Model):
         default=Locales.SPANISH,
     )
     is_active = models.BooleanField(default=True)
+    notify_new_booking = models.BooleanField(default=True)
+    notify_booking_cancelled = models.BooleanField(default=True)
+    notify_booking_rescheduled = models.BooleanField(default=True)
+    notify_employee_changed = models.BooleanField(default=True)
+    notify_prepayment_received = models.BooleanField(default=True)
+    notify_reminder_24h = models.BooleanField(default=True)
+    notify_reminder_2h = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -36,3 +43,15 @@ class PushDevice(models.Model):
 
     def __str__(self):
         return f"{self.user} · {self.platform}"
+
+    @property
+    def notification_preferences(self):
+        return {
+            "new_booking": self.notify_new_booking,
+            "booking_cancelled": self.notify_booking_cancelled,
+            "booking_rescheduled": self.notify_booking_rescheduled,
+            "employee_changed": self.notify_employee_changed,
+            "prepayment_received": self.notify_prepayment_received,
+            "reminder_24h": self.notify_reminder_24h,
+            "reminder_2h": self.notify_reminder_2h,
+        }
