@@ -57,6 +57,19 @@ class PushDeviceApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_owner_can_register_management_notifications(self):
+        owner = User.objects.create_user(
+            username="owner", password="secret", role=User.ROLE_OWNER
+        )
+        self.client.force_authenticate(owner)
+        response = self.client.post(
+            reverse("mobile_api:push_devices"),
+            {"registration_token": "owner-token", "locale": "ru"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(PushDevice.objects.filter(user=owner, is_active=True).exists())
+
 
 @override_settings(
     FIREBASE_CREDENTIALS_FILE="/tmp/firebase.json",
@@ -113,6 +126,23 @@ class BookingPushTests(TestCase):
         message = send.call_args.args[0]
         self.assertEqual(message.token, "employee-device-token")
         self.assertEqual(message.data["booking_id"], str(self.booking.pk))
+
+    @patch("mobile_api.push_notifications._firebase_app", return_value=object())
+    @patch("firebase_admin.messaging.send")
+    def test_notification_is_also_sent_to_owner(self, send, firebase_app):
+        owner = User.objects.create_user(
+            username="owner", password="secret", role=User.ROLE_OWNER
+        )
+        PushDevice.objects.create(
+            user=owner,
+            registration_token="owner-device-token",
+        )
+
+        self.assertEqual(send_new_booking_notification(self.booking.pk), 2)
+        self.assertEqual(
+            {call.args[0].token for call in send.call_args_list},
+            {"employee-device-token", "owner-device-token"},
+        )
 
     @patch("mobile_api.push_notifications.send_new_booking_notification")
     def test_creating_booking_schedules_one_push_after_commit(self, send):

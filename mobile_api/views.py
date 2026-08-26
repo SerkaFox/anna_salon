@@ -492,7 +492,7 @@ class MobileApiMixin:
 class PushDeviceView(MobileApiMixin, APIView):
     def post(self, request):
         employee = get_employee_profile(request.user)
-        if employee is None:
+        if employee is None and not request.user.can_manage_staff:
             raise PermissionDenied("Solo los empleados pueden activar avisos de reservas.")
 
         token = serializers.CharField(max_length=4096).run_validation(

@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from bookings.models import Booking
@@ -72,9 +73,9 @@ def send_new_booking_notification(booking_id):
     ):
         return 0
 
-    devices = PushDevice.objects.filter(
-        user_id=booking.employee.user_id,
-        is_active=True,
+    devices = PushDevice.objects.filter(is_active=True).filter(
+        Q(user_id=booking.employee.user_id)
+        | Q(user__role__in=("owner", "admin"))
     )
     sent = 0
     for device in devices:
