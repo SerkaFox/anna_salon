@@ -282,6 +282,11 @@ def client_portal(request):
                 notify_booking_confirmation(booking)
             except Exception:
                 pass
+            if not client.is_prepayment_exempt:
+                try:
+                    request_booking_prepayment(booking, request)
+                except Exception:
+                    pass
             messages.success(request, f"Solicitud enviada. {getattr(settings, 'SALON_NAME', 'BRIMOON Studio')} revisara y confirmara tu cita.")
             return redirect("clients:portal")
         first_error = next((items[0] for items in errors.values() if items), "No se pudo crear la reserva.")
@@ -323,6 +328,20 @@ def client_portal(request):
         _configure_client_booking_form(form, client)
         if form.is_valid():
             booking = form.save()
+            prepayment_exempt = client.is_prepayment_exempt
+            booking.prepayment_policy = (
+                Booking.PrepaymentPolicies.EXEMPT
+                if prepayment_exempt
+                else Booking.PrepaymentPolicies.REQUIRED
+            )
+            booking.status = (
+                Booking.Statuses.CONFIRMED
+                if prepayment_exempt
+                else Booking.Statuses.PENDING
+            )
+            booking.save(
+                update_fields=["prepayment_policy", "status", "updated_at"]
+            )
             log_event(
                 actor=request.user,
                 section="booking",
@@ -330,7 +349,7 @@ def client_portal(request):
                 instance=booking,
                 message=f"Solicitud de reserva creada desde portal cliente: {client.full_name}.",
             )
-            if not client.is_complimentary:
+            if not prepayment_exempt:
                 try:
                     request_booking_prepayment(booking, request)
                 except Exception:
@@ -1102,9 +1121,24 @@ def _client_portal_context(request, client, booking_form=None):
         .order_by("-start_at")
     )
     done_bookings = bookings.filter(status=Booking.Statuses.DONE)
-    total_spent = sum((booking.client_price_snapshot for booking in done_bookings), Decimal("0.00"))
+    today = timezone.localdate()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+    week_spent = sum(
+        (
+            booking.client_price_snapshot
+            for booking in done_bookings.filter(start_at__date__gte=week_start)
+        ),
+        Decimal("0.00"),
+    )
+    month_spent = sum(
+        (
+            booking.client_price_snapshot
+            for booking in done_bookings.filter(start_at__date__gte=month_start)
+        ),
+        Decimal("0.00"),
+    )
     total_visits = done_bookings.count()
-    avg_ticket = total_spent / total_visits if total_visits else Decimal("0.00")
     upcoming_bookings = list(
         bookings.filter(start_at__gte=timezone.now())
         .exclude(status=Booking.Statuses.CANCELLED)
@@ -1119,7 +1153,6 @@ def _client_portal_context(request, client, booking_form=None):
         (booking.amount_due for booking in upcoming_bookings if booking.online_payment_can_pay),
         Decimal("0.00"),
     )
-    rewards = client_reward_progress(client)
     photo_history = (
         BookingPhoto.objects
         .select_related("booking", "booking__service", "booking__employee", "client")
@@ -1171,15 +1204,13 @@ def _client_portal_context(request, client, booking_form=None):
         ],
         "stats": {
             "total_visits": total_visits,
-            "total_spent": total_spent,
-            "avg_ticket": avg_ticket,
-            "available_rewards": sum(reward["available"] for reward in rewards),
+            "week_spent": week_spent,
+            "month_spent": month_spent,
         },
         "upcoming_bookings": upcoming_bookings,
         "total_amount_due": total_amount_due,
         "bookings": history,
         "photo_history": photo_history,
-        "rewards": rewards,
         "top_services": top_services,
         "client_reviews": client_reviews,
         "reviewable_bookings": reviewable_bookings,
@@ -1204,15 +1235,12 @@ def _configure_client_booking_form(form, client):
     form.fields["zone"].widget = forms.HiddenInput()
     form.fields["notes"].label = "Comentario"
     form.fields["notes"].widget.attrs["placeholder"] = "Cuéntanos cualquier detalle importante."
-    form.fields["reward_rule"].queryset = ClientRewardRule.objects.filter(
-        pk__in=[
-            reward["id"]
-            for reward in client_reward_progress(client)
-            if reward["available"] > 0
-        ]
-    )
-    form.fields["reward_rule"].empty_label = "Sin premio"
+    form.fields["reward_rule"].queryset = ClientRewardRule.objects.none()
+    form.fields["reward_rule"].widget = forms.HiddenInput()
+    form.fields["reward_rule"].disabled = True
     form.fields["apply_referral_reward"].widget = forms.HiddenInput()
+    form.fields["apply_referral_reward"].disabled = True
+    form.fields["apply_referral_reward"].initial = False
     
 @login_required
 def use_referral_reward(request, pk):

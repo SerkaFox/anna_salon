@@ -78,4 +78,16 @@ def create_booking_for_client_from_pending(client, pending):
     )
     if not form.is_valid():
         return None, {field: [str(item) for item in field_errors] for field, field_errors in form.errors.items()}
-    return form.save(), {}
+    booking = form.save()
+    booking.prepayment_policy = (
+        Booking.PrepaymentPolicies.EXEMPT
+        if client.is_prepayment_exempt
+        else Booking.PrepaymentPolicies.REQUIRED
+    )
+    booking.status = (
+        Booking.Statuses.CONFIRMED
+        if client.is_prepayment_exempt
+        else Booking.Statuses.PENDING
+    )
+    booking.save(update_fields=["prepayment_policy", "status", "updated_at"])
+    return booking, {}

@@ -348,6 +348,21 @@ class MobileApiMvpTests(TestCase):
         for hidden_key in ("payments_total", "totals_by_method", "pending_total", "stripe", "stripe_payouts"):
             self.assertNotIn(hidden_key, data)
 
+    def test_employee_detail_hides_salon_revenue(self):
+        self._create_booking(status=Booking.Statuses.DONE)
+        self._auth(self.employee_user)
+
+        response = self.api_client.get(
+            reverse("mobile_api:employee_detail", args=[self.employee.pk])
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        stats = response.json()["stats"]
+        self.assertEqual(stats["employee_earnings"], "20.00")
+        for hidden_key in ("client_revenue", "salon_revenue", "avg_ticket"):
+            self.assertNotIn(hidden_key, stats)
+        self.assertEqual(response.json()["top_clients"], [])
+
     def test_owner_still_sees_cashbox_aggregate_totals(self):
         booking = self._create_booking()
         document = FiscalDocument.objects.create(
@@ -902,6 +917,61 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.REQUIRED)
         self.assertEqual(booking.status, Booking.Statuses.PENDING)
         request_prepayment.assert_called_once()
+
+    @patch("mobile_api.views.request_booking_prepayment")
+    def test_prepayment_exempt_client_booking_is_confirmed(self, request_prepayment):
+        client_user = User.objects.create_user(
+            username="exempt-client",
+            password="testpass123",
+            role=User.ROLE_CLIENT,
+        )
+        self.client_obj.user = client_user
+        self.client_obj.prepayment_exempt = True
+        self.client_obj.save(update_fields=["user", "prepayment_exempt"])
+        self._auth(client_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:bookings"),
+            {
+                "employee": self.employee.pk,
+                "service": self.service.pk,
+                "start_at": "2026-04-27T12:00:00+02:00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        booking = Booking.objects.get(pk=response.json()["id"])
+        self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.EXEMPT)
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
+        request_prepayment.assert_not_called()
+
+    def test_client_detail_hides_lifetime_spend_and_rewards(self):
+        client_user = User.objects.create_user(
+            username="private-spend-client",
+            password="testpass123",
+            role=User.ROLE_CLIENT,
+        )
+        self.client_obj.user = client_user
+        self.client_obj.save(update_fields=["user"])
+        self._create_booking(
+            client=self.client_obj,
+            start_at=timezone.now() - timedelta(hours=1),
+            status=Booking.Statuses.DONE,
+        )
+        self._auth(client_user)
+
+        response = self.api_client.get(
+            reverse("mobile_api:client_detail", args=[self.client_obj.pk])
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertNotIn("total_spent", payload["stats"])
+        self.assertNotIn("total_spent", payload["client"])
+        self.assertEqual(payload["stats"]["week_spent"], "50.00")
+        self.assertEqual(payload["stats"]["month_spent"], "50.00")
+        self.assertEqual(payload["rewards"], [])
 
     @patch("mobile_api.views.request_booking_prepayment")
     def test_client_cannot_book_outside_employee_shift(self, request_prepayment):

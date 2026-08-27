@@ -261,6 +261,39 @@ class WhatsAppBotTests(TestCase):
             ).exists()
         )
 
+    def test_expired_prepayment_does_not_cancel_exempt_client(self):
+        booking = self._booking(timezone.now() + timedelta(days=2))
+        booking.client.prepayment_exempt = True
+        booking.client.save(update_fields=["prepayment_exempt"])
+        booking.status = Booking.Statuses.PENDING
+        booking.prepayment_policy = Booking.PrepaymentPolicies.REQUIRED
+        booking.prepayment_requested_at = timezone.now() - timedelta(minutes=31)
+        booking.prepayment_deadline_at = timezone.now() - timedelta(minutes=1)
+        booking.save(
+            update_fields=[
+                "status",
+                "prepayment_policy",
+                "prepayment_requested_at",
+                "prepayment_deadline_at",
+            ]
+        )
+        Payment.objects.create(
+            booking=booking,
+            amount=Decimal("5.00"),
+            order_number="exempt-deposit-1",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PENDING,
+        )
+
+        result = process_expired_prepayment_requests()
+
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
+        self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.EXEMPT)
+        self.assertIsNone(booking.prepayment_deadline_at)
+        self.assertEqual(result["cancelled"], [])
+
     def test_default_24h_template_contains_confirmation_actions_once(self):
         booking = self._booking(timezone.now() + timedelta(hours=24, minutes=5))
 

@@ -138,6 +138,23 @@ def request_booking_prepayment(booking, request, *, timeout_minutes=30):
     from whatsapp_bot.models import WhatsAppMessage
     from whatsapp_bot.services import queue_and_send
 
+    if booking.client.is_prepayment_exempt:
+        booking.prepayment_policy = Booking.PrepaymentPolicies.EXEMPT
+        booking.prepayment_requested_at = None
+        booking.prepayment_deadline_at = None
+        if booking.status == Booking.Statuses.PENDING:
+            booking.status = Booking.Statuses.CONFIRMED
+        booking.save(
+            update_fields=[
+                "prepayment_policy",
+                "prepayment_requested_at",
+                "prepayment_deadline_at",
+                "status",
+                "updated_at",
+            ]
+        )
+        return None
+
     existing = (
         booking.online_payments.filter(
             provider=Payment.Providers.STRIPE,

@@ -125,6 +125,10 @@ class Client(models.Model):
     def is_complimentary(self):
         return self.pricing_category == self.PricingCategories.COMPLIMENTARY
 
+    @property
+    def is_prepayment_exempt(self):
+        return self.prepayment_exempt or self.is_complimentary
+
 
 class ClientRewardRule(models.Model):
     class RewardTypes(models.TextChoices):

@@ -175,7 +175,7 @@ class ClientSerializer(serializers.ModelSerializer):
         )
 
     def get_prepayment_exempt(self, obj):
-        return obj.prepayment_exempt or obj.is_complimentary
+        return obj.is_prepayment_exempt
 
 
 class ClientRewardRuleSerializer(serializers.ModelSerializer):
@@ -1170,9 +1170,16 @@ class BookingWriteSerializer(serializers.Serializer):
         self._extra_duration_minutes = extra_duration
         self._cleanup_duration_minutes = cleanup_duration
         self._prepayment_required_supplied = "prepayment_required" in attrs
+        if client_profile:
+            # Clients never choose or apply automatic rewards themselves.
+            # A manager can still decide on a discount from the staff flow.
+            values["reward_rule"] = None
+            attrs["apply_referral_reward"] = False
+            self._booking_form.cleaned_data["reward_rule"] = None
+            self._booking_form.cleaned_data["apply_referral_reward"] = False
         self._prepayment_required = (
             False
-            if values["client"].is_complimentary
+            if values["client"].is_prepayment_exempt
             else (True if client_profile else attrs.get("prepayment_required", False))
         )
         return attrs

@@ -458,6 +458,22 @@ def process_expired_prepayment_requests():
                 )
                 if booking.status != Booking.Statuses.PENDING:
                     continue
+                if booking.client.is_prepayment_exempt:
+                    expire_booking_prepayment(booking)
+                    booking.prepayment_policy = Booking.PrepaymentPolicies.EXEMPT
+                    booking.prepayment_requested_at = None
+                    booking.prepayment_deadline_at = None
+                    booking.status = Booking.Statuses.CONFIRMED
+                    booking.save(
+                        update_fields=[
+                            "prepayment_policy",
+                            "prepayment_requested_at",
+                            "prepayment_deadline_at",
+                            "status",
+                            "updated_at",
+                        ]
+                    )
+                    continue
                 if booking.online_payments.filter(status=Payment.Statuses.PAID).exists():
                     booking.status = Booking.Statuses.CONFIRMED
                     booking.save(update_fields=["status", "updated_at"])

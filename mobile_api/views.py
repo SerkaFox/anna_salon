@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 import re
 import secrets
@@ -464,23 +464,34 @@ def _employee_detail_payload(employee, request):
         key=lambda item: (-item["count"], item["name"]),
     )[:5]
     bookings_count = done_bookings.count()
+    stats = {
+        "date_from": date_from.isoformat() if date_from else "",
+        "date_to": date_to.isoformat() if date_to else "",
+        "employee_earnings": str(employee_earnings),
+        "bookings_count": bookings_count,
+        "clients_count": len(clients),
+        "repeat_clients_count": sum(1 for item in clients.values() if item["count"] > 1),
+    }
+    if request.user.can_manage_staff:
+        stats.update(
+            {
+                "client_revenue": str(client_revenue),
+                "salon_revenue": str(salon_revenue),
+                "avg_ticket": str(
+                    client_revenue / bookings_count
+                    if bookings_count
+                    else Decimal("0.00")
+                ),
+            }
+        )
     return {
         "employee": EmployeeSerializer(employee, context={"request": request}).data,
-        "stats": {
-            "date_from": date_from.isoformat() if date_from else "",
-            "date_to": date_to.isoformat() if date_to else "",
-            "employee_earnings": str(employee_earnings),
-            "client_revenue": str(client_revenue),
-            "salon_revenue": str(salon_revenue),
-            "bookings_count": bookings_count,
-            "clients_count": len(clients),
-            "repeat_clients_count": sum(1 for item in clients.values() if item["count"] > 1),
-            "avg_ticket": str(client_revenue / bookings_count if bookings_count else Decimal("0.00")),
-        },
-        "top_clients": [
-            {**item, "spent": str(item["spent"])}
-            for item in top_clients
-        ],
+        "stats": stats,
+        "top_clients": (
+            [{**item, "spent": str(item["spent"])} for item in top_clients]
+            if request.user.can_manage_staff
+            else []
+        ),
         "top_services": top_services,
         "bookings": BookingSerializer(list(bookings[:20]), many=True, context={"request": request}).data,
     }
@@ -798,6 +809,23 @@ class ClientDetailView(MobileApiMixin, APIView):
         booking_history = list(bookings[:20])
         done_bookings = bookings.filter(status=Booking.Statuses.DONE)
         total_spent = sum((booking.client_price_snapshot for booking in done_bookings), Decimal("0.00"))
+        today = timezone.localdate()
+        week_start = today - timedelta(days=today.weekday())
+        month_start = today.replace(day=1)
+        week_spent = sum(
+            (
+                booking.client_price_snapshot
+                for booking in done_bookings.filter(start_at__date__gte=week_start)
+            ),
+            Decimal("0.00"),
+        )
+        month_spent = sum(
+            (
+                booking.client_price_snapshot
+                for booking in done_bookings.filter(start_at__date__gte=month_start)
+            ),
+            Decimal("0.00"),
+        )
         total_visits = done_bookings.count()
         avg_ticket = total_spent / total_visits if total_visits else Decimal("0.00")
         last_visit = done_bookings.first()
@@ -832,16 +860,28 @@ class ClientDetailView(MobileApiMixin, APIView):
         photo_history = _visible_photos_for_user(photo_history, request.user)
         photo_history = photo_history[:24]
 
-        return Response(
-            {
-                "client": ClientSerializer(client, context={"request": request}).data,
-                "stats": {
-                    "total_visits": total_visits,
+        client_self_service = get_client_profile(request.user) is not None
+        stats = {
+            "total_visits": total_visits,
+            "week_spent": str(week_spent),
+            "month_spent": str(month_spent),
+            "cancelled": bookings.filter(status=Booking.Statuses.CANCELLED).count(),
+            "no_show": bookings.filter(status=Booking.Statuses.NO_SHOW).count(),
+        }
+        if not client_self_service:
+            stats.update(
+                {
                     "total_spent": str(total_spent),
                     "avg_ticket": str(avg_ticket),
-                    "cancelled": bookings.filter(status=Booking.Statuses.CANCELLED).count(),
-                    "no_show": bookings.filter(status=Booking.Statuses.NO_SHOW).count(),
-                },
+                }
+            )
+        client_data = ClientSerializer(client, context={"request": request}).data
+        if client_self_service:
+            client_data.pop("total_spent", None)
+        return Response(
+            {
+                "client": client_data,
+                "stats": stats,
                 "last_visit": BookingSerializer(last_visit, context={"request": request}).data if last_visit else None,
                 "next_booking": BookingSerializer(next_booking, context={"request": request}).data if next_booking else None,
                 "top_services": [_serialize_named_count(row) for row in top_services],
@@ -850,9 +890,9 @@ class ClientDetailView(MobileApiMixin, APIView):
                 "referred_clients_count": referred_clients.count(),
                 "referral_tree": _build_referral_tree(client),
                 "successful_referrals_count": successful_referrals_count,
-                "available_rewards": available_rewards,
-                "remaining_for_next_reward": remaining_for_next_reward,
-                "rewards": client_reward_progress(client),
+                "available_rewards": 0 if client_self_service else available_rewards,
+                "remaining_for_next_reward": 0 if client_self_service else remaining_for_next_reward,
+                "rewards": [] if client_self_service else client_reward_progress(client),
                 "bookings": BookingSerializer(booking_history, many=True, context={"request": request}).data,
                 "photo_history": [_serialize_client_photo(photo) for photo in photo_history],
                 "photo_history_count": len(photo_history),

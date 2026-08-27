@@ -95,3 +95,7 @@ class ClientAdminWebTests(TestCase):
         self.assertContains(response, 'data-client-view="home"')
         self.assertContains(response, 'data-client-view="booking"')
         self.assertContains(response, 'data-client-view="settings"')
+        self.assertContains(response, "Esta semana")
+        self.assertContains(response, "Este mes")
+        self.assertNotContains(response, "Gastado")
+        self.assertNotContains(response, "Premios")

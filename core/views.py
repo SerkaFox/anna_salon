@@ -646,7 +646,7 @@ def _public_booking_post_multi(request, post, t):
     # Prepayment only for the first booking in the group
     payment = (
         None
-        if bookings[0].client.is_complimentary
+        if bookings[0].client.is_prepayment_exempt
         else request_booking_prepayment(bookings[0], request)
     )
 
@@ -686,14 +686,15 @@ def _build_public_booking_form(client, service, employee, zone, start_at, end_at
     if not form.is_valid():
         raise PublicBookingError({field: [str(item) for item in errs] for field, errs in form.errors.items()})
     booking = form.save()
+    prepayment_exempt = client.is_prepayment_exempt
     booking.prepayment_policy = (
         Booking.PrepaymentPolicies.EXEMPT
-        if client.is_complimentary
+        if prepayment_exempt
         else Booking.PrepaymentPolicies.REQUIRED
     )
     booking.status = (
         Booking.Statuses.CONFIRMED
-        if client.is_complimentary
+        if prepayment_exempt
         else Booking.Statuses.PENDING
     )
     booking.save(update_fields=["prepayment_policy", "status", "updated_at"])
@@ -1025,7 +1026,7 @@ def public_booking(request):
 
     payment = (
         None
-        if booking.client.is_complimentary
+        if booking.client.is_prepayment_exempt
         else request_booking_prepayment(booking, request)
     )
 

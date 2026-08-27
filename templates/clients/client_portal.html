@@ -50,12 +50,12 @@
           <strong class="stat-value">{{ stats.total_visits }}</strong>
         </article>
         <article class="stat-card">
-          <span class="stat-label">{% ct "rewards" %}</span>
-          <strong class="stat-value">{{ stats.available_rewards }}</strong>
+          <span class="stat-label">{% if current_client_lang == "ru" %}За неделю{% else %}Esta semana{% endif %}</span>
+          <strong class="stat-value">{{ stats.week_spent|floatformat:2 }} €</strong>
         </article>
         <article class="stat-card">
-          <span class="stat-label">{% if current_client_lang == "ru" %}Потрачено{% else %}Gastado{% endif %}</span>
-          <strong class="stat-value">{{ stats.total_spent|floatformat:2 }} €</strong>
+          <span class="stat-label">{% if current_client_lang == "ru" %}За месяц{% else %}Este mes{% endif %}</span>
+          <strong class="stat-value">{{ stats.month_spent|floatformat:2 }} €</strong>
         </article>
       </div>
     </article>
@@ -132,35 +132,6 @@
     </article>
   </section>
 
-  <section class="panel-card client-app-view is-active" data-client-view="home">
-    <div class="dashboard-section-head">
-      <div>
-        <h2>{% ct "rewards" %}</h2>
-        <p class="muted-text">{% ct "rewards_help" %}</p>
-      </div>
-    </div>
-    {% if rewards %}
-      <div class="stats-grid">
-        {% for reward in rewards %}
-          <article class="stat-card">
-            <span class="stat-label">{{ reward.reward_type_label }}</span>
-            <strong class="stat-value">{{ reward.name }}</strong>
-            <p class="muted-text">{% ct "discount" %} {{ reward.discount_percent|floatformat:0 }}%. {% ct "need_now" threshold=reward.threshold current=reward.current %}</p>
-            {% if reward.available > 0 %}
-              <p><strong>{% ct "available" %}</strong> {{ reward.available }}</p>
-            {% elif reward.remaining > 0 %}
-              <p><strong>{% ct "missing" %}</strong> {{ reward.remaining }}</p>
-            {% else %}
-              <p class="muted-text">{% ct "completed" %}</p>
-            {% endif %}
-          </article>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="muted-text">{% ct "no_rewards" %}</p>
-    {% endif %}
-  </section>
-
   <section class="panel-card client-app-view" id="nueva-reserva" data-client-view="booking">
     <h2>{% ct "new_booking_request" %}</h2>
     <p class="muted-text">{% ct "booking_help" %}</p>
@@ -205,11 +176,7 @@
             </select>
           </div>
         </div>
-        <div class="field">
-          <label for="{{ booking_form.reward_rule.id_for_label }}">{% ct "reward" %}</label>
-          {{ booking_form.reward_rule }}
-          {{ booking_form.reward_rule.errors }}
-        </div>
+        {{ booking_form.reward_rule }}
       </div>
 
       <div class="portal-date-strip" data-date-strip aria-label="{% ct 'date' %}"></div>
