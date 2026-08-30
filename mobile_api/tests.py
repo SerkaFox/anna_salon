@@ -1045,6 +1045,64 @@ class MobileApiMvpTests(TestCase):
         self.assertIn("Предоплата уже внесена", str(response.json()))
         request_prepayment.assert_not_called()
 
+    def test_staff_creates_paid_prepayment_invoice_for_actual_payer(self):
+        booking = self._create_booking()
+        Payment.objects.create(
+            booking=booking,
+            amount=Decimal("10.00"),
+            order_number="stripe-prepayment-invoice",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            paid_at=timezone.now(),
+            stripe_payment_intent_id="pi_prepayment_invoice",
+        )
+        self._auth(self.owner_user)
+        payload = {
+            "billing_name": "Carlos Pagador",
+            "fiscal_id": "12345678Z",
+            "fiscal_address": "Calle Pago 10",
+            "fiscal_city": "Bilbao",
+            "fiscal_postcode": "48001",
+            "email": "carlos@example.test",
+            "phone": "+34600111222",
+        }
+
+        response = self.api_client.post(
+            reverse("mobile_api:booking_prepayment_invoice", args=[booking.pk]),
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        document = FiscalDocument.objects.get(pk=response.json()["id"])
+        self.assertEqual(document.purpose, FiscalDocument.Purposes.PREPAYMENT)
+        self.assertEqual(document.document_type, FiscalDocument.DocumentTypes.INVOICE)
+        self.assertEqual(document.billing_name, "Carlos Pagador")
+        self.assertEqual(document.billing_fiscal_id, "12345678Z")
+        self.assertEqual(document.total_amount, Decimal("10.00"))
+        self.assertEqual(document.payments_total, Decimal("10.00"))
+        self.assertTrue(document.is_paid)
+        self.assertIn("Anticipo de", document.lines.get().description)
+        self.assertEqual(ManualPayment.objects.filter(fiscal_document=document).count(), 0)
+        self.client_obj.refresh_from_db()
+        self.assertEqual(self.client_obj.full_name, "Maria Lopez")
+
+        repeated = self.api_client.post(
+            reverse("mobile_api:booking_prepayment_invoice", args=[booking.pk]),
+            payload,
+            format="json",
+        )
+        self.assertEqual(repeated.status_code, 200, repeated.content)
+        self.assertEqual(repeated.json()["id"], document.pk)
+        self.assertEqual(
+            FiscalDocument.objects.filter(
+                booking=booking,
+                purpose=FiscalDocument.Purposes.PREPAYMENT,
+            ).count(),
+            1,
+        )
+
     def test_manual_booking_can_be_exempt_from_prepayment(self):
         self._auth(self.owner_user)
 

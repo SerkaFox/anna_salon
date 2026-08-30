@@ -44,6 +44,7 @@ urlpatterns = [
     path("bookings/<int:pk>/edit-services/", views.BookingEditServicesView.as_view(), name="booking_edit_services"),
     path("bookings/<int:pk>/quick-payment/", views.BookingQuickPaymentView.as_view(), name="booking_quick_payment"),
     path("bookings/<int:pk>/cash-document/", views.BookingCashDocumentView.as_view(), name="booking_cash_document"),
+    path("bookings/<int:pk>/prepayment-invoice/", views.BookingPrepaymentInvoiceView.as_view(), name="booking_prepayment_invoice"),
     path("bookings/<int:pk>/photos/", views.BookingPhotoListCreateView.as_view(), name="booking_photos"),
     path("bookings/<int:pk>/reschedule/", views.BookingRescheduleView.as_view(), name="booking_reschedule"),
     path("bookings/<int:pk>/status/", views.BookingStatusView.as_view(), name="booking_status"),

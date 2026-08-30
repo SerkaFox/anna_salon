@@ -18,6 +18,7 @@ urlpatterns = [
     path("booking/<int:booking_pk>/pay/quick/", views.booking_quick_payment, name="booking_quick_payment"),
     path("<int:pk>/", views.document_detail, name="detail"),
     path("<int:pk>/print/", views.document_print, name="print"),
+    path("public/<str:token>/", views.public_document_print, name="public_print"),
     path("<int:document_pk>/lines/create/", views.document_line_create, name="line_create"),
     path("lines/<int:pk>/delete/", views.document_line_delete, name="line_delete"),
     path("lines/<int:pk>/edit/", views.document_line_edit, name="line_edit"),

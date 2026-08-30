@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core import signing
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -11,6 +12,7 @@ from bookings.models import Booking
 from clients.models import Client
 from documents.line_items import delete_document_line, update_document_line_price
 from documents.models import FiscalDocument, FiscalDocumentLine, Payment
+from documents.public_links import DOCUMENT_LINK_SALT, sign_document_id
 from employees.models import Employee
 from services_app.models import Service
 
@@ -192,3 +194,46 @@ class FiscalDocumentLineEditingTests(TestCase):
         self.document.refresh_from_db()
         self.assertFalse(FiscalDocumentLine.objects.filter(pk=extra.pk).exists())
         self.assertEqual(self.document.total_amount, Decimal("20.00"))
+
+
+class PublicDocumentPrintTests(TestCase):
+    def setUp(self):
+        client = Client.objects.create(first_name="Carlos")
+        employee = Employee.objects.create(first_name="Anna")
+        service = Service.objects.create(
+            name="Manicura",
+            duration_minutes=60,
+            price=Decimal("30.00"),
+        )
+        start = timezone.make_aware(datetime(2026, 8, 30, 10, 0))
+        booking = Booking.objects.create(
+            client=client,
+            employee=employee,
+            service=service,
+            start_at=start,
+            end_at=start + timedelta(hours=1),
+            client_price_snapshot=Decimal("30.00"),
+        )
+        self.document = FiscalDocument.objects.create(
+            booking=booking,
+            billing_name="Carlos Pagador",
+            billing_fiscal_id="12345678Z",
+            billing_address="Calle Mayor 1",
+        )
+
+    def test_signed_document_link_opens_without_login(self):
+        response = self.client.get(
+            reverse("documents:public_print", args=[sign_document_id(self.document.pk)])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Carlos Pagador")
+        self.assertContains(response, "12345678Z")
+
+    def test_invalid_document_signature_returns_not_found(self):
+        token = signing.TimestampSigner(salt=DOCUMENT_LINK_SALT).sign("999999")
+        response = self.client.get(
+            reverse("documents:public_print", args=[f"{token}broken"])
+        )
+
+        self.assertEqual(response.status_code, 404)

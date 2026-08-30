@@ -3,11 +3,13 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.signing import BadSignature, SignatureExpired
 from django.db.models import Q, Sum
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -22,6 +24,7 @@ from payments.models import StripePayoutRequest
 from .forms import FiscalDocumentLineForm, FiscalDocumentLinePriceForm, PaymentForm
 from .line_items import delete_document_line, update_document_line_price
 from .models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment
+from .public_links import unsign_document_id
 
 
 def ensure_document_default_line(document):
@@ -295,6 +298,28 @@ def document_print(request, pk):
         back_url = reverse("dashboard:home")
 
     return render(request, "documents/document_print.html", {"document": document, "back_url": back_url})
+
+
+def public_document_print(request, token):
+    try:
+        document_id = unsign_document_id(token)
+    except (BadSignature, SignatureExpired, TypeError, ValueError):
+        raise Http404
+    document = get_object_or_404(
+        FiscalDocument.objects.select_related(
+            "booking",
+            "booking__client",
+            "booking__employee",
+            "booking__service",
+            "booking__zone",
+        ),
+        pk=document_id,
+    )
+    return render(
+        request,
+        "documents/document_print.html",
+        {"document": document, "back_url": settings.PUBLIC_BASE_URL},
+    )
 
 
 @login_required

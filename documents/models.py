@@ -16,6 +16,10 @@ class FiscalDocument(models.Model):
         ISSUED = "issued", "Emitido"
         CANCELLED = "cancelled", "Cancelado"
 
+    class Purposes(models.TextChoices):
+        STANDARD = "standard", "Documento de la reserva"
+        PREPAYMENT = "prepayment", "Factura de anticipo"
+
     booking = models.ForeignKey(
         "bookings.Booking",
         on_delete=models.PROTECT,
@@ -34,6 +38,12 @@ class FiscalDocument(models.Model):
         choices=Statuses.choices,
         default=Statuses.ISSUED,
     )
+    purpose = models.CharField(
+        "Finalidad",
+        max_length=20,
+        choices=Purposes.choices,
+        default=Purposes.STANDARD,
+    )
     number = models.CharField("Número", max_length=40, unique=True, blank=True)
     issue_date = models.DateField("Fecha de emisión", default=timezone.localdate)
     tax_rate = models.DecimalField("IVA %", max_digits=5, decimal_places=2, default=Decimal("0.00"))
@@ -41,6 +51,24 @@ class FiscalDocument(models.Model):
     tax_amount = models.DecimalField("IVA", max_digits=10, decimal_places=2, default=Decimal("0.00"))
     total_amount = models.DecimalField("Total", max_digits=10, decimal_places=2, default=Decimal("0.00"))
     notes = models.TextField("Notas", blank=True)
+    billing_name = models.CharField("Nombre fiscal", max_length=255, blank=True)
+    billing_fiscal_id = models.CharField("NIE/NIF/CIF fiscal", max_length=40, blank=True)
+    billing_address = models.CharField("Dirección fiscal", max_length=255, blank=True)
+    billing_city = models.CharField("Ciudad fiscal", max_length=120, blank=True)
+    billing_postcode = models.CharField("Código postal fiscal", max_length=20, blank=True)
+    billing_email = models.EmailField("Email de facturación", blank=True)
+    billing_phone = models.CharField("Teléfono de facturación", max_length=30, blank=True)
+    online_paid_amount = models.DecimalField(
+        "Importe online vinculado",
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    external_payment_reference = models.CharField(
+        "Referencia del pago online",
+        max_length=255,
+        blank=True,
+    )
     created_at = models.DateTimeField("Creado", auto_now_add=True)
     updated_at = models.DateTimeField("Actualizado", auto_now=True)
 
@@ -50,9 +78,9 @@ class FiscalDocument(models.Model):
         verbose_name_plural = "Documentos fiscales"
         constraints = [
             models.UniqueConstraint(
-                fields=["booking", "document_type"],
+                fields=["booking", "document_type", "purpose"],
                 condition=models.Q(status__in=["draft", "issued"]),
-                name="unique_active_document_per_booking_type",
+                name="unique_active_document_per_booking_type_purpose",
             )
         ]
 
@@ -74,7 +102,7 @@ class FiscalDocument(models.Model):
             "amount",
         )
         total = sum((payment.signed_amount for payment in payments), Decimal("0.00"))
-        return total
+        return total + (self.online_paid_amount or Decimal("0.00"))
 
     @property
     def balance_due(self):

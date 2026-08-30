@@ -14,6 +14,7 @@ from bookings.utils import booking_payment_summary, combine_local, find_availabl
 from clients.models import Client, ClientRewardRule
 from clients.rewards import client_reward_progress
 from documents.models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment as ManualPayment
+from documents.public_links import get_public_document_url
 from employees.models import (
     Employee,
     EmployeeRecurringTimeBlock,
@@ -1325,13 +1326,13 @@ class ManualPaymentSerializer(serializers.ModelSerializer):
 class FiscalDocumentSerializer(serializers.ModelSerializer):
     document_type_label = serializers.CharField(source="get_document_type_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
-    client_name = serializers.CharField(source="booking.client.full_name", read_only=True)
-    client_phone = serializers.CharField(source="booking.client.phone", read_only=True)
-    client_email = serializers.CharField(source="booking.client.email", read_only=True)
-    client_fiscal_id = serializers.CharField(source="booking.client.fiscal_id", read_only=True)
-    client_fiscal_address = serializers.CharField(source="booking.client.fiscal_address", read_only=True)
-    client_fiscal_city = serializers.CharField(source="booking.client.fiscal_city", read_only=True)
-    client_fiscal_postcode = serializers.CharField(source="booking.client.fiscal_postcode", read_only=True)
+    client_name = serializers.SerializerMethodField()
+    client_phone = serializers.SerializerMethodField()
+    client_email = serializers.SerializerMethodField()
+    client_fiscal_id = serializers.SerializerMethodField()
+    client_fiscal_address = serializers.SerializerMethodField()
+    client_fiscal_city = serializers.SerializerMethodField()
+    client_fiscal_postcode = serializers.SerializerMethodField()
     service_name = serializers.CharField(source="booking.service_names", read_only=True)
     booking_start_at = serializers.SerializerMethodField()
     business = serializers.SerializerMethodField()
@@ -1349,6 +1350,7 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
             "booking",
             "document_type",
             "document_type_label",
+            "purpose",
             "status",
             "status_label",
             "number",
@@ -1361,6 +1363,8 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
             "balance_due",
             "is_paid",
             "notes",
+            "online_paid_amount",
+            "external_payment_reference",
             "client_name",
             "client_phone",
             "client_email",
@@ -1378,6 +1382,34 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
 
     def get_booking_start_at(self, obj):
         return _format_local_datetime(obj.booking.start_at)
+
+    def get_client_name(self, obj):
+        return self._billing_value(obj, "billing_name", "full_name")
+
+    def get_client_phone(self, obj):
+        return self._billing_value(obj, "billing_phone", "phone")
+
+    def get_client_email(self, obj):
+        return self._billing_value(obj, "billing_email", "email")
+
+    def get_client_fiscal_id(self, obj):
+        return self._billing_value(obj, "billing_fiscal_id", "fiscal_id")
+
+    def get_client_fiscal_address(self, obj):
+        return self._billing_value(obj, "billing_address", "fiscal_address")
+
+    def get_client_fiscal_city(self, obj):
+        return self._billing_value(obj, "billing_city", "fiscal_city")
+
+    def get_client_fiscal_postcode(self, obj):
+        return self._billing_value(obj, "billing_postcode", "fiscal_postcode")
+
+    @staticmethod
+    def _billing_value(obj, billing_field, client_field):
+        value = getattr(obj, billing_field)
+        if obj.purpose == FiscalDocument.Purposes.PREPAYMENT:
+            return value
+        return value or getattr(obj.booking.client, client_field)
 
     def get_payments_total(self, obj):
         return str(obj.payments_total)
@@ -1407,8 +1439,7 @@ class FiscalDocumentSerializer(serializers.ModelSerializer):
         }
 
     def get_document_url(self, obj):
-        public_url = settings.PUBLIC_BASE_URL.rstrip("/")
-        return f"{public_url}/panel/documentos/{obj.pk}/print/"
+        return get_public_document_url(obj)
 
 
 class CashClosureSerializer(serializers.ModelSerializer):
@@ -1468,6 +1499,27 @@ class FiscalDocumentLineWriteSerializer(serializers.Serializer):
             raise serializers.ValidationError({"unit_amount": ["Indica un importe."]})
         if "quantity" not in attrs:
             attrs["quantity"] = Decimal("1.00")
+        return attrs
+
+
+class PrepaymentInvoiceCreateSerializer(serializers.Serializer):
+    billing_name = serializers.CharField(max_length=255)
+    fiscal_id = serializers.CharField(max_length=40)
+    fiscal_address = serializers.CharField(max_length=255)
+    fiscal_city = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    fiscal_postcode = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        for field in ("billing_name", "fiscal_id", "fiscal_address"):
+            attrs[field] = (attrs.get(field) or "").strip()
+            if not attrs[field]:
+                raise serializers.ValidationError(
+                    {field: ["Este campo es obligatorio para emitir la factura."]}
+                )
+        for field in ("fiscal_city", "fiscal_postcode", "email", "phone"):
+            attrs[field] = (attrs.get(field) or "").strip()
         return attrs
 
 

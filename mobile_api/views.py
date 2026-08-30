@@ -89,6 +89,7 @@ from .serializers import (
     FiscalDocumentLinePriceSerializer,
     FiscalDocumentLineWriteSerializer,
     FiscalDocumentSerializer,
+    PrepaymentInvoiceCreateSerializer,
     ManualPaymentSerializer,
     ManualPaymentMethodUpdateSerializer,
     ManualPaymentWriteSerializer,
@@ -244,6 +245,8 @@ def _document_share_subject(document):
 
 
 def _document_share_text(document, request=None):
+    from documents.public_links import get_public_document_url
+
     lines = list(document.lines.all())
     if lines:
         detail_rows = [
@@ -260,14 +263,15 @@ def _document_share_text(document, request=None):
         else f"Pendiente: {document.balance_due} EUR."
     )
     return (
-        f"Hola {document.booking.client.full_name},\n\n"
+        f"Hola {document.billing_name or document.booking.client.full_name},\n\n"
         f"Te enviamos tu {document.get_document_type_display().lower()} {document.number}.\n"
         f"Fecha: {document.issue_date:%d/%m/%Y}\n"
         f"Servicio: {document.booking.service_names}\n"
         f"Reserva: {timezone.localtime(document.booking.start_at):%d/%m/%Y %H:%M}\n\n"
         f"{detail_text}\n\n"
         f"Total: {document.total_amount} EUR\n"
-        f"{status_text}"
+        f"{status_text}\n\n"
+        f"Abrir factura: {get_public_document_url(document)}"
         "\n\n"
         "BRIMOON Studio"
     )
@@ -2126,6 +2130,104 @@ class BookingCashDocumentView(MobileApiMixin, APIView):
         return Response(FiscalDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
 
 
+class BookingPrepaymentInvoiceView(MobileApiMixin, APIView):
+    def post(self, request, pk):
+        _mobile_staff_required(request.user)
+        booking = generics.get_object_or_404(
+            Booking.objects.select_related(
+                "client", "employee", "service"
+            ).prefetch_related(
+                "online_payments",
+                "fiscal_documents__lines",
+                "fiscal_documents__payments",
+            ),
+            pk=pk,
+        )
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+
+        paid_amount = get_booking_online_paid_amount(booking)
+        if paid_amount <= Decimal("0.00"):
+            raise serializers.ValidationError(
+                {"payment": ["Esta reserva todavía no tiene un prepago online confirmado."]}
+            )
+
+        input_serializer = PrepaymentInvoiceCreateSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        data = input_serializer.validated_data
+        active_statuses = [FiscalDocument.Statuses.DRAFT, FiscalDocument.Statuses.ISSUED]
+        document = FiscalDocument.objects.filter(
+            booking=booking,
+            document_type=FiscalDocument.DocumentTypes.INVOICE,
+            purpose=FiscalDocument.Purposes.PREPAYMENT,
+            status__in=active_statuses,
+        ).first()
+        created = document is None
+        if document is None:
+            document = FiscalDocument(
+                booking=booking,
+                document_type=FiscalDocument.DocumentTypes.INVOICE,
+                purpose=FiscalDocument.Purposes.PREPAYMENT,
+                status=FiscalDocument.Statuses.ISSUED,
+                issue_date=timezone.localdate(),
+            )
+
+        payment = next(
+            (
+                item
+                for item in booking.online_payments.all()
+                if item.status
+                in {
+                    OnlinePayment.Statuses.PAID,
+                    OnlinePayment.Statuses.PARTIALLY_REFUNDED,
+                    OnlinePayment.Statuses.REFUND_PENDING,
+                }
+                and item.amount - item.amount_refunded > Decimal("0.00")
+            ),
+            None,
+        )
+        document.billing_name = data["billing_name"]
+        document.billing_fiscal_id = data["fiscal_id"]
+        document.billing_address = data["fiscal_address"]
+        document.billing_city = data.get("fiscal_city", "")
+        document.billing_postcode = data.get("fiscal_postcode", "")
+        document.billing_email = data.get("email", "")
+        document.billing_phone = data.get("phone", "")
+        document.online_paid_amount = paid_amount
+        document.external_payment_reference = (
+            (payment.stripe_payment_intent_id or payment.order_number) if payment else ""
+        )
+        document.notes = "Factura del anticipo pagado online para esta reserva."
+        document.save()
+
+        document.lines.all().delete()
+        local_start = timezone.localtime(booking.start_at)
+        FiscalDocumentLine.objects.create(
+            fiscal_document=document,
+            service=booking.service,
+            description=(
+                f"Anticipo de {booking.service_names} · "
+                f"cita {local_start:%d/%m/%Y %H:%M}"
+            ),
+            quantity=Decimal("1.00"),
+            unit_amount=paid_amount,
+            sort_order=0,
+        )
+        document.save()
+        log_event(
+            actor=request.user,
+            section="document",
+            action="create" if created else "update",
+            instance=document,
+            message=f"Factura de anticipo {document.number} preparada desde API móvil.",
+            metadata={"paid_amount": str(paid_amount), "booking_id": booking.pk},
+        )
+        return Response(
+            FiscalDocumentSerializer(document).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
 class CashDocumentDetailView(MobileApiMixin, APIView):
     def get_object(self, request, pk):
         _mobile_staff_required(request.user)
@@ -2363,19 +2465,33 @@ class CashDocumentShareView(MobileApiMixin, APIView):
         client = document.booking.client
         email_override = (request.data.get("email") or "").strip()
         phone_override = (request.data.get("phone") or "").strip()
-        update_fields = []
-        if email_override and email_override != (client.email or ""):
-            client.email = email_override
-            update_fields.append("email")
-        if phone_override and phone_override != (client.phone or ""):
-            client.phone = phone_override
-            update_fields.append("phone")
-        if update_fields:
-            client.save(update_fields=update_fields)
+        if document.purpose == FiscalDocument.Purposes.PREPAYMENT:
+            update_fields = []
+            if email_override and email_override != document.billing_email:
+                document.billing_email = email_override
+                update_fields.append("billing_email")
+            if phone_override and phone_override != document.billing_phone:
+                document.billing_phone = phone_override
+                update_fields.append("billing_phone")
+            if update_fields:
+                document.save(update_fields=[*update_fields, "updated_at"])
+            email = (document.billing_email or "").strip()
+            phone = _normalize_whatsapp_phone(document.billing_phone)
+        else:
+            update_fields = []
+            if email_override and email_override != (client.email or ""):
+                client.email = email_override
+                update_fields.append("email")
+            if phone_override and phone_override != (client.phone or ""):
+                client.phone = phone_override
+                update_fields.append("phone")
+            if update_fields:
+                client.save(update_fields=update_fields)
+            email = (client.email or "").strip()
+            phone = _normalize_whatsapp_phone(client.phone)
 
         share_text = _document_share_text(document, request=request)
         if channel == "email":
-            email = (client.email or "").strip()
             if not email:
                 raise serializers.ValidationError({"email": ["El cliente no tiene email."]})
             from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@brimoon.es")
@@ -2391,7 +2507,6 @@ class CashDocumentShareView(MobileApiMixin, APIView):
                 raise serializers.ValidationError({"email": [str(exc)]}) from exc
             return Response({"channel": "email", "sent": True, "email": email})
 
-        phone = _normalize_whatsapp_phone(client.phone)
         if not phone:
             raise serializers.ValidationError({"phone": ["El cliente no tiene telefono."]})
         return Response(
