@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import stripe
+from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -17,6 +18,7 @@ from employees.models import Employee
 from payments.models import Payment, StripePayoutRequest
 from payments.account_service import get_stripe_account_summary, request_stripe_payout
 from payments.redsys import build_form_fields, decode_merchant_parameters, encode_merchant_parameters, sign_merchant_parameters, verify_signature
+from payments.stripe_service import request_booking_prepayment
 from salon.models import Zone
 from services_app.models import Service
 
@@ -306,6 +308,21 @@ class StripePaymentTests(TestCase):
             employee_amount_snapshot=Decimal("20.00"),
             salon_amount_snapshot=Decimal("30.00"),
         )
+
+    def test_paid_prepayment_cannot_create_another_checkout(self):
+        Payment.objects.create(
+            booking=self.booking,
+            amount=Decimal("10.00"),
+            currency="eur",
+            order_number="stripe-already-paid-service",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            paid_at=timezone.now(),
+        )
+
+        with self.assertRaisesMessage(ValidationError, "prepago ya está realizado"):
+            request_booking_prepayment(self.booking, SimpleNamespace())
 
     def test_compact_public_payment_url_redirects_to_stripe(self):
         Payment.objects.create(

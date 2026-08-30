@@ -58,6 +58,7 @@ from payments.stripe_service import (
     create_checkout_session,
     create_pending_stripe_payment,
     expire_booking_prepayment,
+    get_booking_online_paid_amount,
     request_booking_prepayment,
 )
 from whatsapp_bot.models import WhatsAppMessage
@@ -1541,6 +1542,10 @@ class BookingPrepaymentView(MobileApiMixin, APIView):
         if booking.client.is_complimentary:
             required = False
         if required:
+            if get_booking_online_paid_amount(booking) > Decimal("0.00"):
+                raise serializers.ValidationError(
+                    "El prepago ya está realizado. No se puede enviar otro enlace para evitar un cobro duplicado."
+                )
             booking.whatsapp_messages.filter(
                 kind__in=[
                     WhatsAppMessage.Kinds.PREPAYMENT_REQUEST,

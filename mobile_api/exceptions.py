@@ -84,6 +84,7 @@ RU_ERROR_TRANSLATIONS = {
     "Método de pago no válido.": "Выберите корректный способ оплаты.",
     "Esta reserva no se puede pagar online.": "Эту запись нельзя оплатить онлайн.",
     "Esta reserva ya está pagada.": "Эта запись уже оплачена.",
+    "El prepago ya está realizado. No se puede enviar otro enlace para evitar un cobro duplicado.": "Предоплата уже внесена. Повторную ссылку нельзя отправить, чтобы не списать деньги дважды.",
     "Stripe no está configurado.": "Stripe ещё не настроен.",
     "Solo están habilitadas las retiradas en EUR.": "Вывод средств доступен только в евро.",
     "Método de retirada no válido.": "Выберите корректный способ вывода средств.",

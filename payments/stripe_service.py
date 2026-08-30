@@ -17,6 +17,28 @@ from bookings.services import create_booking_prepayment
 from .models import Payment, PaymentRefund
 
 
+def get_booking_online_paid_amount(booking):
+    """Return the net amount already captured online for a booking."""
+    payments = getattr(booking, "_prefetched_objects_cache", {}).get(
+        "online_payments"
+    )
+    if payments is None:
+        payments = booking.online_payments.all()
+    paid_statuses = {
+        Payment.Statuses.PAID,
+        Payment.Statuses.PARTIALLY_REFUNDED,
+        Payment.Statuses.REFUND_PENDING,
+    }
+    return sum(
+        (
+            max(payment.amount - payment.amount_refunded, Decimal("0.00"))
+            for payment in payments
+            if payment.status in paid_statuses
+        ),
+        Decimal("0.00"),
+    )
+
+
 def get_public_payment_url(payment, request):
     """Return a compact, branded URL instead of exposing Stripe's long URL."""
     reference = payment.order_number.removeprefix("stripe-")
@@ -137,6 +159,11 @@ def request_booking_prepayment(booking, request, *, timeout_minutes=30):
     """Create a Stripe deposit link and send it to the booking client."""
     from whatsapp_bot.models import WhatsAppMessage
     from whatsapp_bot.services import queue_and_send
+
+    if get_booking_online_paid_amount(booking) > Decimal("0.00"):
+        raise ValidationError(
+            "El prepago ya está realizado. No se puede enviar otro enlace para evitar un cobro duplicado."
+        )
 
     if booking.client.is_prepayment_exempt:
         booking.prepayment_policy = Booking.PrepaymentPolicies.EXEMPT

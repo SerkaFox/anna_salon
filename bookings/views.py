@@ -166,6 +166,7 @@ def booking_list(request):
         booking.payment_state = payment_summary["state"]
         booking.payment_state_label = payment_summary["label"]
         booking.payment_paid_total = payment_summary["paid_amount"]
+        booking.online_payment_is_paid = payment_summary["paid_amount"] > 0
 
     now = timezone.now()
     today = timezone.localdate()

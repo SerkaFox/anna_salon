@@ -1020,6 +1020,31 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(booking.status, Booking.Statuses.PENDING)
         request_prepayment.assert_called_once()
 
+    @patch("mobile_api.views.request_booking_prepayment")
+    def test_paid_prepayment_cannot_request_a_second_link(self, request_prepayment):
+        booking = self._create_booking()
+        Payment.objects.create(
+            booking=booking,
+            amount=Decimal("10.00"),
+            order_number="stripe-already-paid",
+            provider=Payment.Providers.STRIPE,
+            method=Payment.Methods.CARD,
+            status=Payment.Statuses.PAID,
+            paid_at=timezone.now(),
+        )
+        self._auth(self.owner_user)
+
+        response = self.api_client.post(
+            reverse("mobile_api:booking_prepayment", args=[booking.pk]),
+            {"required": True},
+            format="json",
+            HTTP_ACCEPT_LANGUAGE="ru",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("Предоплата уже внесена", str(response.json()))
+        request_prepayment.assert_not_called()
+
     def test_manual_booking_can_be_exempt_from_prepayment(self):
         self._auth(self.owner_user)
 

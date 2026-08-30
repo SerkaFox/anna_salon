@@ -200,9 +200,12 @@
                   {% endif %}
                   <form method="post" action="{% url 'bookings:stripe_checkout' booking.id %}">
                     {% csrf_token %}
-                    <button class="btn btn-light btn-small" type="submit" {% if booking.online_payment_is_paid %}disabled{% endif %}>
-                      {% if booking.online_payment_is_paid %}Pagado online{% else %}Enviar enlace de pago{% endif %}
+                    <button class="btn btn-light btn-small" type="submit" {% if booking.online_payment_is_paid %}disabled title="El prepago ya está realizado. No se enviará otro enlace para evitar un cobro duplicado."{% endif %}>
+                      {% if booking.online_payment_is_paid %}Prepago ya realizado{% else %}Enviar enlace de pago{% endif %}
                     </button>
+                    {% if booking.online_payment_is_paid %}
+                      <small>No se puede enviar otro enlace para evitar un cobro duplicado.</small>
+                    {% endif %}
                   </form>
                   <a class="btn btn-light btn-small" href="{% url 'bookings:delete' booking.id %}">Eliminar</a>
                 {% endif %}
