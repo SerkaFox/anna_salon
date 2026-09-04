@@ -19,7 +19,7 @@
 {% block content %}
 <section class="lux-section public-booking-section">
   <div class="lux-container public-booking-layout">
-    <form class="public-booking-card" method="post" novalidate data-public-booking-form data-slots-url="{{ slot_endpoint }}" data-multi-slots-url="{{ multi_slot_endpoint }}">
+    <form class="public-booking-card" method="post" novalidate data-public-booking-form data-slots-url="{{ slot_endpoint }}" data-multi-slots-url="{{ multi_slot_endpoint }}" data-week-slots-url="{% url 'public_multi_booking_week_slots' %}">
       {% csrf_token %}
       <div class="booking-alert" data-global-error {% if not booking_non_field_errors %}hidden{% endif %}>{% if booking_non_field_errors %}{{ booking_non_field_errors.0 }}{% endif %}</div>
 
@@ -88,6 +88,18 @@
         </label>
       </div>
       <div class="booking-date-strip" data-date-strip aria-label="{{ t.public_booking_date }}"></div>
+
+      <section class="week-availability" data-week-availability hidden>
+        <div class="week-availability__head">
+          <div>
+            <strong data-week-title>Horas disponibles esta semana</strong>
+            <p data-week-status></p>
+          </div>
+        </div>
+        <div class="week-availability__scroll">
+          <div class="week-availability__grid" data-week-grid></div>
+        </div>
+      </section>
 
       <div class="selected-slot-summary" data-selected-summary hidden>
         <div>
@@ -277,6 +289,10 @@
     const dateRangeSection = form.querySelector('[data-date-range]');
     const grid = form.querySelector('[data-slot-grid]');
     const dateStrip = form.querySelector('[data-date-strip]');
+    const weekAvailability = form.querySelector('[data-week-availability]');
+    const weekTitle = form.querySelector('[data-week-title]');
+    const weekStatus = form.querySelector('[data-week-status]');
+    const weekGrid = form.querySelector('[data-week-grid]');
     const status = form.querySelector('[data-slot-status]');
     const slotPicker = form.querySelector('[data-slot-picker]');
     const cartJsonInput = form.querySelector('[data-cart-json-input]');
@@ -322,6 +338,8 @@
     // Cart state
     let cart = [];
     let activeDateRequest = 0;
+    let activeWeekRequest = 0;
+    let weekDays = [];
     const currentLanguage = '{{ public_language|default:"es"|escapejs }}';
     const prepaymentCopy = {
       es: {
@@ -379,6 +397,14 @@
       secondaryPhoneHelp: '{{ t.public_booking_contact_secondary_phone_help|escapejs }}',
       secondaryEmailHelp: '{{ t.public_booking_contact_secondary_email_help|escapejs }}'
     };
+    const weekCopy = {
+      es: { title: 'Horas disponibles esta semana', loading: 'Buscando horas libres…', empty: 'No hay horas libres', more: 'Ver todas', less: 'Ocultar' },
+      ru: { title: 'Свободное время на неделю', loading: 'Ищем свободное время…', empty: 'Нет свободного времени', more: 'Показать все', less: 'Скрыть' },
+      en: { title: 'Available times this week', loading: 'Looking for available times…', empty: 'No available times', more: 'Show all', less: 'Show less' },
+      de: { title: 'Freie Zeiten diese Woche', loading: 'Freie Zeiten werden gesucht…', empty: 'Keine freien Zeiten', more: 'Alle anzeigen', less: 'Weniger anzeigen' },
+      fr: { title: 'Horaires disponibles cette semaine', loading: 'Recherche des horaires libres…', empty: 'Aucun horaire libre', more: 'Tout afficher', less: 'Réduire' }
+    }[currentLanguage] || { title: 'Horas disponibles esta semana', loading: 'Buscando horas libres…', empty: 'No hay horas libres', more: 'Ver todas', less: 'Ocultar' };
+    if (weekTitle) weekTitle.textContent = weekCopy.title;
     const waitlistCtaText = '{{ t.public_waitlist_inline_cta|escapejs }}';
     const passwordRecoverySuccess = '{{ t.public_booking_recovery_success|escapejs }}';
     const passwordRecoveryError = '{{ t.public_booking_recovery_error|escapejs }}';
@@ -469,6 +495,7 @@
       if (cartPanel) cartPanel.hidden = !hasItems;
       if (dateRangeSection) dateRangeSection.hidden = !hasItems;
       if (slotPicker) slotPicker.hidden = !hasItems;
+      if (weekAvailability) weekAvailability.hidden = !hasItems;
 
       if (cartList) {
         cartList.innerHTML = '';
@@ -504,6 +531,7 @@
       if (hasItems && dateInput && dateInput.value) {
         renderDateStrip();
         loadBlocks();
+        loadWeekAvailability();
       } else if (hasItems) {
         renderDateStrip();
         if (status) status.textContent = messages.choose;
@@ -745,7 +773,8 @@
         button.addEventListener('click', function () {
           dateInput.value = value;
           renderDateStrip();
-          loadSlots();
+          loadBlocks();
+          loadWeekAvailability();
         });
         dateStrip.appendChild(button);
       }
@@ -822,6 +851,7 @@
       visible.forEach(function (block) {
         const card = document.createElement('div');
         card.className = 'block-slot-card';
+        card.dataset.startAt = block.start_at;
         const timeRow = document.createElement('div');
         timeRow.className = 'block-slot-card__time';
         timeRow.innerHTML = '<strong>' + block.label + '</strong><span>' + formatDuration(block.total_duration_minutes) + '</span>';
@@ -843,6 +873,101 @@
         grid.appendChild(card);
       });
       syncWaitlistForm();
+    }
+
+    function chooseWeekBlock(day, block) {
+      dateInput.value = day.date;
+      renderDateStrip();
+      renderBlocks(day.blocks || []);
+      const card = Array.from(grid.querySelectorAll('.block-slot-card')).find(function (item) {
+        return item.dataset.startAt === block.start_at;
+      });
+      if (card) selectBlock(block, card);
+    }
+
+    function renderWeekAvailability(days) {
+      if (!weekGrid) return;
+      weekGrid.innerHTML = '';
+      const formatterWeekday = new Intl.DateTimeFormat(currentLanguage, { weekday: 'short' });
+      const formatterDate = new Intl.DateTimeFormat(currentLanguage, { day: 'numeric', month: 'short' });
+      days.forEach(function (day) {
+        const date = parseIsoDate(day.date);
+        if (!date) return;
+        const column = document.createElement('article');
+        column.className = 'week-availability__day';
+        if (day.date === dateInput.value) column.classList.add('is-active');
+        const head = document.createElement('button');
+        head.type = 'button';
+        head.className = 'week-availability__day-head';
+        head.innerHTML = '<strong>' + formatterWeekday.format(date) + '</strong><span>' + formatterDate.format(date) + '</span>';
+        head.addEventListener('click', function () {
+          dateInput.value = day.date;
+          renderDateStrip();
+          renderBlocks(day.blocks || []);
+        });
+        column.appendChild(head);
+        const times = document.createElement('div');
+        times.className = 'week-availability__times';
+        const visibleBlocks = filteredBlocks(day.blocks || []);
+        if (!visibleBlocks.length) {
+          const empty = document.createElement('span');
+          empty.className = 'week-availability__empty';
+          empty.textContent = weekCopy.empty;
+          times.appendChild(empty);
+        } else {
+          visibleBlocks.forEach(function (block, index) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'week-slot-time';
+            if (index >= 8) button.hidden = true;
+            button.textContent = block.label;
+            button.addEventListener('click', function () { chooseWeekBlock(day, block); });
+            times.appendChild(button);
+          });
+          if (visibleBlocks.length > 8) {
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'week-availability__more';
+            toggle.textContent = weekCopy.more + ' +' + (visibleBlocks.length - 8);
+            toggle.addEventListener('click', function () {
+              const expanding = Array.from(times.querySelectorAll('.week-slot-time')).some(function (item) { return item.hidden; });
+              times.querySelectorAll('.week-slot-time').forEach(function (item, index) { item.hidden = !expanding && index >= 8; });
+              toggle.textContent = expanding ? weekCopy.less : weekCopy.more + ' +' + (visibleBlocks.length - 8);
+            });
+            times.appendChild(toggle);
+          }
+        }
+        column.appendChild(times);
+        weekGrid.appendChild(column);
+      });
+      if (weekStatus) weekStatus.textContent = '';
+    }
+
+    function loadWeekAvailability() {
+      if (!cart.length || !dateInput || !form.dataset.weekSlotsUrl) return;
+      activeWeekRequest += 1;
+      const requestId = activeWeekRequest;
+      const start = dateInput.value;
+      if (!start) return;
+      if (weekStatus) weekStatus.textContent = weekCopy.loading;
+      if (weekGrid) weekGrid.innerHTML = '';
+      const params = new URLSearchParams({
+        services: cart.map(function (item) { return item.id; }).join(','),
+        start: start
+      });
+      fetch(form.dataset.weekSlotsUrl + '?' + params.toString(), { headers: { 'Accept': 'application/json' } })
+        .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+        .then(function (result) {
+          if (activeWeekRequest !== requestId) return;
+          if (!result.ok || !result.data.ok) throw new Error(result.data.message || messages.error);
+          weekDays = result.data.days || [];
+          renderWeekAvailability(weekDays);
+        })
+        .catch(function (error) {
+          if (activeWeekRequest !== requestId) return;
+          weekDays = [];
+          if (weekStatus) weekStatus.textContent = error.message || messages.error;
+        });
     }
 
     function syncWaitlistForm() {
@@ -1049,8 +1174,8 @@
         contactInput.addEventListener(eventName, syncContactFields);
       });
     }
-    if (dateInput) dateInput.addEventListener('change', function () { renderDateStrip(); loadBlocks(); });
-    if (rangeSelect) rangeSelect.addEventListener('change', function () { loadBlocks(); });
+    if (dateInput) dateInput.addEventListener('change', function () { renderDateStrip(); loadBlocks(); loadWeekAvailability(); });
+    if (rangeSelect) rangeSelect.addEventListener('change', function () { loadBlocks(); renderWeekAvailability(weekDays); });
     if (editSlotButton) {
       editSlotButton.addEventListener('click', function () {
         form.classList.remove('is-time-selected');

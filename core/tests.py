@@ -149,6 +149,25 @@ class PublicBookingTests(TestCase):
         self.assertGreater(len(payload["slots"]), 0)
         self.assertEqual(payload["slots"][0]["employees"][0]["id"], self.employee.pk)
 
+    def test_public_booking_week_slots_returns_seven_days(self):
+        response = self.browser.get(
+            reverse("public_multi_booking_week_slots"),
+            {"services": str(self.service.pk), "start": self.date},
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(payload["days"]), 7)
+        self.assertEqual(payload["days"][0]["date"], self.date)
+        self.assertGreater(len(payload["days"][0]["blocks"]), 0)
+
+    def test_public_booking_page_has_week_availability(self):
+        response = self.browser.get(reverse("public_booking"))
+
+        self.assertContains(response, "data-week-availability")
+        self.assertContains(response, reverse("public_multi_booking_week_slots"))
+
     @patch("core.views.request_booking_prepayment")
     def test_public_booking_creates_pending_booking_with_required_prepayment(
         self, request_prepayment

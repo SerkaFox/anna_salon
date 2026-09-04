@@ -20,6 +20,7 @@ urlpatterns = [
     path("reservar/", core_views.public_booking, name="public_booking"),
     path("reservar/slots/", core_views.public_booking_slots, name="public_booking_slots"),
     path("reservar/multi-slots/", core_views.public_multi_booking_slots, name="public_multi_booking_slots"),
+    path("reservar/multi-slots-week/", core_views.public_multi_booking_week_slots, name="public_multi_booking_week_slots"),
     path("reservar/lista-espera/", core_views.public_waitlist, name="public_waitlist"),
     path("bookings/<int:pk>/pay/", booking_views.booking_pay, name="booking_pay"),
     path("confirmar-cita/<str:token>/", booking_views.booking_response, name="booking_response"),

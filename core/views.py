@@ -1085,6 +1085,69 @@ def public_multi_booking_slots(request):
     })
 
 
+def public_multi_booking_week_slots(request):
+    """GET /reservar/multi-slots-week/?services=1,2&start=YYYY-MM-DD"""
+    service_ids_raw = request.GET.get("services", "")
+    start_text = request.GET.get("start")
+    if not service_ids_raw or not start_text:
+        return JsonResponse(
+            {"ok": False, "message": "Indica los servicios y la fecha inicial."},
+            status=400,
+        )
+    try:
+        service_ids = [int(value) for value in service_ids_raw.split(",") if value.strip()]
+        start_date = datetime.strptime(start_text, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "message": "Datos invalidos."}, status=400)
+    if not service_ids:
+        return JsonResponse(
+            {"ok": False, "message": "Selecciona al menos un servicio."},
+            status=400,
+        )
+    if len(service_ids) > 6:
+        return JsonResponse(
+            {"ok": False, "message": "Maximo 6 servicios a la vez."},
+            status=400,
+        )
+    if not _date_within_booking_window(start_date):
+        return JsonResponse(
+            {"ok": False, "message": "Fecha fuera del rango permitido."},
+            status=400,
+        )
+    try:
+        services_by_id = {
+            service.pk: service
+            for service in Service.objects.filter(pk__in=service_ids, is_active=True)
+            .prefetch_related("allowed_zones", "employees")
+        }
+        services = [services_by_id[service_id] for service_id in service_ids]
+    except KeyError:
+        return JsonResponse(
+            {"ok": False, "message": "Uno de los servicios no existe."},
+            status=400,
+        )
+
+    days = []
+    for offset in range(7):
+        date_value = start_date + timedelta(days=offset)
+        if not _date_within_booking_window(date_value):
+            break
+        days.append(
+            {
+                "date": date_value.isoformat(),
+                "blocks": find_multi_service_slots(date_value, services),
+            }
+        )
+    return JsonResponse(
+        {
+            "ok": True,
+            "start": start_date.isoformat(),
+            "total_duration": sum(service.duration_minutes for service in services),
+            "days": days,
+        }
+    )
+
+
 @require_POST
 def public_waitlist(request):
     language = detect_public_language(request)
