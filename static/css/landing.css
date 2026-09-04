@@ -1537,9 +1537,7 @@ img { max-width: 100%; }
 .selected-slot-summary strong { display: block; margin-top: 4px; color: var(--gold-light); font-size: 1.03rem; }
 .service-selection-summary { margin-top: 0; margin-bottom: 18px; }
 .public-booking-card.is-service-selected .booking-service-catalog { display: none; }
-.public-booking-card.is-time-selected .slot-picker__body,
-.public-booking-card.is-time-selected .slot-picker__actions { display: none; }
-.public-booking-card.is-time-selected .slot-picker { padding-bottom: 16px; }
+.public-booking-card.is-time-selected .slot-picker { display: none; }
 .booking-details-section {
   scroll-margin-top: 110px;
   padding-top: 4px;
