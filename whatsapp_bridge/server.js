@@ -11,9 +11,9 @@ process.on("unhandledRejection", (reason) => {
 
 const { Client, LocalAuth, Buttons, List, Poll } = pkg;
 
-// Maps poll message ID → {bookingId, attendName, declineName} so vote_update
-// events can be matched back to a booking. Lost on restart but acceptable since
-// reminders are only active for ~24h and restarts are rare.
+// Maps poll message ID / destination phone to the action payload. WhatsApp Web
+// does not reliably emit vote_update for LID-addressed chats, so each sent poll
+// also gets a lightweight results watcher.
 const pollMappings = new Map();
 
 const PORT = Number(process.env.WHATSAPP_BRIDGE_PORT || 8125);
@@ -45,6 +45,119 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   return next();
+}
+
+async function postButtonReply(state, mapping, selectedName) {
+  if (!BUTTON_REPLY_WEBHOOK_URL || mapping.handled || !selectedName) return false;
+  const selected = mapping.options.find((option) => option.body === selectedName);
+  if (!selected) {
+    console.warn(`[whatsapp:${state.name}] unknown poll option for booking ${mapping.bookingId}: ${selectedName}`);
+    return false;
+  }
+
+  // Claim the first non-empty answer before awaiting network calls. This also
+  // prevents a late vote_update event and the watcher from processing twice.
+  mapping.handled = true;
+  console.log(`[whatsapp:${state.name}] poll vote for booking ${mapping.bookingId}: ${selectedName}`);
+  const payload = {
+    session: state.name,
+    from_phone: mapping.toDigits,
+    button_id: selected.id,
+    button_text: selectedName,
+  };
+
+  try {
+    const { default: transport } = await import(BUTTON_REPLY_WEBHOOK_URL.startsWith("https") ? "https" : "http");
+    const url = new URL(BUTTON_REPLY_WEBHOOK_URL);
+    const data = JSON.stringify(payload);
+    const statusCode = await new Promise((resolve, reject) => {
+      const request = transport.request({
+        hostname: url.hostname,
+        port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: url.pathname + url.search,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(data),
+          ...(TOKEN ? { "Authorization": `Bearer ${TOKEN}` } : {}),
+        },
+      }, (response) => {
+        response.resume();
+        resolve(response.statusCode || 0);
+      });
+      request.on("error", reject);
+      request.write(data);
+      request.end();
+    });
+    console.log(`[whatsapp:${state.name}] poll webhook status=${statusCode} booking=${mapping.bookingId}`);
+  } catch (error) {
+    console.warn(`[whatsapp:${state.name}] poll vote webhook error:`, error?.message || error);
+  }
+
+  // WhatsApp Web has no public "stop poll" method. Deleting the poll for
+  // everyone removes the voting controls immediately after the first answer.
+  if (mapping.messageId) {
+    try {
+      const pollMessage = await state.client.getMessageById(mapping.messageId);
+      if (pollMessage) {
+        await pollMessage.delete(true);
+        console.log(`[whatsapp:${state.name}] closed poll for booking ${mapping.bookingId}`);
+      }
+    } catch (error) {
+      console.warn(`[whatsapp:${state.name}] could not close poll for booking ${mapping.bookingId}:`, error?.message || error);
+    }
+  }
+  return true;
+}
+
+async function recoverSentPoll(state, chatId, body, directResult, sentAfter) {
+  if (directResult?.id?._serialized) return directResult;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (attempt > 0) await sleep(500);
+    try {
+      const chat = await state.client.getChatById(chatId);
+      const messages = chat ? await chat.fetchMessages({ limit: 20 }) : [];
+      const poll = [...messages].reverse().find((message) => (
+        message.fromMe
+        && message.type === "poll_creation"
+        && (message.body === body || message.pollName === body)
+        && (!sentAfter || Number(message.timestamp || 0) * 1000 >= sentAfter - 5000)
+      ));
+      if (poll?.id?._serialized) return poll;
+    } catch (error) {
+      if (attempt === 5) {
+        console.warn(`[whatsapp:${state.name}] could not recover sent poll id:`, error?.message || error);
+      }
+    }
+  }
+  return null;
+}
+
+async function watchPollVotes(state, mapping) {
+  if (!mapping.messageId) return;
+  const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+  let errorCount = 0;
+  while (!mapping.handled && Date.now() < expiresAt) {
+    await sleep(2000);
+    if (state.status !== "ready") continue;
+    try {
+      const votes = await state.client.getPollVotes(mapping.messageId);
+      const vote = [...votes]
+        .filter((item) => item.selectedOptions?.length)
+        .sort((left, right) => Number(right.interractedAtTs || 0) - Number(left.interractedAtTs || 0))[0];
+      const selectedName = vote?.selectedOptions?.[0]?.name || "";
+      if (selectedName) await postButtonReply(state, mapping, selectedName);
+    } catch (error) {
+      errorCount += 1;
+      if (errorCount === 1 || errorCount % 30 === 0) {
+        console.warn(`[whatsapp:${state.name}] poll watcher error for booking ${mapping.bookingId}:`, error?.message || error);
+      }
+    }
+  }
+  if (mapping.messageId) pollMappings.delete(mapping.messageId);
+  if (pollMappings.get(`phone_${mapping.toDigits}`) === mapping) {
+    pollMappings.delete(`phone_${mapping.toDigits}`);
+  }
 }
 
 function normalizeSession(value) {
@@ -127,10 +240,9 @@ function attachClientEvents(client, state) {
   });
 
   client.on("vote_update", async (vote) => {
-    const pollMsgId = vote.pollCreationMsgId?._serialized;
+    const pollMsgId = vote.parentMsgKey?._serialized || vote.parentMessage?.id?._serialized || "";
     const voterPhone = (vote.voter || "").replace("@c.us", "").replace("@lid", "").replace(/\D/g, "");
     console.log(`[whatsapp:${state.name}] vote_update: voter=${voterPhone} pollMsgId=${pollMsgId} options=${JSON.stringify(vote.selectedOptions?.map(o=>o.name))}`);
-    if (!BUTTON_REPLY_WEBHOOK_URL) return;
     const mapping = (pollMsgId ? pollMappings.get(pollMsgId) : null)
                  || (voterPhone ? pollMappings.get(`phone_${voterPhone}`) : null);
     if (!mapping) {
@@ -138,36 +250,7 @@ function attachClientEvents(client, state) {
       return;
     }
     const selectedName = vote.selectedOptions?.[0]?.name || "";
-    const isAttend = selectedName === mapping.attendName;
-    const payload = {
-      session: state.name,
-      from_phone: vote.voter?.replace("@c.us", "").replace("@lid", "") || "",
-      button_id: isAttend ? `attend_${mapping.bookingId}` : `decline_${mapping.bookingId}`,
-      button_text: selectedName,
-    };
-    console.log(`[whatsapp:${state.name}] poll vote for booking ${mapping.bookingId}: ${selectedName}`);
-    try {
-      const { default: https } = await import(BUTTON_REPLY_WEBHOOK_URL.startsWith("https") ? "https" : "http");
-      const url = new URL(BUTTON_REPLY_WEBHOOK_URL);
-      const data = JSON.stringify(payload);
-      const reqOptions = {
-        hostname: url.hostname, port: url.port || (url.protocol === "https:" ? 443 : 80),
-        path: url.pathname + url.search, method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(data),
-          ...(TOKEN ? { "Authorization": `Bearer ${TOKEN}` } : {}),
-        },
-      };
-      await new Promise((resolve, reject) => {
-        const req = https.request(reqOptions, (r) => { r.resume(); resolve(r.statusCode); });
-        req.on("error", reject);
-        req.write(data);
-        req.end();
-      });
-    } catch (err) {
-      console.warn(`[whatsapp:${state.name}] poll vote webhook error:`, err?.message || err);
-    }
+    await postButtonReply(state, mapping, selectedName);
   });
 
   client.on("message", async (msg) => {
@@ -618,8 +701,8 @@ app.post("/messages/list", async (req, res) => {
 
 // Poll message — works on personal and business accounts. buttons[] is the
 // same format as /messages/buttons so Django can reuse the same payload.
-// The first button with id starting "attend_" maps to a "yes" vote, the rest
-// to "no". Poll votes arrive via vote_update and are forwarded to the webhook.
+// The button labels are shown as poll options; their exact IDs are retained for
+// the Django webhook. Results are read both from vote_update and by a watcher.
 app.post("/messages/poll", async (req, res) => {
   const state = getSession(req.body?.session);
   const digits = String(req.body?.to || "").replace(/\D/g, "");
@@ -636,8 +719,11 @@ app.post("/messages/poll", async (req, res) => {
   if (!onWhatsApp) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
   const lid = onWhatsApp._serialized;
 
-  const pollOptions = rawButtons.map((b) => String(b.body));
-  const attendName = pollOptions[0];
+  const options = rawButtons.map((button) => ({
+    id: String(button.id || button.body),
+    body: String(button.body),
+  }));
+  const pollOptions = options.map((option) => option.body);
   // Extract booking ID from first button id, e.g. "attend_42" → 42
   const bookingId = String(rawButtons[0]?.id || "").split("_")[1] || "";
 
@@ -661,15 +747,25 @@ app.post("/messages/poll", async (req, res) => {
       return { serialized: chat2?.id?._serialized || `${digitsArg}@c.us` };
     }, digits, lid);
 
+    const sentAt = Date.now();
     const result = await state.client.sendMessage(primed.serialized, pollMsg, { sendSeen: false });
-    const msgId = result?.id?._serialized || "";
+    const pollMessage = await recoverSentPoll(state, primed.serialized, body, result, sentAt);
+    const msgId = pollMessage?.id?._serialized || "";
     if (bookingId) {
-      const mapping = { bookingId, attendName, declineName: pollOptions[1] || "", toDigits: digits };
-      // Index by message ID when available; always index by phone as fallback
-      // (LID-addressed sends return empty msgId but vote_update has the voter's phone).
+      const mapping = {
+        bookingId,
+        options,
+        toDigits: digits,
+        messageId: msgId,
+        sentAt,
+        handled: false,
+      };
       if (msgId) pollMappings.set(msgId, mapping);
       pollMappings.set(`phone_${digits}`, mapping);
       console.log(`[whatsapp:${state.name}] poll sent to ${digits}, booking=${bookingId} msgId=${msgId || "(empty)"}`);
+      void watchPollVotes(state, mapping).catch((error) => {
+        console.warn(`[whatsapp:${state.name}] poll watcher stopped for booking ${bookingId}:`, error?.message || error);
+      });
     } else {
       console.log(`[whatsapp:${state.name}] poll sent to ${digits}, msgId=${msgId || "(empty)"}`);
     }
