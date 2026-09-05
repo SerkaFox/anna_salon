@@ -30,7 +30,7 @@ from .forms import BookingForm, BookingPhotoForm
 from .models import Booking, BookingPhoto
 from .client_actions import booking_amount_due, booking_paid_amount, cancel_booking
 from .services import notify_waitlist_for_booking_opening
-from whatsapp_bot.services import queue_and_send
+from whatsapp_bot.services import queue_and_send, send_cancellation_confirmation
 from whatsapp_bot.models import WhatsAppMessage
 from payments.models import Payment as OnlinePayment
 from payments.stripe_service import (
@@ -548,7 +548,7 @@ def _apply_booking_response(request, booking_id, action):
             pk=booking_id,
         )
         if action == Booking.ClientResponses.DECLINED:
-            booking.client_response = Booking.ClientResponses.DECLINED
+            booking.client_response = Booking.ClientResponses.CANCELLATION_PENDING
             booking.client_responded_at = timezone.now()
             booking.save(update_fields=["client_response", "client_responded_at", "updated_at"])
             if booking.status not in {
@@ -556,21 +556,24 @@ def _apply_booking_response(request, booking_id, action):
                 Booking.Statuses.DONE,
                 Booking.Statuses.NO_SHOW,
             }:
-                message, _refunds = cancel_booking(booking, force_refund=True)
-                queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CANCELLED)
+                send_cancellation_confirmation(booking)
+                message = (
+                    "Te hemos enviado una pregunta de confirmación por WhatsApp. "
+                    "La cita todavía no ha sido cancelada."
+                )
             else:
                 message = "La reserva ya estaba cerrada."
             log_event(
                 actor=None,
                 section="booking",
-                action="client_declined",
+                action="cancellation_confirmation_requested",
                 instance=booking,
-                message=f"Cliente indico que no asistira a la reserva #{booking.pk}.",
+                message=f"Cliente solicitó confirmar la cancelación de la reserva #{booking.pk}.",
             )
             return render(
                 request,
                 "bookings/booking_response.html",
-                {"title": "Reserva cancelada", "message": message, "booking": booking},
+                {"title": "Confirma por WhatsApp", "message": message, "booking": booking},
             )
 
         if booking.status in {

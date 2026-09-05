@@ -33,6 +33,7 @@ class Booking(models.Model):
     class ClientResponses(models.TextChoices):
         PENDING = "pending", "Sin respuesta"
         ATTENDING = "attending", "Asistira"
+        CANCELLATION_PENDING = "cancellation_pending", "Cancelacion pendiente de confirmar"
         DECLINED = "declined", "No asistira"
 
     client = models.ForeignKey(

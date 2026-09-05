@@ -52,6 +52,8 @@ def cancel_booking(booking, *, force_refund=False):
 
     with transaction.atomic():
         booking = Booking.objects.select_for_update().get(pk=booking.pk)
+        if not can_client_cancel(booking):
+            raise ValidationError("Esta reserva no se puede cancelar.")
         refundable = force_refund or timezone.now() <= booking_refundable_until(booking)
         refunds = []
         if refundable:

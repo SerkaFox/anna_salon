@@ -224,11 +224,13 @@ class ClientBookingActionTests(TestCase):
         mocked_refund.assert_not_called()
         self.assertEqual(payment.status, Payment.Statuses.PAID)
 
+    @patch("bookings.views.send_cancellation_confirmation")
     @patch("payments.stripe_service.stripe.Refund.create")
-    def test_24h_decline_link_forces_refund(self, mocked_refund):
+    def test_24h_decline_link_requests_confirmation_without_refund(
+        self, mocked_refund, send_confirmation
+    ):
         booking = self._booking(start_at=timezone.now() + timedelta(hours=12))
         payment = self._paid_payment(booking)
-        mocked_refund.return_value = {"id": "re_decline", "status": "succeeded"}
         path = urlparse(booking_response_url(booking, "declined")).path
 
         response = self.client.get(path)
@@ -236,9 +238,15 @@ class ClientBookingActionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         booking.refresh_from_db()
         payment.refresh_from_db()
-        self.assertEqual(booking.client_response, Booking.ClientResponses.DECLINED)
-        self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
-        self.assertEqual(payment.status, Payment.Statuses.REFUNDED)
+        self.assertEqual(
+            booking.client_response,
+            Booking.ClientResponses.CANCELLATION_PENDING,
+        )
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
+        self.assertEqual(payment.status, Payment.Statuses.PAID)
+        send_confirmation.assert_called_once_with(booking)
+        mocked_refund.assert_not_called()
+        self.assertContains(response, "todavía no ha sido cancelada")
 
     @patch("payments.stripe_service.stripe.checkout.Session.create")
     def test_24h_attending_link_redirects_to_configured_deposit(self, mocked_session):

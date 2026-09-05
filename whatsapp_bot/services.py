@@ -7,7 +7,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from bookings.models import Booking
-from bookings.client_actions import cancel_booking
+from bookings.client_actions import booking_paid_amount, cancel_booking
 from bookings.utils import booking_payment_summary
 
 from . import bridge
@@ -500,36 +500,100 @@ def process_expired_prepayment_requests():
 
 
 def _send_reminder_24h_buttons(message):
-    """Send the 24h reminder as a poll (preferred) or button message. Returns True on success."""
+    """Send the 24h reminder with native actions. Return bridge data or None."""
     booking = message.booking
     if not booking:
-        return False
+        return None
+    local_start = timezone.localtime(booking.start_at)
+    body = (
+        f"Hola {booking.client.first_name or booking.client.full_name} 👋\n"
+        f"¿Confirmas tu cita en BRIMOON Studio mañana {local_start:%d/%m/%Y} "
+        f"a las {local_start:%H:%M} para {booking.service_names}?"
+    )
     buttons = [
         {"id": f"attend_{booking.pk}", "body": "✅ Sí, voy"},
         {"id": f"decline_{booking.pk}", "body": "❌ No puedo ir"},
     ]
-    # Try native poll first — works on personal accounts; Buttons are deprecated.
+    # Prefer real buttons. Some personal accounts reject the legacy format,
+    # therefore the native poll remains a compatible fallback.
     try:
-        bridge.send_poll_message(
+        return bridge.send_buttons_message(
             message.connection,
             to_phone=message.to_phone,
-            body="¿Confirmas tu cita de mañana?",
+            title="BRIMOON Studio",
+            body=body,
             buttons=buttons,
+            footer="Selecciona una opción",
         )
-        return True
     except (WhatsAppBridgeError, WhatsAppNumberNotFound):
         pass
-    # Fallback to old Buttons format (works on WhatsApp Business accounts).
     try:
-        bridge.send_buttons_message(
+        return bridge.send_poll_message(
             message.connection,
             to_phone=message.to_phone,
-            body=message.body,
+            body=body,
             buttons=buttons,
         )
-        return True
     except (WhatsAppBridgeError, WhatsAppNumberNotFound):
-        return False
+        return None
+
+
+def send_cancellation_confirmation(booking):
+    """Ask for an explicit second WhatsApp confirmation without cancelling yet."""
+    connection = get_default_connection()
+    phone = normalize_whatsapp_phone(booking.client.phone)
+    local_start = timezone.localtime(booking.start_at)
+    paid_amount = booking_paid_amount(booking)
+    refund_text = (
+        f"Devolveremos {paid_amount:.2f} EUR y liberaremos este horario para otros clientes."
+        if paid_amount > 0
+        else "Liberaremos este horario para otros clientes."
+    )
+    body = (
+        "⚠️ ¿Seguro que quieres cancelar tu cita?\n\n"
+        f"📅 {local_start:%d/%m/%Y} a las {local_start:%H:%M}\n"
+        f"💅 {booking.service_names}\n\n"
+        f"{refund_text}\n\n"
+        "Tu cita todavía NO ha sido cancelada."
+    )
+    buttons = [
+        {"id": f"confirm_decline_{booking.pk}", "body": "Sí, cancelar"},
+        {"id": f"keep_booking_{booking.pk}", "body": "No, mantener cita"},
+    ]
+    if getattr(settings, "WHATSAPP_DRY_RUN", True):
+        return {"message_id": "dry-run"}
+    try:
+        return bridge.send_buttons_message(
+            connection,
+            to_phone=phone,
+            title="Confirmar cancelación",
+            body=body,
+            buttons=buttons,
+            footer="La cancelación requiere confirmación",
+        )
+    except (WhatsAppBridgeError, WhatsAppNumberNotFound):
+        # Never cancel if the confirmation controls cannot be delivered.
+        return bridge.send_message(
+            connection,
+            to_phone=phone,
+            body=(
+                f"{body}\n\nNo hemos podido mostrar los botones. "
+                "Contacta con BRIMOON Studio si quieres cancelar."
+            ),
+        )
+
+
+def send_booking_kept_confirmation(booking):
+    connection = get_default_connection()
+    phone = normalize_whatsapp_phone(booking.client.phone)
+    local_start = timezone.localtime(booking.start_at)
+    body = (
+        "✅ Perfecto, mantenemos tu cita.\n"
+        f"Te esperamos el {local_start:%d/%m/%Y} a las {local_start:%H:%M}."
+    )
+    if getattr(settings, "WHATSAPP_DRY_RUN", True):
+        return {"message_id": "dry-run"}
+    return bridge.send_message(connection, to_phone=phone, body=body)
 
 
 def send_whatsapp_message(message):
@@ -556,11 +620,12 @@ def send_whatsapp_message(message):
         message.save(update_fields=["status", "provider_message_id", "sent_at", "error", "updated_at"])
         return message
 
-    # WhatsApp deprecated interactive buttons on personal accounts; reminders
-    # are sent as plain text with confirmation links (attend_url / decline_url).
-
     try:
-        result = bridge.send_message(message.connection, to_phone=message.to_phone, body=message.body)
+        result = None
+        if message.kind == WhatsAppMessage.Kinds.REMINDER_24H and message.booking_id:
+            result = _send_reminder_24h_buttons(message)
+        if result is None:
+            result = bridge.send_message(message.connection, to_phone=message.to_phone, body=message.body)
     except WhatsAppNumberNotFound as exc:
         message.status = WhatsAppMessage.Statuses.SKIPPED
         message.error = str(exc)
