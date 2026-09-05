@@ -454,6 +454,55 @@ app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
+// Protected diagnostic endpoint for WhatsApp Web poll-sync issues.
+app.post("/debug/poll-votes", async (req, res) => {
+  const state = getSession(req.body?.session);
+  const messageId = String(req.body?.message_id || "");
+  if (!messageId || state.status !== "ready") {
+    return res.status(400).json({ error: "A ready session and message_id are required." });
+  }
+  try {
+    const result = await state.client.pupPage.evaluate(async (pollMessageId) => {
+      const schema = window.require("WAWebPollsVotesSchema");
+      const table = schema.getTable();
+      const message = window.require("WAWebCollections").Msg.get(pollMessageId);
+      const msgKey = window.require("WAWebMsgKey").fromString(pollMessageId);
+      const matched = await table.equals(["parentMsgKey"], msgKey.toString());
+      let allRows = [];
+      if (typeof table.toArray === "function") {
+        allRows = await table.toArray();
+      } else if (typeof table.getAll === "function") {
+        allRows = await table.getAll();
+      }
+      const summarize = (row) => ({
+        keys: Object.keys(row || {}),
+        parentMsgKey: row?.parentMsgKey?.toString?.() || String(row?.parentMsgKey || ""),
+        sender: row?.sender?.toString?.() || String(row?.sender || ""),
+        senderTimestampMs: row?.senderTimestampMs,
+        selectedOptionLocalIds: Array.from(row?.selectedOptionLocalIds || []),
+      });
+      return {
+        schemaKeys: Object.keys(schema || {}),
+        tableKeys: Object.keys(table || {}),
+        message: message ? {
+          id: message.id?._serialized || message.id?.toString?.() || "",
+          type: message.type,
+          pollName: message.pollName || message.body || "",
+          pollOptions: (message.pollOptions || []).map((option) => ({
+            localId: option.localId,
+            name: option.name,
+          })),
+        } : null,
+        matched: (matched || []).map(summarize),
+        allRows: (allRows || []).slice(-50).map(summarize),
+      };
+    }, messageId);
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error?.message || String(error) });
+  }
+});
+
 app.post("/sessions/:session/debug-pairing", async (req, res) => {
   const state = sessions.get(normalizeSession(req.params.session));
   if (!state?.client?.pupPage) return res.status(404).json({ error: "no page" });
