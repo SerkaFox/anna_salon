@@ -98,11 +98,20 @@ async function postButtonReply(state, mapping, selectedName) {
   // everyone removes the voting controls immediately after the first answer.
   if (mapping.messageId) {
     try {
-      const pollMessage = await state.client.getMessageById(mapping.messageId);
-      if (pollMessage) {
-        await pollMessage.delete(true);
-        console.log(`[whatsapp:${state.name}] closed poll for booking ${mapping.bookingId}`);
-      }
+      await state.client.pupPage.evaluate(async (messageId) => {
+        const collections = window.require("WAWebCollections");
+        const message = collections.Msg.get(messageId)
+          || (await collections.Msg.getMessagesById([messageId]))?.messages?.[0];
+        if (!message) return;
+        const chat = collections.Chat.get(message.id.remote)
+          || await collections.Chat.find(message.id.remote);
+        const canRevoke = window.require("WAWebMsgActionCapability").canSenderRevokeMsg(message);
+        const { Cmd } = window.require("WAWebCmd");
+        if (canRevoke) {
+          await Cmd.sendRevokeMsgs(chat, { list: [message], type: "message" }, { clearMedia: true });
+        }
+      }, mapping.messageId);
+      console.log(`[whatsapp:${state.name}] closed poll for booking ${mapping.bookingId}`);
     } catch (error) {
       console.warn(`[whatsapp:${state.name}] could not close poll for booking ${mapping.bookingId}:`, error?.message || error);
     }
@@ -148,7 +157,22 @@ async function watchPollVotes(state, mapping) {
     await sleep(2000);
     if (state.status !== "ready") continue;
     try {
-      const votes = await state.client.getPollVotes(mapping.messageId);
+      // Client.getPollVotes() first serializes the LID poll message and loses
+      // its ID in this WhatsApp Web build. Query the same vote table directly.
+      const votes = await state.client.pupPage.evaluate(async (messageId) => {
+        const msgKey = window.require("WAWebMsgKey").fromString(messageId);
+        const rows = await window.require("WAWebPollsVotesSchema")
+          .getTable()
+          .equals(["parentMsgKey"], msgKey.toString());
+        const message = window.require("WAWebCollections").Msg.get(messageId);
+        const options = message?.pollOptions || [];
+        return rows.map((row) => ({
+          interractedAtTs: row.senderTimestampMs,
+          selectedOptions: Array.from(row.selectedOptionLocalIds || []).map((localId) => ({
+            name: options.find((option) => option.localId === localId)?.name || "",
+          })),
+        }));
+      }, mapping.messageId);
       const vote = [...votes]
         .filter((item) => item.selectedOptions?.length)
         .sort((left, right) => Number(right.interractedAtTs || 0) - Number(left.interractedAtTs || 0))[0];
