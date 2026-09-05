@@ -9,11 +9,9 @@ process.on("unhandledRejection", (reason) => {
   console.error("[bridge] unhandled rejection (suppressed crash):", reason?.message || reason);
 });
 
-const { Client, LocalAuth, Buttons, List, Poll } = pkg;
+const { Client, LocalAuth, Buttons, List } = pkg;
 
-// Maps poll message ID / destination phone to the action payload. WhatsApp Web
-// does not reliably emit vote_update for LID-addressed chats, so each sent poll
-// also gets a lightweight results watcher.
+// Maps an interactive request by message ID, destination phone and LID chat.
 const pollMappings = new Map();
 
 const PORT = Number(process.env.WHATSAPP_BRIDGE_PORT || 8125);
@@ -94,8 +92,7 @@ async function postButtonReply(state, mapping, selectedName) {
     console.warn(`[whatsapp:${state.name}] poll vote webhook error:`, error?.message || error);
   }
 
-  // WhatsApp Web has no public "stop poll" method. Deleting the poll for
-  // everyone removes the voting controls immediately after the first answer.
+  // Remove the answered request so there is no stale control to press again.
   if (mapping.messageId) {
     try {
       await state.client.pupPage.evaluate(async (messageId) => {
@@ -111,15 +108,18 @@ async function postButtonReply(state, mapping, selectedName) {
           await Cmd.sendRevokeMsgs(chat, { list: [message], type: "message" }, { clearMedia: true });
         }
       }, mapping.messageId);
-      console.log(`[whatsapp:${state.name}] closed poll for booking ${mapping.bookingId}`);
+      console.log(`[whatsapp:${state.name}] closed response request for booking ${mapping.bookingId}`);
     } catch (error) {
-      console.warn(`[whatsapp:${state.name}] could not close poll for booking ${mapping.bookingId}:`, error?.message || error);
+      console.warn(`[whatsapp:${state.name}] could not close response request for booking ${mapping.bookingId}:`, error?.message || error);
     }
+  }
+  for (const key of [mapping.messageId, `phone_${mapping.toDigits}`, `chat_${mapping.chatId}`]) {
+    if (key && pollMappings.get(key) === mapping) pollMappings.delete(key);
   }
   return true;
 }
 
-async function recoverSentPoll(state, chatId, body, directResult, sentAfter) {
+async function recoverSentMessage(state, chatId, body, directResult, sentAfter) {
   if (directResult?.id?._serialized) return directResult.id._serialized;
   for (let attempt = 0; attempt < 6; attempt += 1) {
     if (attempt > 0) await sleep(500);
@@ -131,13 +131,12 @@ async function recoverSentPoll(state, chatId, body, directResult, sentAfter) {
         const { createWid } = window.require("WAWebWidFactory");
         const chat = Chat.get(createWid(targetChatId));
         const messages = chat?.msgs?.getModelsArray?.() || [];
-        const poll = [...messages].reverse().find((message) => (
+        const sentMessage = [...messages].reverse().find((message) => (
           message.id?.fromMe
-          && message.type === "poll_creation"
           && (message.body === pollBody || message.pollName === pollBody)
           && (!sentAfterMs || Number(message.t || 0) * 1000 >= sentAfterMs - 5000)
         ));
-        return poll?.id?._serialized || poll?.id?.toString?.() || "";
+        return sentMessage?.id?._serialized || sentMessage?.id?.toString?.() || "";
       }, chatId, body, sentAfter);
       if (messageId) return messageId;
     } catch (error) {
@@ -147,48 +146,6 @@ async function recoverSentPoll(state, chatId, body, directResult, sentAfter) {
     }
   }
   return "";
-}
-
-async function watchPollVotes(state, mapping) {
-  if (!mapping.messageId) return;
-  const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-  let errorCount = 0;
-  while (!mapping.handled && Date.now() < expiresAt) {
-    await sleep(2000);
-    if (state.status !== "ready") continue;
-    try {
-      // Client.getPollVotes() first serializes the LID poll message and loses
-      // its ID in this WhatsApp Web build. Query the same vote table directly.
-      const votes = await state.client.pupPage.evaluate(async (messageId) => {
-        const msgKey = window.require("WAWebMsgKey").fromString(messageId);
-        const rows = await window.require("WAWebPollsVotesSchema")
-          .getTable()
-          .equals(["parentMsgKey"], msgKey.toString());
-        const message = window.require("WAWebCollections").Msg.get(messageId);
-        const options = message?.pollOptions || [];
-        return rows.map((row) => ({
-          interractedAtTs: row.senderTimestampMs,
-          selectedOptions: Array.from(row.selectedOptionLocalIds || []).map((localId) => ({
-            name: options.find((option) => option.localId === localId)?.name || "",
-          })),
-        }));
-      }, mapping.messageId);
-      const vote = [...votes]
-        .filter((item) => item.selectedOptions?.length)
-        .sort((left, right) => Number(right.interractedAtTs || 0) - Number(left.interractedAtTs || 0))[0];
-      const selectedName = vote?.selectedOptions?.[0]?.name || "";
-      if (selectedName) await postButtonReply(state, mapping, selectedName);
-    } catch (error) {
-      errorCount += 1;
-      if (errorCount === 1 || errorCount % 30 === 0) {
-        console.warn(`[whatsapp:${state.name}] poll watcher error for booking ${mapping.bookingId}:`, error?.message || error);
-      }
-    }
-  }
-  if (mapping.messageId) pollMappings.delete(mapping.messageId);
-  if (pollMappings.get(`phone_${mapping.toDigits}`) === mapping) {
-    pollMappings.delete(`phone_${mapping.toDigits}`);
-  }
 }
 
 function normalizeSession(value) {
@@ -287,6 +244,29 @@ function attachClientEvents(client, state) {
   client.on("message", async (msg) => {
     const isButtonReply = msg.type === "buttons_response";
     const isListReply = msg.type === "list_response";
+    const senderId = String(msg.from || "");
+    const senderDigits = senderId.replace("@c.us", "").replace("@lid", "").replace(/\D/g, "");
+    const mapping = pollMappings.get(`chat_${senderId}`)
+      || pollMappings.get(`phone_${senderDigits}`);
+
+    // Poll votes in current LID chats are not synchronized back to the linked
+    // WhatsApp Web device. Numbered text replies are visible and reliable.
+    if (mapping && msg.type === "chat") {
+      const answer = String(msg.body || "").trim();
+      let selectedName = "";
+      if (answer === "1") selectedName = mapping.options[0]?.body || "";
+      if (answer === "2") selectedName = mapping.options[1]?.body || "";
+      if (!selectedName) {
+        selectedName = mapping.options.find(
+          (option) => option.body.toLocaleLowerCase() === answer.toLocaleLowerCase(),
+        )?.body || "";
+      }
+      if (selectedName) {
+        await postButtonReply(state, mapping, selectedName);
+        return;
+      }
+    }
+
     if ((!isButtonReply && !isListReply) || !BUTTON_REPLY_WEBHOOK_URL) return;
     const payload = {
       session: state.name,
@@ -779,10 +759,9 @@ app.post("/messages/list", async (req, res) => {
   }
 });
 
-// Poll message — works on personal and business accounts. buttons[] is the
-// same format as /messages/buttons so Django can reuse the same payload.
-// The button labels are shown as poll options; their exact IDs are retained for
-// the Django webhook. Results are read both from vote_update and by a watcher.
+// Interactive confirmation. Native polls display correctly but their votes are
+// currently not synchronized to linked WhatsApp Web devices for LID chats.
+// Send a numbered prompt instead; ordinary text replies arrive reliably.
 app.post("/messages/poll", async (req, res) => {
   const state = getSession(req.body?.session);
   const digits = String(req.body?.to || "").replace(/\D/g, "");
@@ -803,11 +782,10 @@ app.post("/messages/poll", async (req, res) => {
     id: String(button.id || button.body),
     body: String(button.body),
   }));
-  const pollOptions = options.map((option) => option.body);
   // Extract booking ID from first button id, e.g. "attend_42" → 42
   const bookingId = String(rawButtons[0]?.id || "").split("_")[1] || "";
 
-  const pollMsg = new Poll(body, pollOptions, { allowMultipleAnswers: false });
+  const replyBody = `${body}\n\n1 — ${options[0].body}\n2 — ${options[1].body}\n\nEnvía 1 o 2.`;
   try {
     const primed = await state.client.pupPage.evaluate(async (digitsArg, lidArg) => {
       const WAWebWidFactory = window.require("WAWebWidFactory");
@@ -828,25 +806,24 @@ app.post("/messages/poll", async (req, res) => {
     }, digits, lid);
 
     const sentAt = Date.now();
-    const result = await state.client.sendMessage(primed.serialized, pollMsg, { sendSeen: false });
-    const msgId = await recoverSentPoll(state, primed.serialized, body, result, sentAt);
+    const result = await state.client.sendMessage(primed.serialized, replyBody, { sendSeen: false });
+    const msgId = await recoverSentMessage(state, primed.serialized, replyBody, result, sentAt);
     if (bookingId) {
       const mapping = {
         bookingId,
         options,
         toDigits: digits,
+        chatId: primed.serialized,
         messageId: msgId,
         sentAt,
         handled: false,
       };
       if (msgId) pollMappings.set(msgId, mapping);
       pollMappings.set(`phone_${digits}`, mapping);
-      console.log(`[whatsapp:${state.name}] poll sent to ${digits}, booking=${bookingId} msgId=${msgId || "(empty)"}`);
-      void watchPollVotes(state, mapping).catch((error) => {
-        console.warn(`[whatsapp:${state.name}] poll watcher stopped for booking ${bookingId}:`, error?.message || error);
-      });
+      pollMappings.set(`chat_${primed.serialized}`, mapping);
+      console.log(`[whatsapp:${state.name}] response request sent to ${digits}, booking=${bookingId} msgId=${msgId || "(empty)"}`);
     } else {
-      console.log(`[whatsapp:${state.name}] poll sent to ${digits}, msgId=${msgId || "(empty)"}`);
+      console.log(`[whatsapp:${state.name}] response request sent to ${digits}, msgId=${msgId || "(empty)"}`);
     }
     return res.json({ id: msgId, message_id: msgId });
   } catch (error) {
