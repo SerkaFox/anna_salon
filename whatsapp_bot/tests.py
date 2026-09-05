@@ -28,6 +28,7 @@ from .services import (
     queue_booking_confirmation,
     queue_due_reminders,
     queue_payment_receipt,
+    send_cancellation_confirmation,
     send_password_reset_credentials,
     send_due_messages,
     send_whatsapp_message,
@@ -166,9 +167,9 @@ class WhatsAppBotTests(TestCase):
         self.assertEqual(WhatsAppMessage.objects.count(), 1)
 
     @override_settings(WHATSAPP_DRY_RUN=False)
-    @patch("whatsapp_bot.services.bridge.send_buttons_message")
-    def test_24h_reminder_prefers_native_buttons(self, send_buttons):
-        send_buttons.return_value = {"message_id": "button-message-1"}
+    @patch("whatsapp_bot.services.bridge.send_poll_message")
+    def test_24h_reminder_uses_native_poll(self, send_poll):
+        send_poll.return_value = {"message_id": "poll-message-1"}
         booking = self._booking(timezone.now() + timedelta(hours=24, minutes=5))
         message, _created = queue_booking_message(
             booking, kind=WhatsAppMessage.Kinds.REMINDER_24H
@@ -178,10 +179,23 @@ class WhatsAppBotTests(TestCase):
 
         message.refresh_from_db()
         self.assertEqual(message.status, WhatsAppMessage.Statuses.SENT)
-        self.assertEqual(message.provider_message_id, "button-message-1")
-        buttons = send_buttons.call_args.kwargs["buttons"]
+        self.assertEqual(message.provider_message_id, "poll-message-1")
+        buttons = send_poll.call_args.kwargs["buttons"]
         self.assertEqual(buttons[0]["id"], f"attend_{booking.pk}")
         self.assertEqual(buttons[1]["id"], f"decline_{booking.pk}")
+
+    @override_settings(WHATSAPP_DRY_RUN=False)
+    @patch("whatsapp_bot.services.bridge.send_poll_message")
+    def test_cancellation_confirmation_poll_puts_keep_option_first(self, send_poll):
+        send_poll.return_value = {"message_id": "confirmation-poll-1"}
+        booking = self._booking(timezone.now() + timedelta(hours=12))
+
+        result = send_cancellation_confirmation(booking)
+
+        self.assertEqual(result["message_id"], "confirmation-poll-1")
+        buttons = send_poll.call_args.kwargs["buttons"]
+        self.assertEqual(buttons[0], {"id": f"attend_{booking.pk}", "body": "No, mantener cita"})
+        self.assertEqual(buttons[1], {"id": f"decline_{booking.pk}", "body": "Sí, cancelar"})
 
     @patch("whatsapp_bot.services.send_cancellation_confirmation")
     @patch("bookings.client_actions.create_refund")
@@ -236,7 +250,7 @@ class WhatsAppBotTests(TestCase):
             url,
             data=json.dumps(
                 {
-                    "button_id": f"confirm_decline_{booking.pk}",
+                    "button_id": f"decline_{booking.pk}",
                     "from_phone": phone,
                 }
             ),
@@ -250,7 +264,7 @@ class WhatsAppBotTests(TestCase):
         create_refund.assert_called_once()
 
     @patch("whatsapp_bot.services.send_booking_kept_confirmation")
-    def test_keep_button_preserves_booking(self, send_kept):
+    def test_keep_poll_option_preserves_booking(self, send_kept):
         booking = self._booking(timezone.now() + timedelta(hours=12))
         booking.client_response = Booking.ClientResponses.CANCELLATION_PENDING
         booking.save(update_fields=["client_response"])
@@ -260,7 +274,7 @@ class WhatsAppBotTests(TestCase):
         response = self.client.post(
             url,
             data=json.dumps(
-                {"button_id": f"keep_booking_{booking.pk}", "from_phone": phone}
+                {"button_id": f"attend_{booking.pk}", "from_phone": phone}
             ),
             content_type="application/json",
         )
@@ -270,6 +284,18 @@ class WhatsAppBotTests(TestCase):
         self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
         self.assertEqual(booking.client_response, Booking.ClientResponses.ATTENDING)
         send_kept.assert_called_once()
+
+        repeated_decline = self.client.post(
+            url,
+            data=json.dumps(
+                {"button_id": f"decline_{booking.pk}", "from_phone": phone}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(repeated_decline.status_code, 200)
+        self.assertEqual(repeated_decline.json()["reason"], "response already recorded")
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
 
     @patch("bookings.client_actions.create_refund")
     def test_unanswered_24h_reminder_cancels_and_requests_refund(self, create_refund):

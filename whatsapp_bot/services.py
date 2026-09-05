@@ -500,7 +500,7 @@ def process_expired_prepayment_requests():
 
 
 def _send_reminder_24h_buttons(message):
-    """Send the 24h reminder with native actions. Return bridge data or None."""
+    """Send the 24h reminder as a native WhatsApp poll."""
     booking = message.booking
     if not booking:
         return None
@@ -514,19 +514,6 @@ def _send_reminder_24h_buttons(message):
         {"id": f"attend_{booking.pk}", "body": "✅ Sí, voy"},
         {"id": f"decline_{booking.pk}", "body": "❌ No puedo ir"},
     ]
-    # Prefer real buttons. Some personal accounts reject the legacy format,
-    # therefore the native poll remains a compatible fallback.
-    try:
-        return bridge.send_buttons_message(
-            message.connection,
-            to_phone=message.to_phone,
-            title="BRIMOON Studio",
-            body=body,
-            buttons=buttons,
-            footer="Selecciona una opción",
-        )
-    except (WhatsAppBridgeError, WhatsAppNumberNotFound):
-        pass
     try:
         return bridge.send_poll_message(
             message.connection,
@@ -557,19 +544,19 @@ def send_cancellation_confirmation(booking):
         "Tu cita todavía NO ha sido cancelada."
     )
     buttons = [
-        {"id": f"confirm_decline_{booking.pk}", "body": "Sí, cancelar"},
-        {"id": f"keep_booking_{booking.pk}", "body": "No, mantener cita"},
+        # The current bridge maps the first poll option to "attend" and the
+        # second to "decline". Keep the safe option first.
+        {"id": f"attend_{booking.pk}", "body": "No, mantener cita"},
+        {"id": f"decline_{booking.pk}", "body": "Sí, cancelar"},
     ]
     if getattr(settings, "WHATSAPP_DRY_RUN", True):
         return {"message_id": "dry-run"}
     try:
-        return bridge.send_buttons_message(
+        return bridge.send_poll_message(
             connection,
             to_phone=phone,
-            title="Confirmar cancelación",
             body=body,
             buttons=buttons,
-            footer="La cancelación requiere confirmación",
         )
     except (WhatsAppBridgeError, WhatsAppNumberNotFound):
         # Never cancel if the confirmation controls cannot be delivered.

@@ -184,10 +184,24 @@ def button_reply_webhook(request):
     if booking.status in {Booking.Statuses.CANCELLED, Booking.Statuses.DONE, Booking.Statuses.NO_SHOW}:
         return JsonResponse({"ok": True, "reason": "booking already closed"})
 
+    if (
+        booking.client_response == Booking.ClientResponses.ATTENDING
+        and action_key in {"attend", "decline"}
+    ):
+        return JsonResponse({"ok": True, "reason": "response already recorded"})
+
     if action_key in {"confirm_decline", "keep_booking"} and (
         booking.client_response != Booking.ClientResponses.CANCELLATION_PENDING
     ):
         return JsonResponse({"ok": False, "reason": "cancellation confirmation not requested"}, status=409)
+
+    # The bridge represents the second poll's "Sí, cancelar" option as the
+    # same decline action. A pending confirmation makes this the second step.
+    if (
+        action_key == "decline"
+        and booking.client_response == Booking.ClientResponses.CANCELLATION_PENDING
+    ):
+        action_key = "confirm_decline"
 
     if action_key == "decline":
         booking.client_response = Booking.ClientResponses.CANCELLATION_PENDING
@@ -241,6 +255,27 @@ def button_reply_webhook(request):
             message=f"Cliente confirmó por WhatsApp que no asistirá a la reserva #{booking.pk}.",
         )
         return JsonResponse({"ok": True, "action": "declined_confirmed"})
+
+    if (
+        action_key == "attend"
+        and booking.client_response == Booking.ClientResponses.CANCELLATION_PENDING
+    ):
+        booking.client_response = Booking.ClientResponses.ATTENDING
+        booking.client_responded_at = timezone.now()
+        booking.save(update_fields=["client_response", "client_responded_at", "updated_at"])
+        from .services import send_booking_kept_confirmation
+        try:
+            send_booking_kept_confirmation(booking)
+        except Exception:
+            logger.exception("Could not send booking-kept confirmation for booking %s.", booking.pk)
+        log_event(
+            actor=None,
+            section="booking",
+            action="cancellation_aborted",
+            instance=booking,
+            message=f"Cliente decidió mantener la reserva #{booking.pk} por WhatsApp.",
+        )
+        return JsonResponse({"ok": True, "action": "booking_kept"})
 
     # attending
     booking.client_response = Booking.ClientResponses.ATTENDING
