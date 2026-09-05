@@ -160,15 +160,16 @@ class WhatsAppBotTests(TestCase):
         message = WhatsAppMessage.objects.get(kind=WhatsAppMessage.Kinds.REMINDER_24H)
         self.assertEqual(message.status, WhatsAppMessage.Statuses.SENT)
         self.assertEqual(message.provider_message_id, "dry-run")
-        self.assertIn("Voy:", message.body)
-        self.assertIn("No voy:", message.body)
+        self.assertIn("No voy", message.body)
+        self.assertIn("No puedo", message.body)
+        self.assertNotIn("http", message.body)
 
         send_whatsapp_message(message)
         self.assertEqual(WhatsAppMessage.objects.count(), 1)
 
     @override_settings(WHATSAPP_DRY_RUN=False)
     @patch("whatsapp_bot.services.bridge.send_poll_message")
-    def test_24h_reminder_uses_native_poll(self, send_poll):
+    def test_24h_reminder_registers_only_explicit_decline(self, send_poll):
         send_poll.return_value = {"message_id": "poll-message-1"}
         booking = self._booking(timezone.now() + timedelta(hours=24, minutes=5))
         message, _created = queue_booking_message(
@@ -182,11 +183,15 @@ class WhatsAppBotTests(TestCase):
         self.assertEqual(message.provider_message_id, "poll-message-1")
         buttons = send_poll.call_args.kwargs["buttons"]
         self.assertEqual(buttons[0]["id"], f"attend_{booking.pk}")
-        self.assertEqual(buttons[1]["id"], f"decline_{booking.pk}")
+        self.assertEqual(buttons[1]["id"], f"confirm_decline_{booking.pk}")
+        body = send_poll.call_args.kwargs["body"]
+        self.assertIn("No quiero", body)
+        self.assertIn("30 minutos", body)
+        self.assertNotIn("http", body)
 
     @override_settings(WHATSAPP_DRY_RUN=False)
     @patch("whatsapp_bot.services.bridge.send_poll_message")
-    def test_cancellation_confirmation_poll_puts_keep_option_first(self, send_poll):
+    def test_cancellation_confirmation_requests_written_decline(self, send_poll):
         send_poll.return_value = {"message_id": "confirmation-poll-1"}
         booking = self._booking(timezone.now() + timedelta(hours=12))
 
@@ -194,14 +199,12 @@ class WhatsAppBotTests(TestCase):
 
         self.assertEqual(result["message_id"], "confirmation-poll-1")
         buttons = send_poll.call_args.kwargs["buttons"]
-        self.assertEqual(buttons[0], {"id": f"attend_{booking.pk}", "body": "No, mantener cita"})
-        self.assertEqual(buttons[1], {"id": f"decline_{booking.pk}", "body": "Sí, cancelar"})
+        self.assertEqual(buttons[0], {"id": f"attend_{booking.pk}", "body": "Mantener cita"})
+        self.assertEqual(buttons[1], {"id": f"confirm_decline_{booking.pk}", "body": "No asistiré"})
+        self.assertIn("No puedo", send_poll.call_args.kwargs["body"])
 
-    @patch("whatsapp_bot.services.send_cancellation_confirmation")
     @patch("bookings.client_actions.create_refund")
-    def test_decline_button_requires_second_confirmation(
-        self, create_refund, send_confirmation
-    ):
+    def test_written_decline_cancels_immediately(self, create_refund):
         booking = self._booking(timezone.now() + timedelta(hours=12))
         Payment.objects.create(
             booking=booking,
@@ -215,49 +218,16 @@ class WhatsAppBotTests(TestCase):
         url = reverse("whatsapp_bot:button_reply")
         phone = normalize_whatsapp_phone(self.client_obj.phone).lstrip("+")
 
-        premature = self.client.post(
-            url,
-            data=json.dumps(
-                {
-                    "button_id": f"confirm_decline_{booking.pk}",
-                    "from_phone": phone,
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(premature.status_code, 409)
-
-        first = self.client.post(
-            url,
-            data=json.dumps(
-                {"button_id": f"decline_{booking.pk}", "from_phone": phone}
-            ),
-            content_type="application/json",
-        )
-
-        self.assertEqual(first.status_code, 200)
-        booking.refresh_from_db()
-        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
-        self.assertEqual(
-            booking.client_response,
-            Booking.ClientResponses.CANCELLATION_PENDING,
-        )
-        send_confirmation.assert_called_once()
-        create_refund.assert_not_called()
-
         create_refund.return_value = object()
-        second = self.client.post(
+        response = self.client.post(
             url,
             data=json.dumps(
-                {
-                    "button_id": f"decline_{booking.pk}",
-                    "from_phone": phone,
-                }
+                {"button_id": f"confirm_decline_{booking.pk}", "from_phone": phone}
             ),
             content_type="application/json",
         )
 
-        self.assertEqual(second.status_code, 200)
+        self.assertEqual(response.status_code, 200)
         booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
         self.assertEqual(booking.client_response, Booking.ClientResponses.DECLINED)
@@ -298,7 +268,7 @@ class WhatsAppBotTests(TestCase):
         self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
 
     @patch("bookings.client_actions.create_refund")
-    def test_unanswered_24h_reminder_cancels_and_requests_refund(self, create_refund):
+    def test_unanswered_24h_reminder_confirms_without_refund(self, create_refund):
         booking = self._booking(timezone.now() + timedelta(hours=23))
         Payment.objects.create(
             booking=booking,
@@ -319,22 +289,22 @@ class WhatsAppBotTests(TestCase):
         create_refund.return_value = object()
 
         result = process_unanswered_24h_reminders(timeout_minutes=15)
-        send_due_messages()
 
         booking.refresh_from_db()
-        self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
-        self.assertEqual(len(result["cancelled"]), 1)
-        create_refund.assert_called_once()
-        timeout_message = WhatsAppMessage.objects.get(
-            booking=booking,
-            kind=WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED,
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
+        self.assertEqual(booking.client_response, Booking.ClientResponses.ATTENDING)
+        self.assertEqual(len(result["confirmed"]), 1)
+        create_refund.assert_not_called()
+        self.assertFalse(
+            WhatsAppMessage.objects.filter(
+                booking=booking,
+                kind=WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED,
+            ).exists()
         )
-        self.assertEqual(timeout_message.status, WhatsAppMessage.Statuses.SENT)
-        self.assertIn("devolución", timeout_message.body)
 
         second = process_unanswered_24h_reminders(timeout_minutes=15)
-        self.assertEqual(len(second["cancelled"]), 0)
-        create_refund.assert_called_once()
+        self.assertEqual(len(second["confirmed"]), 0)
+        create_refund.assert_not_called()
 
     def test_answered_24h_reminder_is_not_cancelled(self):
         booking = self._booking(timezone.now() + timedelta(hours=23))
@@ -353,7 +323,7 @@ class WhatsAppBotTests(TestCase):
 
         booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
-        self.assertEqual(len(result["cancelled"]), 0)
+        self.assertEqual(len(result["confirmed"]), 0)
 
     def test_pending_cancellation_confirmation_is_not_auto_cancelled(self):
         booking = self._booking(timezone.now() + timedelta(hours=23))
@@ -372,7 +342,7 @@ class WhatsAppBotTests(TestCase):
 
         booking.refresh_from_db()
         self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
-        self.assertEqual(len(result["cancelled"]), 0)
+        self.assertEqual(len(result["confirmed"]), 0)
 
     def test_expired_unpaid_prepayment_cancels_booking(self):
         booking = self._booking(timezone.now() + timedelta(days=2))
@@ -455,7 +425,9 @@ class WhatsAppBotTests(TestCase):
         reminder_body = TEMPLATE_DEFAULTS[WhatsAppMessage.Kinds.REMINDER_24H]
         self.assertIn("{date}", reminder_body)
         self.assertIn("{time}", reminder_body)
-        self.assertIn("¿Vas a poder venir?", reminder_body)
+        self.assertIn("No quiero", reminder_body)
+        self.assertIn("30 minutos", reminder_body)
+        self.assertNotIn("{attend_url}", reminder_body)
 
     def test_done_booking_queues_delayed_review_request(self):
         template = WhatsAppTemplate.objects.get(

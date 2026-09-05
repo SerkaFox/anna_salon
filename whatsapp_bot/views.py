@@ -190,37 +190,14 @@ def button_reply_webhook(request):
     ):
         return JsonResponse({"ok": True, "reason": "response already recorded"})
 
-    if action_key in {"confirm_decline", "keep_booking"} and (
+    if action_key == "keep_booking" and (
         booking.client_response != Booking.ClientResponses.CANCELLATION_PENDING
     ):
         return JsonResponse({"ok": False, "reason": "cancellation confirmation not requested"}, status=409)
 
-    # The bridge represents the second poll's "Sí, cancelar" option as the
-    # same decline action. A pending confirmation makes this the second step.
-    if (
-        action_key == "decline"
-        and booking.client_response == Booking.ClientResponses.CANCELLATION_PENDING
-    ):
-        action_key = "confirm_decline"
-
+    # A written negative reply is itself the client's explicit confirmation.
     if action_key == "decline":
-        booking.client_response = Booking.ClientResponses.CANCELLATION_PENDING
-        booking.client_responded_at = timezone.now()
-        booking.save(update_fields=["client_response", "client_responded_at", "updated_at"])
-        from .services import send_cancellation_confirmation
-        try:
-            send_cancellation_confirmation(booking)
-        except Exception:
-            logger.exception("Could not send cancellation confirmation for booking %s.", booking.pk)
-            return JsonResponse({"ok": False, "reason": "confirmation delivery failed"}, status=503)
-        log_event(
-            actor=None,
-            section="booking",
-            action="cancellation_confirmation_requested",
-            instance=booking,
-            message=f"Cliente solicitó confirmar la cancelación por WhatsApp para la reserva #{booking.pk}.",
-        )
-        return JsonResponse({"ok": True, "action": "cancellation_confirmation_requested"})
+        action_key = "confirm_decline"
 
     if action_key == "keep_booking":
         booking.client_response = Booking.ClientResponses.ATTENDING

@@ -18,7 +18,7 @@ class Command(BaseCommand):
         parser.add_argument("--window-minutes", type=int, default=15)
         parser.add_argument("--limit", type=int, default=50)
         parser.add_argument("--queue-only", action="store_true")
-        parser.add_argument("--response-timeout-minutes", type=int, default=15)
+        parser.add_argument("--response-timeout-minutes", type=int, default=30)
 
     def handle(self, *args, **options):
         connection_status = refresh_connection_status()
@@ -26,7 +26,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.WARNING(
                     f"WhatsApp unavailable: {connection_status['status']}; "
-                    "message sending and automatic cancellations are paused"
+                    "message sending and automatic confirmations are paused"
                 )
             )
             return
@@ -45,8 +45,8 @@ class Command(BaseCommand):
         sent = [] if options["queue_only"] else send_due_messages(limit=options["limit"])
         self.stdout.write(
             f"queued={total_queued} skipped_existing={total_skipped} "
-            f"auto_cancelled={len(timeout_result['cancelled'])} "
-            f"auto_cancel_failed={len(timeout_result['failed'])} processed={len(sent)}"
+            f"auto_confirmed={len(timeout_result['confirmed'])} "
+            f"auto_confirm_failed={len(timeout_result['failed'])} processed={len(sent)}"
             f" prepayment_cancelled={len(prepayment_result['cancelled'])}"
             f" prepayment_failed={len(prepayment_result['failed'])}"
         )

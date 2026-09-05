@@ -7,8 +7,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from bookings.models import Booking
-from bookings.client_actions import booking_paid_amount, cancel_booking
-from bookings.utils import booking_payment_summary
+from bookings.client_actions import booking_paid_amount
 
 from . import bridge
 from .bridge import WhatsAppNumberNotFound, WhatsAppBridgeError
@@ -369,8 +368,8 @@ def queue_due_reminders(*, hours, window_minutes=15):
     return {"queued": queued, "skipped": skipped}
 
 
-def process_unanswered_24h_reminders(*, timeout_minutes=15):
-    """Cancel bookings whose delivered 24h reminder was left unanswered."""
+def process_unanswered_24h_reminders(*, timeout_minutes=30):
+    """Confirm attendance when a delivered reminder has no explicit refusal."""
     cutoff = timezone.now() - timedelta(minutes=timeout_minutes)
     candidates = list(
         WhatsAppMessage.objects.filter(
@@ -389,7 +388,7 @@ def process_unanswered_24h_reminders(*, timeout_minutes=15):
         .select_related("booking__client", "booking__service")
         .order_by("sent_at", "id")
     )
-    cancelled = []
+    confirmed = []
     failed = []
     for reminder in candidates:
         try:
@@ -409,27 +408,36 @@ def process_unanswered_24h_reminders(*, timeout_minutes=15):
                     }
                 ):
                     continue
-                paid_before = booking_payment_summary(booking)["paid_amount"]
-                _message, refunds = cancel_booking(booking, force_refund=True)
-                if refunds:
-                    refund_message = "La devolución del importe pagado ha sido solicitada."
-                elif paid_before > 0:
-                    refund_message = "El salón revisará el pago para completar la devolución."
-                else:
-                    refund_message = "No había ningún pago que devolver."
-                timeout_message, _created = queue_booking_message(
-                    booking,
-                    kind=WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED,
-                    extra_context={"refund_message": refund_message},
+                booking.client_response = Booking.ClientResponses.ATTENDING
+                booking.client_responded_at = timezone.now()
+                update_fields = ["client_response", "client_responded_at", "updated_at"]
+                if (
+                    booking.status == Booking.Statuses.PENDING
+                    and booking.prepayment_policy != Booking.PrepaymentPolicies.REQUIRED
+                ):
+                    booking.status = Booking.Statuses.CONFIRMED
+                    update_fields.append("status")
+                booking.save(update_fields=update_fields)
+                from auditlog.services import log_event
+
+                log_event(
+                    actor=None,
+                    section="booking",
+                    action="client_auto_confirmed",
+                    instance=booking,
+                    message=(
+                        f"Asistencia de la reserva #{booking.pk} confirmada automáticamente "
+                        f"tras {timeout_minutes} minutos sin negativa del cliente."
+                    ),
                 )
-                cancelled.append((booking, timeout_message))
+                confirmed.append(booking)
         except Exception as exc:
             logger.exception(
-                "Could not auto-cancel booking %s after unanswered reminder.",
+                "Could not auto-confirm booking %s after unanswered reminder.",
                 reminder.booking_id,
             )
             failed.append((reminder.booking_id, str(exc)))
-    return {"cancelled": cancelled, "failed": failed}
+    return {"confirmed": confirmed, "failed": failed}
 
 
 def process_expired_prepayment_requests():
@@ -500,19 +508,22 @@ def process_expired_prepayment_requests():
 
 
 def _send_reminder_24h_buttons(message):
-    """Send the 24h reminder as a native WhatsApp poll."""
+    """Send a reminder that only treats an explicit negative reply as refusal."""
     booking = message.booking
     if not booking:
         return None
     local_start = timezone.localtime(booking.start_at)
     body = (
         f"Hola {booking.client.first_name or booking.client.full_name} 👋\n"
-        f"¿Confirmas tu cita en BRIMOON Studio mañana {local_start:%d/%m/%Y} "
-        f"a las {local_start:%H:%M} para {booking.service_names}?"
+        f"Te recordamos tu cita en BRIMOON Studio mañana {local_start:%d/%m/%Y} "
+        f"a las {local_start:%H:%M} para {booking.service_names}.\n\n"
+        "Si no puedes venir, responde a este mensaje escribiendo una de estas frases:\n"
+        "No\nNo voy\nNo quiero\nNo puedo\n\n"
+        "Si no respondes, confirmaremos automáticamente tu cita dentro de 30 minutos."
     )
     buttons = [
-        {"id": f"attend_{booking.pk}", "body": "✅ Sí, voy"},
-        {"id": f"decline_{booking.pk}", "body": "❌ No puedo ir"},
+        {"id": f"attend_{booking.pk}", "body": "Asistencia automática"},
+        {"id": f"confirm_decline_{booking.pk}", "body": "No asistiré"},
     ]
     try:
         return bridge.send_poll_message(
@@ -537,17 +548,17 @@ def send_cancellation_confirmation(booking):
         else "Liberaremos este horario para otros clientes."
     )
     body = (
-        "⚠️ ¿Seguro que quieres cancelar tu cita?\n\n"
+        "⚠️ Para cancelar tu cita necesitamos una confirmación escrita.\n\n"
         f"📅 {local_start:%d/%m/%Y} a las {local_start:%H:%M}\n"
         f"💅 {booking.service_names}\n\n"
         f"{refund_text}\n\n"
-        "Tu cita todavía NO ha sido cancelada."
+        "Si realmente no vas a venir, responde a este mensaje escribiendo una de estas frases:\n"
+        "No\nNo voy\nNo quiero\nNo puedo\n\n"
+        "Solo cancelaremos la cita después de recibir una de estas respuestas."
     )
     buttons = [
-        # The current bridge maps the first poll option to "attend" and the
-        # second to "decline". Keep the safe option first.
-        {"id": f"attend_{booking.pk}", "body": "No, mantener cita"},
-        {"id": f"decline_{booking.pk}", "body": "Sí, cancelar"},
+        {"id": f"attend_{booking.pk}", "body": "Mantener cita"},
+        {"id": f"confirm_decline_{booking.pk}", "body": "No asistiré"},
     ]
     if getattr(settings, "WHATSAPP_DRY_RUN", True):
         return {"message_id": "dry-run"}
@@ -564,8 +575,7 @@ def send_cancellation_confirmation(booking):
             connection,
             to_phone=phone,
             body=(
-                f"{body}\n\nNo hemos podido mostrar los botones. "
-                "Contacta con BRIMOON Studio si quieres cancelar."
+                f"{body}\n\nSi la respuesta no se procesa, contacta con BRIMOON Studio."
             ),
         )
 

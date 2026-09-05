@@ -45,6 +45,17 @@ function requireAuth(req, res, next) {
   return next();
 }
 
+function isExplicitDeclineReply(value) {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .replace(/[.!?,;:]+$/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+  return new Set(["no", "no voy", "no quiero", "no puedo", "no puedo ir"]).has(normalized);
+}
+
 async function postButtonReply(state, mapping, selectedName) {
   if (!BUTTON_REPLY_WEBHOOK_URL || mapping.handled || !selectedName) return false;
   const selected = mapping.options.find((option) => option.body === selectedName);
@@ -92,27 +103,8 @@ async function postButtonReply(state, mapping, selectedName) {
     console.warn(`[whatsapp:${state.name}] poll vote webhook error:`, error?.message || error);
   }
 
-  // Remove the answered request so there is no stale control to press again.
-  if (mapping.messageId) {
-    try {
-      await state.client.pupPage.evaluate(async (messageId) => {
-        const collections = window.require("WAWebCollections");
-        const message = collections.Msg.get(messageId)
-          || (await collections.Msg.getMessagesById([messageId]))?.messages?.[0];
-        if (!message) return;
-        const chat = collections.Chat.get(message.id.remote)
-          || await collections.Chat.find(message.id.remote);
-        const canRevoke = window.require("WAWebMsgActionCapability").canSenderRevokeMsg(message);
-        const { Cmd } = window.require("WAWebCmd");
-        if (canRevoke) {
-          await Cmd.sendRevokeMsgs(chat, { list: [message], type: "message" }, { clearMedia: true });
-        }
-      }, mapping.messageId);
-      console.log(`[whatsapp:${state.name}] closed response request for booking ${mapping.bookingId}`);
-    } catch (error) {
-      console.warn(`[whatsapp:${state.name}] could not close response request for booking ${mapping.bookingId}:`, error?.message || error);
-    }
-  }
+  // Keep both the request and the client's reply in the chat as evidence of
+  // the explicit cancellation instruction.
   for (const key of [mapping.messageId, `phone_${mapping.toDigits}`, `chat_${mapping.chatId}`]) {
     if (key && pollMappings.get(key) === mapping) pollMappings.delete(key);
   }
@@ -249,22 +241,12 @@ function attachClientEvents(client, state) {
     const mapping = pollMappings.get(`chat_${senderId}`)
       || pollMappings.get(`phone_${senderDigits}`);
 
-    // Poll votes in current LID chats are not synchronized back to the linked
-    // WhatsApp Web device. Numbered text replies are visible and reliable.
-    if (mapping && msg.type === "chat") {
-      const answer = String(msg.body || "").trim();
-      let selectedName = "";
-      if (answer === "1") selectedName = mapping.options[0]?.body || "";
-      if (answer === "2") selectedName = mapping.options[1]?.body || "";
-      if (!selectedName) {
-        selectedName = mapping.options.find(
-          (option) => option.body.toLocaleLowerCase() === answer.toLocaleLowerCase(),
-        )?.body || "";
-      }
-      if (selectedName) {
-        await postButtonReply(state, mapping, selectedName);
-        return;
-      }
+    // Only an explicit negative phrase is actionable. Silence and every other
+    // reply leave the booking intact for automatic attendance confirmation.
+    if (mapping && msg.type === "chat" && isExplicitDeclineReply(msg.body)) {
+      const selectedName = mapping.options[1]?.body || "";
+      if (selectedName) await postButtonReply(state, mapping, selectedName);
+      return;
     }
 
     if ((!isButtonReply && !isListReply) || !BUTTON_REPLY_WEBHOOK_URL) return;
@@ -712,7 +694,7 @@ app.post("/messages/list", async (req, res) => {
 
 // Interactive confirmation. Native polls display correctly but their votes are
 // currently not synchronized to linked WhatsApp Web devices for LID chats.
-// Send a numbered prompt instead; ordinary text replies arrive reliably.
+// Send a plain prompt; only explicit negative text replies are actionable.
 app.post("/messages/poll", async (req, res) => {
   const state = getSession(req.body?.session);
   const digits = String(req.body?.to || "").replace(/\D/g, "");
@@ -736,7 +718,7 @@ app.post("/messages/poll", async (req, res) => {
   // Extract booking ID from first button id, e.g. "attend_42" → 42
   const bookingId = String(rawButtons[0]?.id || "").split("_")[1] || "";
 
-  const replyBody = `${body}\n\n1 — ${options[0].body}\n2 — ${options[1].body}\n\nEnvía 1 o 2.`;
+  const replyBody = body;
   try {
     const primed = await state.client.pupPage.evaluate(async (digitsArg, lidArg) => {
       const WAWebWidFactory = window.require("WAWebWidFactory");

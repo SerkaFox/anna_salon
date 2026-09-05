@@ -145,7 +145,9 @@ TEMPLATE_DEFAULTS = {
     WhatsAppMessage.Kinds.REMINDER_24H: (
         "Hola {client_name} 👋 Te recordamos tu cita en {salon_name} mañana "
         "{date} a las {time} para {service_name}.\n\n"
-        "¿Vas a poder venir?"
+        "Si no puedes venir, responde a este mensaje escribiendo una de estas frases:\n"
+        "No\nNo voy\nNo quiero\nNo puedo\n\n"
+        "Si no respondes, confirmaremos automáticamente tu cita dentro de 30 minutos."
     ),
     WhatsAppMessage.Kinds.REMINDER_2H: (
         "Hola {client_name} 👋 Te esperamos en {salon_name} en 2 horas, "
@@ -232,7 +234,7 @@ TEMPLATE_VARIABLES = {
     WhatsAppMessage.Kinds.BOOKING_CONFIRMATION: "{client_name} {salon_name} {date} {time} {service_name} {booking_url} {portal_url}",
     WhatsAppMessage.Kinds.BOOKING_CANCELLED: "{client_name} {salon_name} {date} {time} {service_name} {portal_url}",
     WhatsAppMessage.Kinds.BOOKING_RESCHEDULED: "{client_name} {salon_name} {date} {time} {service_name} {portal_url}",
-    WhatsAppMessage.Kinds.REMINDER_24H: "{client_name} {salon_name} {date} {time} {service_name} {attend_url} {decline_url}",
+    WhatsAppMessage.Kinds.REMINDER_24H: "{client_name} {salon_name} {date} {time} {service_name}",
     WhatsAppMessage.Kinds.REMINDER_2H: "{client_name} {salon_name} {time} {service_name}",
     WhatsAppMessage.Kinds.REMINDER_TIMEOUT_CANCELLED: "{client_name} {salon_name} {date} {time} {service_name} {refund_message}",
     WhatsAppMessage.Kinds.PREPAYMENT_REQUEST: "{client_name} {salon_name} {date} {time} {service_name} {payment_amount} {payment_url} {payment_deadline}",
