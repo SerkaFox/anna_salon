@@ -111,26 +111,33 @@ async function postButtonReply(state, mapping, selectedName) {
 }
 
 async function recoverSentPoll(state, chatId, body, directResult, sentAfter) {
-  if (directResult?.id?._serialized) return directResult;
+  if (directResult?.id?._serialized) return directResult.id._serialized;
   for (let attempt = 0; attempt < 6; attempt += 1) {
     if (attempt > 0) await sleep(500);
     try {
-      const chat = await state.client.getChatById(chatId);
-      const messages = chat ? await chat.fetchMessages({ limit: 20 }) : [];
-      const poll = [...messages].reverse().find((message) => (
-        message.fromMe
-        && message.type === "poll_creation"
-        && (message.body === body || message.pollName === body)
-        && (!sentAfter || Number(message.timestamp || 0) * 1000 >= sentAfter - 5000)
-      ));
-      if (poll?.id?._serialized) return poll;
+      // Read the raw in-page message collection. Chat.fetchMessages() tries to
+      // serialize the newly-sent poll and currently throws for LID chats.
+      const messageId = await state.client.pupPage.evaluate((targetChatId, pollBody, sentAfterMs) => {
+        const { Chat } = window.require("WAWebCollections");
+        const { createWid } = window.require("WAWebWidFactory");
+        const chat = Chat.get(createWid(targetChatId));
+        const messages = chat?.msgs?.getModelsArray?.() || [];
+        const poll = [...messages].reverse().find((message) => (
+          message.id?.fromMe
+          && message.type === "poll_creation"
+          && (message.body === pollBody || message.pollName === pollBody)
+          && (!sentAfterMs || Number(message.t || 0) * 1000 >= sentAfterMs - 5000)
+        ));
+        return poll?.id?._serialized || poll?.id?.toString?.() || "";
+      }, chatId, body, sentAfter);
+      if (messageId) return messageId;
     } catch (error) {
       if (attempt === 5) {
         console.warn(`[whatsapp:${state.name}] could not recover sent poll id:`, error?.message || error);
       }
     }
   }
-  return null;
+  return "";
 }
 
 async function watchPollVotes(state, mapping) {
@@ -749,8 +756,7 @@ app.post("/messages/poll", async (req, res) => {
 
     const sentAt = Date.now();
     const result = await state.client.sendMessage(primed.serialized, pollMsg, { sendSeen: false });
-    const pollMessage = await recoverSentPoll(state, primed.serialized, body, result, sentAt);
-    const msgId = pollMessage?.id?._serialized || "";
+    const msgId = await recoverSentPoll(state, primed.serialized, body, result, sentAt);
     if (bookingId) {
       const mapping = {
         bookingId,
