@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from bookings.models import Booking
 from bookings.client_actions import booking_paid_amount
+from bookings.utils import exact_duplicate_bookings
 
 from . import bridge
 from .bridge import WhatsAppNumberNotFound, WhatsAppBridgeError
@@ -342,7 +343,18 @@ def queue_due_reminders(*, hours, window_minutes=15):
     )
     queued = []
     skipped = []
+    seen_appointments = set()
     for booking in bookings:
+        appointment_key = (
+            booking.client_id,
+            booking.service_id,
+            booking.start_at,
+            booking.end_at,
+        )
+        if appointment_key in seen_appointments:
+            skipped.append(booking)
+            continue
+        seen_appointments.add(appointment_key)
         message, created = queue_booking_message(booking, kind=kind)
         if created:
             queued.append(message)
@@ -408,16 +420,34 @@ def process_unanswered_24h_reminders(*, timeout_minutes=30):
                     }
                 ):
                     continue
-                booking.client_response = Booking.ClientResponses.ATTENDING
-                booking.client_responded_at = timezone.now()
-                update_fields = ["client_response", "client_responded_at", "updated_at"]
-                if (
-                    booking.status == Booking.Statuses.PENDING
-                    and booking.prepayment_policy != Booking.PrepaymentPolicies.REQUIRED
-                ):
-                    booking.status = Booking.Statuses.CONFIRMED
-                    update_fields.append("status")
-                booking.save(update_fields=update_fields)
+                duplicate_group = list(
+                    exact_duplicate_bookings(booking)
+                    .select_for_update()
+                    .exclude(
+                        status__in={
+                            Booking.Statuses.CANCELLED,
+                            Booking.Statuses.DONE,
+                            Booking.Statuses.NO_SHOW,
+                        }
+                    )
+                )
+                responded_at = timezone.now()
+                for duplicate in duplicate_group:
+                    duplicate.client_response = Booking.ClientResponses.ATTENDING
+                    duplicate.client_responded_at = responded_at
+                    update_fields = [
+                        "client_response",
+                        "client_responded_at",
+                        "updated_at",
+                    ]
+                    if (
+                        duplicate.status == Booking.Statuses.PENDING
+                        and duplicate.prepayment_policy
+                        != Booking.PrepaymentPolicies.REQUIRED
+                    ):
+                        duplicate.status = Booking.Statuses.CONFIRMED
+                        update_fields.append("status")
+                    duplicate.save(update_fields=update_fields)
                 from auditlog.services import log_event
 
                 log_event(
@@ -430,7 +460,7 @@ def process_unanswered_24h_reminders(*, timeout_minutes=30):
                         f"tras {timeout_minutes} minutos sin negativa del cliente."
                     ),
                 )
-                confirmed.append(booking)
+                confirmed.extend(duplicate_group)
         except Exception as exc:
             logger.exception(
                 "Could not auto-confirm booking %s after unanswered reminder.",

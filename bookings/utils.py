@@ -304,6 +304,16 @@ def find_available_zone(
     return None
 
 
+def exact_duplicate_bookings(booking):
+    """Return records that describe the same client appointment exactly."""
+    return Booking.objects.filter(
+        client_id=booking.client_id,
+        service_id=booking.service_id,
+        start_at=booking.start_at,
+        end_at=booking.end_at,
+    )
+
+
 def find_available_slots_for_day(date_obj, employee, service, zone=None, exclude_booking_id=None):
     slots, _blocked = build_available_slots_for_day(
         date_obj=date_obj,

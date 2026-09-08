@@ -103,6 +103,7 @@ class ClientSerializer(serializers.ModelSerializer):
     total_spent = serializers.SerializerMethodField()
     is_online_client = serializers.SerializerMethodField()
     prepayment_exempt = serializers.SerializerMethodField()
+    is_employee_profile = serializers.SerializerMethodField()
     pricing_category_label = serializers.CharField(
         source="get_pricing_category_display", read_only=True
     )
@@ -129,6 +130,7 @@ class ClientSerializer(serializers.ModelSerializer):
             "total_orders",
             "total_spent",
             "is_online_client",
+            "is_employee_profile",
             "last_appointment_at",
             "acquisition_date",
             "average_expense_amount_cents",
@@ -151,6 +153,11 @@ class ClientSerializer(serializers.ModelSerializer):
         if not obj.avatar:
             return None
         return f"/api/v1/clients/{obj.pk}/avatar/"
+
+    def get_is_employee_profile(self, obj):
+        if not obj.user_id:
+            return False
+        return getattr(obj.user, "employee_profile", None) is not None
 
     def get_total_orders(self, obj):
         return obj.booking_count + getattr(obj, "completed_bookings_count", 0)

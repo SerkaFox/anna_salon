@@ -314,6 +314,16 @@ class Command(BaseCommand):
         employee_percent = employee.commission_percent
         employee_amount = (price * employee_percent / Decimal("100")).quantize(Decimal("0.01"))
         zone = Command._zone(employee, service)
+        existing_booking = Booking.objects.filter(
+            external_source="treatwell",
+            external_id=str(row["external_id"]),
+        ).first()
+        incoming_status = row.get("status") or Booking.Statuses.CONFIRMED
+        preserve_local_cancellation = bool(
+            existing_booking
+            and existing_booking.status == Booking.Statuses.CANCELLED
+            and incoming_status != Booking.Statuses.CANCELLED
+        )
         treatwell_client_id = str((row.get("client") or {}).get("treatwell_id") or "")
         if (
             treatwell_client_id
@@ -332,10 +342,18 @@ class Command(BaseCommand):
                 "zone": zone,
                 "start_at": start_at,
                 "end_at": end_at,
-                "status": row.get("status") or Booking.Statuses.CONFIRMED,
+                "status": (
+                    Booking.Statuses.CANCELLED
+                    if preserve_local_cancellation
+                    else incoming_status
+                ),
                 "source": Booking.Sources.TREATWELL,
                 "notes": row.get("notes") or "",
-                "completed_at": _datetime(row.get("checked_out_at")),
+                "completed_at": (
+                    existing_booking.completed_at
+                    if preserve_local_cancellation
+                    else _datetime(row.get("checked_out_at"))
+                ),
                 "external_updated_at": _datetime(row.get("updated_at")),
                 "price_snapshot": price,
                 "duration_snapshot": duration,

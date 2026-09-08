@@ -167,6 +167,21 @@ class WhatsAppBotTests(TestCase):
         send_whatsapp_message(message)
         self.assertEqual(WhatsAppMessage.objects.count(), 1)
 
+    def test_exact_duplicate_bookings_receive_one_reminder(self):
+        start_at = timezone.now() + timedelta(hours=24, minutes=5)
+        first = self._booking(start_at)
+        second = self._booking(start_at)
+
+        result = queue_due_reminders(hours=24, window_minutes=15)
+
+        self.assertEqual(len(result["queued"]), 1)
+        self.assertEqual(len(result["skipped"]), 1)
+        self.assertEqual(WhatsAppMessage.objects.count(), 1)
+        self.assertIn(
+            WhatsAppMessage.objects.get().booking_id,
+            {first.pk, second.pk},
+        )
+
     @override_settings(WHATSAPP_DRY_RUN=False)
     @patch("whatsapp_bot.services.bridge.send_poll_message")
     def test_24h_reminder_registers_only_explicit_decline(self, send_poll):
@@ -206,6 +221,7 @@ class WhatsAppBotTests(TestCase):
     @patch("bookings.client_actions.create_refund")
     def test_written_decline_cancels_immediately(self, create_refund):
         booking = self._booking(timezone.now() + timedelta(hours=12))
+        duplicate = self._booking(booking.start_at)
         Payment.objects.create(
             booking=booking,
             amount=Decimal("10.00"),
@@ -229,8 +245,17 @@ class WhatsAppBotTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         booking.refresh_from_db()
+        duplicate.refresh_from_db()
         self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
+        self.assertEqual(duplicate.status, Booking.Statuses.CANCELLED)
         self.assertEqual(booking.client_response, Booking.ClientResponses.DECLINED)
+        self.assertEqual(
+            duplicate.client_response, Booking.ClientResponses.DECLINED
+        )
+        self.assertCountEqual(
+            response.json()["cancelled_booking_ids"],
+            [booking.pk, duplicate.pk],
+        )
         create_refund.assert_called_once()
 
     @patch("whatsapp_bot.services.send_booking_kept_confirmation")

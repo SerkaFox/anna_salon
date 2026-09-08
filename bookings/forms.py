@@ -87,6 +87,7 @@ class BookingForm(forms.ModelForm):
         self.fields["service"].queryset = Service.objects.filter(is_active=True).order_by("name")
         self.fields["employee"].queryset = Employee.objects.filter(is_active=True).order_by("first_name", "last_name")
         self.fields["client"].queryset = Client.objects.filter(is_active=True).order_by("first_name", "last_name")
+        self.fields["client"].label_from_instance = self._client_label
         self.fields["zone"].queryset = Zone.objects.filter(is_active=True).order_by("name")
         self.fields["start_at"].input_formats = ("%Y-%m-%dT%H:%M",)
         self.fields["end_at"].input_formats = ("%Y-%m-%dT%H:%M",)
@@ -170,6 +171,16 @@ class BookingForm(forms.ModelForm):
                 )
             else:
                 self.fields["apply_referral_reward"].help_text = "Este cliente no tiene premios disponibles."
+
+    @staticmethod
+    def _client_label(client):
+        phone = client.phone or client.alternate_phone or "sin teléfono"
+        employee_marker = (
+            " · EMPLEADA"
+            if client.user_id and hasattr(client.user, "employee_profile")
+            else ""
+        )
+        return f"{client.full_name or 'Cliente'} · {phone}{employee_marker}"
 
     def clean(self):
         cleaned_data = super().clean()

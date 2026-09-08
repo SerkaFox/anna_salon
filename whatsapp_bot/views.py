@@ -161,6 +161,7 @@ def button_reply_webhook(request):
 
     from bookings.models import Booking
     from bookings.client_actions import cancel_booking, booking_paid_amount, booking_amount_due
+    from bookings.utils import exact_duplicate_bookings
     from auditlog.services import log_event
 
     try:
@@ -181,7 +182,11 @@ def button_reply_webhook(request):
         logger.warning("Button reply phone mismatch: expected %s got %s for booking %s", client_phone, from_phone, booking_pk)
         return JsonResponse({"ok": False, "reason": "phone mismatch"})
 
-    if booking.status in {Booking.Statuses.CANCELLED, Booking.Statuses.DONE, Booking.Statuses.NO_SHOW}:
+    if (
+        booking.status
+        in {Booking.Statuses.CANCELLED, Booking.Statuses.DONE, Booking.Statuses.NO_SHOW}
+        and action_key not in {"decline", "confirm_decline"}
+    ):
         return JsonResponse({"ok": True, "reason": "booking already closed"})
 
     if (
@@ -218,20 +223,54 @@ def button_reply_webhook(request):
         return JsonResponse({"ok": True, "action": "booking_kept"})
 
     if action_key == "confirm_decline":
-        booking.client_response = Booking.ClientResponses.DECLINED
-        booking.client_responded_at = timezone.now()
-        booking.save(update_fields=["client_response", "client_responded_at", "updated_at"])
-        cancel_booking(booking, force_refund=True)
+        with transaction.atomic():
+            duplicate_group = list(
+                exact_duplicate_bookings(booking)
+                .select_for_update()
+                .exclude(
+                    status__in={
+                        Booking.Statuses.CANCELLED,
+                        Booking.Statuses.DONE,
+                        Booking.Statuses.NO_SHOW,
+                    }
+                )
+            )
+            if not duplicate_group:
+                return JsonResponse({"ok": True, "reason": "booking already closed"})
+            responded_at = timezone.now()
+            for duplicate in duplicate_group:
+                duplicate.client_response = Booking.ClientResponses.DECLINED
+                duplicate.client_responded_at = responded_at
+                duplicate.save(
+                    update_fields=[
+                        "client_response",
+                        "client_responded_at",
+                        "updated_at",
+                    ]
+                )
+                cancel_booking(duplicate, force_refund=True)
+                log_event(
+                    actor=None,
+                    section="booking",
+                    action="client_declined",
+                    instance=duplicate,
+                    message=(
+                        f"Cliente confirmó por WhatsApp que no asistirá a la "
+                        f"reserva #{duplicate.pk}."
+                    ),
+                    metadata={
+                        "duplicate_group": [item.pk for item in duplicate_group]
+                    },
+                )
         from .services import queue_and_send
         queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CANCELLED)
-        log_event(
-            actor=None,
-            section="booking",
-            action="client_declined",
-            instance=booking,
-            message=f"Cliente confirmó por WhatsApp que no asistirá a la reserva #{booking.pk}.",
+        return JsonResponse(
+            {
+                "ok": True,
+                "action": "declined_confirmed",
+                "cancelled_booking_ids": [item.pk for item in duplicate_group],
+            }
         )
-        return JsonResponse({"ok": True, "action": "declined_confirmed"})
 
     if (
         action_key == "attend"

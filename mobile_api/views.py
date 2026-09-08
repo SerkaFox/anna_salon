@@ -722,7 +722,9 @@ class ClientListView(MobileApiMixin, generics.ListCreateAPIView):
     pagination_class = ClientListPagination
 
     def get_queryset(self):
-        queryset = Client.objects.filter(is_active=True).annotate(
+        queryset = Client.objects.filter(is_active=True).select_related(
+            "user", "user__employee_profile"
+        ).annotate(
             completed_bookings_count=Count(
                 "bookings",
                 filter=Q(bookings__status=Booking.Statuses.DONE),

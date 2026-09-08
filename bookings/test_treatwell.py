@@ -135,6 +135,38 @@ class TreatwellImportTests(TestCase):
         self.assertEqual(payment.provider, Payment.Providers.TREATWELL)
         self.assertEqual(payment.amount, Decimal("2.00"))
 
+    def test_sync_does_not_resurrect_locally_cancelled_booking(self):
+        client = Client.objects.create(first_name="Daniela", phone="680553535")
+        service = Service.objects.create(name="Relleno", duration_minutes=90)
+        employee = Employee.objects.create(first_name="Hanna")
+        start_at = timezone.now() + timedelta(days=1)
+        end_at = start_at + timedelta(minutes=90)
+        row = {
+            "external_id": "tw-cancelled",
+            "status": "confirmed",
+            "notes": "",
+            "price": "33.00",
+            "duration_minutes": 90,
+            "paid_online": False,
+            "updated_at": start_at.isoformat(),
+            "checked_out_at": "",
+        }
+        ImportCommand._save(row, client, employee, service, start_at, end_at)
+        booking = Booking.objects.get(external_id="tw-cancelled")
+        booking.status = Booking.Statuses.CANCELLED
+        booking.client_response = Booking.ClientResponses.DECLINED
+        booking.save(update_fields=["status", "client_response", "updated_at"])
+
+        row["status"] = "done"
+        row["checked_out_at"] = end_at.isoformat()
+        row["updated_at"] = (start_at + timedelta(hours=2)).isoformat()
+        ImportCommand._save(row, client, employee, service, start_at, end_at)
+
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
+        self.assertEqual(booking.client_response, Booking.ClientResponses.DECLINED)
+        self.assertIsNone(booking.completed_at)
+
     def test_resolver_uses_staff_surname_and_service_alias(self):
         Employee.objects.create(first_name="Hanna", last_name="Briukhovets")
         expected_service = Service.objects.create(name="Relleno de gel")
