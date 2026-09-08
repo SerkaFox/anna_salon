@@ -60,7 +60,7 @@ def create_booking_for_client_from_pending(client, pending):
 
     end_at = start_at + timedelta(minutes=service.duration_minutes)
     if service.requires_zone and zone is None:
-        zone = find_available_zone(service, start_at, end_at)
+        zone = find_available_zone(service, start_at, end_at, employee=employee)
 
     form = BookingForm(
         {

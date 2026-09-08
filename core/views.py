@@ -593,8 +593,14 @@ def _public_booking_post_multi(request, post, t):
                     start_at = timezone.make_aware(start_at)
                 start_at = timezone.localtime(start_at).replace(second=0, microsecond=0)
                 end_at = start_at + timedelta(minutes=service.duration_minutes)
+                if (
+                    zone is not None
+                    and employee.zones.exists()
+                    and not employee.zones.filter(pk=zone.pk).exists()
+                ):
+                    zone = None
                 if service.requires_zone and zone is None:
-                    zone = find_available_zone(service, start_at, end_at)
+                    zone = find_available_zone(service, start_at, end_at, employee=employee)
                 booking = _build_public_booking_form(client, service, employee, zone, start_at, end_at)
                 booking.booking_group_id = group_id
                 booking.save(update_fields=["booking_group_id", "updated_at"])
@@ -836,7 +842,12 @@ def public_booking_slots(request):
                 continue
             slot_zone = zone
             if service.requires_zone and slot_zone is None:
-                slot_zone = find_available_zone(service, slot["start_at"], slot["end_at"])
+                slot_zone = find_available_zone(
+                    service,
+                    slot["start_at"],
+                    slot["end_at"],
+                    employee=employee,
+                )
             if service.requires_zone and slot_zone is None:
                 continue
             key = _format_public_datetime(slot["start_at"])
@@ -950,8 +961,14 @@ def public_booking(request):
     end_at = None
     if service and employee and start_at and not errors.get("start_at"):
         end_at = start_at + timedelta(minutes=service.duration_minutes)
+        if (
+            zone is not None
+            and employee.zones.exists()
+            and not employee.zones.filter(pk=zone.pk).exists()
+        ):
+            zone = None
         if service.requires_zone and zone is None:
-            zone = find_available_zone(service, start_at, end_at)
+            zone = find_available_zone(service, start_at, end_at, employee=employee)
         if service.requires_zone and zone is None:
             errors["zone"] = [t["public_booking_error_no_zone"]]
         else:

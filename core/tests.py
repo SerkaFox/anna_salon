@@ -12,6 +12,7 @@ from accounts.models import User
 from bookings.models import Booking, BookingWaitlistEntry
 from clients.models import Client
 from employees.models import Employee, EmployeeWeeklyShift
+from salon.models import Zone
 from services_app.models import Service
 
 
@@ -148,6 +149,37 @@ class PublicBookingTests(TestCase):
         self.assertTrue(payload["ok"])
         self.assertGreater(len(payload["slots"]), 0)
         self.assertEqual(payload["slots"][0]["employees"][0]["id"], self.employee.pk)
+
+    def test_public_booking_slots_use_only_employee_zones(self):
+        zone_a = Zone.objects.create(name="zona A", is_active=True)
+        zone_b = Zone.objects.create(name="zona B", is_active=True)
+        self.service.requires_zone = True
+        self.service.save(update_fields=["requires_zone", "updated_at"])
+        self.service.allowed_zones.add(zone_a, zone_b)
+        self.employee.zones.add(zone_b)
+
+        response = self.browser.get(
+            reverse("public_booking_slots"),
+            {"service": self.service.pk, "date": self.date},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        employee_option = payload["slots"][0]["employees"][0]
+        self.assertEqual(employee_option["id"], self.employee.pk)
+        self.assertEqual(employee_option["zone"], zone_b.pk)
+
+        wrong_zone_response = self.browser.get(
+            reverse("public_booking_slots"),
+            {
+                "service": self.service.pk,
+                "date": self.date,
+                "zone": zone_a.pk,
+            },
+        )
+        self.assertEqual(wrong_zone_response.status_code, 200)
+        self.assertFalse(wrong_zone_response.json()["slots"])
 
     def test_public_booking_week_slots_returns_seven_days(self):
         response = self.browser.get(

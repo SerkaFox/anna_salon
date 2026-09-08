@@ -476,7 +476,12 @@ def client_portal_slots_api(request):
             start_key = timezone.localtime(slot["start_at"]).strftime("%Y-%m-%dT%H:%M")
             slot_zone = zone
             if service.requires_zone and slot_zone is None:
-                slot_zone = find_available_zone(service, slot["start_at"], slot["end_at"])
+                slot_zone = find_available_zone(
+                    service,
+                    slot["start_at"],
+                    slot["end_at"],
+                    employee=employee,
+                )
             item = slot_map.setdefault(
                 start_key,
                 {

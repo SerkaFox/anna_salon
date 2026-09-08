@@ -85,7 +85,13 @@ def reschedule_booking(booking, *, start_at, employee=None, zone=None, allow_lat
     service = booking.service
     end_at = start_at + timedelta(minutes=booking.duration_snapshot or service.duration_minutes)
     if service.requires_zone and zone is None:
-        zone = find_available_zone(service, start_at, end_at, exclude_booking_id=booking.pk)
+        zone = find_available_zone(
+            service,
+            start_at,
+            end_at,
+            exclude_booking_id=booking.pk,
+            employee=employee,
+        )
     required_service_ids = {
         item.get("service_id") for item in booking.service_items if item.get("service_id")
     }
@@ -152,8 +158,20 @@ def change_booking_service(
         )
     )
     zone = booking.zone
+    if (
+        zone is not None
+        and booking.employee.zones.exists()
+        and not booking.employee.zones.filter(pk=zone.pk).exists()
+    ):
+        zone = None
     if service.requires_zone and zone is None:
-        zone = find_available_zone(service, booking.start_at, new_end_at, exclude_booking_id=booking.pk)
+        zone = find_available_zone(
+            service,
+            booking.start_at,
+            new_end_at,
+            exclude_booking_id=booking.pk,
+            employee=booking.employee,
+        )
     if not is_slot_available(
         booking.employee,
         service,

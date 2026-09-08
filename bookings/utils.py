@@ -264,6 +264,8 @@ def is_slot_available(employee, service, zone, start_at, end_at, exclude_booking
         ) is not None
 
     if service.requires_zone and zone:
+        if employee.zones.exists() and not employee.zones.filter(pk=zone.pk).exists():
+            return False
         zone_conflict = qs.filter(
             zone=zone,
             start_at__lt=end_at,

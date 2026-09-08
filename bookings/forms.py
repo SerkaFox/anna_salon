@@ -232,6 +232,7 @@ class BookingForm(forms.ModelForm):
                         start_at,
                         end_at,
                         exclude_booking_id=self.instance.pk if self.instance.pk else None,
+                        employee=employee,
                     )
                     cleaned_data["zone"] = zone
                     self.cleaned_data["zone"] = zone
@@ -239,6 +240,12 @@ class BookingForm(forms.ModelForm):
                     self.add_error("zone", "No hay zona libre para este horario.")
                 elif not service.allowed_zones.filter(pk=zone.pk).exists():
                     self.add_error("zone", "La zona seleccionada no está permitida para este servicio.")
+                elif (
+                    employee
+                    and employee.zones.exists()
+                    and not employee.zones.filter(pk=zone.pk).exists()
+                ):
+                    self.add_error("zone", "Este empleado no trabaja en la zona seleccionada.")
             else:
                 cleaned_data["zone"] = None
 
