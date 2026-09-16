@@ -1,9 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deadline, guardPageBindings, recoveryReason } from "./resilience.js";
+import { deadline, guardPageBindings, recoveryReason, setLoginMode } from "./resilience.js";
 
 test("healthy QR is not restarted", () => {
   assert.equal(recoveryReason({ status: "qr", statusSince: 0 }, 999999), null);
+});
+test("code login suppresses QR refresh using the existing captured options object", () => {
+  const captured = { phoneNumber: "" };
+  const client = { options: { pairWithPhoneNumber: captured } };
+  const state = { status: "qr", qr: "old", qrImage: "old" };
+  setLoginMode(client, state, "code", "34600000000");
+  assert.equal(client.options.pairWithPhoneNumber, captured);
+  assert.equal(captured.phoneNumber, "34600000000");
+  assert.equal(state.status, "pairing");
+  assert.equal(state.qr, "");
+  assert.equal(recoveryReason(state, 999999), null);
+  setLoginMode(client, state, "qr");
+  assert.equal(captured.phoneNumber, "");
+  assert.equal(state.authMode, "qr");
 });
 test("faulted QR and stalled initialization recover", () => {
   assert.equal(recoveryReason({ status: "qr", faultAt: 1 }, 20000), "browser_fault");

@@ -75,6 +75,17 @@
     <div class="status error">✗ Error de bridge</div>
     <div class="err">La conexión se está recuperando. Espera un minuto. El acceso guardado no se borra.</div>
 
+  {% elif bridge_status == "authenticated" %}
+    <div class="status starting">Teléfono vinculado. Sincronizando…</div>
+    <p class="hint">No solicites otro código. Espera a que aparezca Conectado.</p>
+
+  {% elif auth_mode == "code" %}
+    <div class="status starting">Vinculación por número y código</div>
+    <p class="hint"><a href="{% url 'whatsapp_bot:pairing_code' name %}" style="color:#63b3ed;">Ver código / comprobar conexión</a></p>
+    <form method="post" action="{% url 'whatsapp_bot:return_to_qr' name %}">
+      {% csrf_token %}<button type="submit">Cambiar a QR sin borrar el acceso</button>
+    </form>
+
   {% elif has_qr %}
     <div class="status qr">Escanea el QR</div>
     <div class="qr-wrap">

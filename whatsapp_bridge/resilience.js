@@ -39,3 +39,23 @@ export function recoveryReason(state, now = Date.now()) {
   // A healthy unpaired browser must remain open for the customer to scan QR.
   return null;
 }
+
+// The library's QR refresh callback reads this option dynamically. Keep it in
+// sync when switching an existing browser to phone-code linking.
+export function setLoginMode(client, state, mode, phone = "") {
+  client.options.pairWithPhoneNumber ||= {};
+  Object.assign(client.options.pairWithPhoneNumber, {
+    phoneNumber: mode === "code" ? phone : "",
+    showNotification: true,
+    intervalMs: 180000,
+  });
+  state.authMode = mode;
+  state.loginPhone = mode === "code" ? phone : "";
+  state.pairingCode = null;
+  state.pairingCodeAt = null;
+  if (mode === "code") {
+    state.qr = "";
+    state.qrImage = "";
+    state.status = "pairing";
+  }
+}

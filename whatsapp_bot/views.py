@@ -47,7 +47,7 @@ def whatsapp_connect(request, name):
         phone = data.get("phone", connection.phone or "")
         connection.status = (
             WhatsAppConnection.Statuses.CONNECTED if status == "ready"
-            else WhatsAppConnection.Statuses.QR_PENDING if status in {"qr", "starting", "authenticated"}
+            else WhatsAppConnection.Statuses.QR_PENDING if status in {"qr", "pairing", "starting", "authenticated"}
             else WhatsAppConnection.Statuses.ERROR
         )
         connection.phone = phone
@@ -67,6 +67,7 @@ def whatsapp_connect(request, name):
         "name": name,
         "now": timezone.now(),
         "bridge_status": status if not bridge_error else "error",
+        "auth_mode": data.get("auth_mode", "qr") if not bridge_error else "qr",
     })
 
 
@@ -79,6 +80,7 @@ def whatsapp_pairing_code(request, name):
     connection, _ = WhatsAppConnection.objects.get_or_create(name=name)
     pairing_code = None
     error = ""
+    phone = connection.phone or ""
 
     if request.method == "POST":
         phone = request.POST.get("phone", "").strip().replace(" ", "").replace("+", "")
@@ -89,13 +91,34 @@ def whatsapp_pairing_code(request, name):
             logger.warning("WhatsApp pairing failed for %s: %s", name, exc)
             error = "WhatsApp no pudo generar el código. Espera un minuto y vuelve a intentarlo, o utiliza el QR. No se ha borrado el acceso guardado."
 
+    if request.method == "GET":
+        try:
+            progress = bridge.pairing_progress(connection)
+            if progress.get("status") == "ready":
+                return redirect("whatsapp_bot:connect", name=name)
+            pairing_code = progress.get("code")
+        except bridge.WhatsAppBridgeError:
+            pass
+
     return render(request, "whatsapp_bot/pairing_code.html", {
         "name": name,
         "connection": connection,
         "pairing_code": pairing_code,
+        "phone": phone,
         "error": error,
         "now": timezone.now(),
     })
+
+
+@never_cache
+def whatsapp_pairing_progress(request, name):
+    if not has_access(request, name):
+        return JsonResponse({"error": "access_expired"}, status=403)
+    try:
+        data = bridge.pairing_progress(WhatsAppConnection.objects.get_or_create(name=name)[0])
+    except bridge.WhatsAppBridgeError:
+        return JsonResponse({"error": "bridge_unavailable"}, status=503)
+    return JsonResponse({k: data.get(k) for k in ("status", "auth_mode", "code", "code_at")})
 
 
 @never_cache

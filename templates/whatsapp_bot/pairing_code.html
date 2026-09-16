@@ -45,7 +45,7 @@
   {% if pairing_code and pairing_code != "already connected" %}
     <p class="sub">Introduce este código en tu teléfono</p>
     <div class="code-box">
-      <div class="code">{{ pairing_code }}</div>
+      <div class="code" id="live-code">{{ pairing_code }}</div>
       <div class="hint">El código caduca en unos minutos</div>
     </div>
     <div class="steps">
@@ -68,7 +68,7 @@
     <form method="post" class="field-block">
       {% csrf_token %}
       <label for="phone">Número de teléfono (con prefijo, sin +)</label>
-      <input id="phone" type="tel" name="phone" placeholder="34643996431" value="34643996431" autofocus>
+      <input id="phone" type="tel" name="phone" placeholder="34…" value="{{ phone }}" required autofocus>
       <button type="submit" class="btn">Obtener código →</button>
       {% if error %}<div class="err">{{ error }}</div>{% endif %}
     </form>
@@ -78,6 +78,44 @@
   {% endif %}
 </div>
 <script>
+const liveCode = document.getElementById('live-code');
+const progress = document.createElement('p');
+progress.className = 'hint';
+document.querySelector('.card').appendChild(progress);
+let polling = true;
+async function refreshLinking() {
+  if (!polling) return;
+  try {
+    const response = await fetch("{% url 'whatsapp_bot:pairing_progress' name %}", {cache: 'no-store'});
+    if (response.status === 403) {
+      polling = false;
+      progress.textContent = 'Acceso caducado. Vuelve a entrar con la contraseña.';
+      return;
+    }
+    if (!response.ok) throw new Error('unavailable');
+    const data = await response.json();
+    if (data.status === 'ready') {
+      polling = false;
+      window.location.replace("{% url 'whatsapp_bot:connect' name %}");
+      return;
+    }
+    if (data.status === 'authenticated') {
+      if (liveCode) liveCode.textContent = '✓';
+      progress.textContent = 'Teléfono vinculado. Sincronizando WhatsApp…';
+    } else if (data.code && liveCode) {
+      liveCode.textContent = data.code;
+      progress.textContent = 'Esperando que introduzcas este código en WhatsApp.';
+    } else {
+      if (liveCode) liveCode.textContent = '—';
+      progress.textContent = 'No hay un código activo. Solicita uno nuevo o utiliza el QR.';
+    }
+  } catch (_) {
+    progress.textContent = 'Comprobando conexión…';
+  } finally {
+    if (polling) setTimeout(refreshLinking, 3000);
+  }
+}
+refreshLinking();
 document.querySelectorAll('form').forEach(form => form.addEventListener('submit', () => {
   const button = form.querySelector('button[type="submit"]');
   if (button) { button.disabled = true; button.textContent = 'Solicitando…'; }

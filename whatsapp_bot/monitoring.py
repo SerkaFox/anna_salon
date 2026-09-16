@@ -35,7 +35,7 @@ def refresh_connection_status(name="main"):
         phone = str(result.get("phone") or phone or "").strip()
         if raw_status in {"ready", "connected"}:
             stored_status = WhatsAppConnection.Statuses.CONNECTED
-        elif raw_status in {"qr", "qr_pending", "starting", "initializing"}:
+        elif raw_status in {"qr", "pairing", "qr_pending", "starting", "initializing", "authenticated"}:
             stored_status = WhatsAppConnection.Statuses.QR_PENDING
         elif raw_status in {"disconnected", "unpaired", "unpaired_idle"}:
             stored_status = WhatsAppConnection.Statuses.DISCONNECTED

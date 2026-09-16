@@ -85,6 +85,10 @@ def cancel_pairing(connection):
     return _request(f"/sessions/{connection.name}/cancel-pairing", {}, timeout=25)
 
 
+def pairing_progress(connection):
+    return _request(f"/sessions/{connection.name}/pairing-progress", timeout=10)
+
+
 def send_buttons_message(connection, *, to_phone, body, buttons, title="", footer=""):
     """Send an interactive button message. buttons is a list of {"id": str, "body": str}."""
     return _request(

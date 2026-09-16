@@ -67,7 +67,7 @@ def whatsapp(config):
     if status != 'ready':
         if status in ('starting', 'authenticated') and time.time() - data.get('status_since', 0)/1000 < 120:
             return 'Запускается (льготные 120 секунд)'
-        reason = 'требуется вход по QR: https://brimoon.es/whatsapp/connect/main/' if status == 'qr' else 'мост не готов'
+        reason = 'ожидается вход по QR или коду: https://brimoon.es/whatsapp/connect/main/' if status in ('qr', 'pairing') else 'мост не готов'
         raise ValueError(str(status) + ' — ' + reason)
     actual = fetch(base + '/sessions/main/state', headers)
     if actual.get('wa_state') != 'CONNECTED':

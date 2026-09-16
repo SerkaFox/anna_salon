@@ -46,6 +46,33 @@ class ConnectAccessTests(TestCase):
     def test_other_sessions_not_accessible(self):
         self.assertEqual(self.client.get(reverse("whatsapp_bot:connect", args=["other"])).status_code, 404)
 
+    def test_pairing_progress_requires_password(self):
+        response = self.client.get(reverse('whatsapp_bot:pairing_progress', args=['main']))
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn(b'code_at', response.content)
+
+    @patch('whatsapp_bot.views.bridge.pairing_progress', return_value={'status': 'pairing', 'auth_mode': 'code', 'code': 'TEST-CODE', 'code_at': 1000, 'phone': 'private'})
+    def test_pairing_progress_returns_live_code_without_private_data(self, progress):
+        self.client.post(self.url, {'pin': '1234'})
+        response = self.client.get(reverse('whatsapp_bot:pairing_progress', args=['main']))
+        self.assertEqual(response.json()['code'], 'TEST-CODE')
+        self.assertNotIn('phone', response.json())
+        self.assertIn('no-store', response['Cache-Control'])
+
+    @patch('whatsapp_bot.views.bridge.pairing_progress', return_value={'status': 'pairing', 'code': 'LIVE-CODE'})
+    def test_pairing_page_uses_current_code(self, progress):
+        self.client.post(self.url, {'pin': '1234'})
+        response = self.client.get(reverse('whatsapp_bot:pairing_code', args=['main']))
+        self.assertContains(response, 'LIVE-CODE')
+        self.assertContains(response, 'pairing-progress')
+
+    @patch('whatsapp_bot.views.bridge.get_qr', return_value={'status': 'pairing', 'auth_mode': 'code', 'qr': 'ignored'})
+    def test_code_mode_page_does_not_show_qr(self, get_qr):
+        self.client.post(self.url, {'pin': '1234'})
+        response = self.client.get(self.url)
+        self.assertContains(response, 'Vinculación por número y código')
+        self.assertNotContains(response, '<img')
+
     def test_qr_is_protected_and_legacy_grant_rejected(self):
         session = self.client.session
         session["wa_connect_auth_main"] = True

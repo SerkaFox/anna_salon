@@ -1,7 +1,7 @@
 import express from "express";
 import qrcode from "qrcode";
 import pkg from "whatsapp-web.js";
-import { deadline, guardPageBindings, recoveryReason } from "./resilience.js";
+import { deadline, guardPageBindings, recoveryReason, setLoginMode } from "./resilience.js";
 
 // whatsapp-web.js calls requestPairingCode() without await inside initialize(),
 // so a WhatsApp API rejection becomes an unhandled promise rejection that would
@@ -210,13 +210,16 @@ function buildClient(sessionName) {
 function attachClientEvents(client, state) {
   for (const event of ["qr", "ready", "authenticated", "auth_failure", "disconnected"]) {
     client.on(event, detail => {
+      if (state.client !== client || (event === "qr" && state.authMode === "code")) return;
       state.statusSince = Date.now();
       console.log(`[whatsapp:${state.name}] event=${event}${event === "disconnected" || event === "auth_failure" ? ` reason=${String(detail)}` : ""}`);
     });
   }
   client.on("qr", async (qr) => {
+    if (state.client !== client || state.authMode === "code" || ["ready", "authenticated"].includes(state.status)) return;
     state.qr = qr;
     state.qrImage = await qrcode.toDataURL(qr);
+    if (state.client !== client || state.authMode === "code" || ["ready", "authenticated"].includes(state.status)) return;
     state.status = "qr";
     state.lastError = "";
 
@@ -238,6 +241,7 @@ function attachClientEvents(client, state) {
   });
 
   client.on("ready", () => {
+    if (state.client !== client) return;
     state.status = "ready";
     state.qr = "";
     state.qrImage = "";
@@ -245,28 +249,44 @@ function attachClientEvents(client, state) {
     state.faultAt = null;
     state.lastError = "";
     state.restartCount = 0;
+    state.pairingCode = null;
+    state.pairingCodeAt = null;
     const info = client.info || {};
     state.phone = info.wid?.user || "";
   });
 
   client.on("authenticated", () => {
+    if (state.client !== client) return;
     state.status = "authenticated";
     state.authenticatedAt = Date.now();
+    state.qr = "";
+    state.qrImage = "";
+    state.pairingCode = null;
   });
 
   client.on("auth_failure", (message) => {
+    if (state.client !== client) return;
     state.status = "auth_failure";
     state.lastError = String(message || "Authentication failed");
+    state.pairingCode = null;
+    state.pairingCodeAt = null;
   });
 
   client.on("disconnected", (reason) => {
+    if (state.client !== client) return;
     state.status = "disconnected";
     state.lastError = String(reason || "");
+    state.pairingCode = null;
+    state.pairingCodeAt = null;
     if (!/LOGOUT|UNPAIRED|CONFLICT/i.test(String(reason))) markFault(state, new Error(`Disconnected: ${reason}`));
   });
 
   client.on("code", (code) => {
+    if (state.client !== client || state.authMode !== "code" || ["ready", "authenticated"].includes(state.status)) return;
     state.pairingCode = code;
+    state.pairingCodeAt = Date.now();
+    state.status = "pairing";
+    state.statusSince = Date.now();
     console.log(`[whatsapp:${state.name}] pairing code received`);
   });
 
@@ -355,6 +375,9 @@ function getSession(name) {
     lastRestartAt: 0,
     restartCount: 0,
     pairingCode: null,
+    pairingCodeAt: null,
+    authMode: "qr",
+    loginPhone: "",
     pairingPhone: null,
     authenticatedAt: null,
     statusSince: Date.now(),
@@ -425,12 +448,16 @@ async function restartClient(state, { wipeAuth = false, reason = "" } = {}) {
   state.qrImage = "";
   state.lastError = "";
   state.pairingCode = null;
+  state.pairingCodeAt = null;
   state.pairingPhone = null;
   state.faultAt = null;
   state.statusSince = Date.now();
   state.authenticatedAt = null;
 
   const client = buildClient(state.name);
+  if (state.authMode === "code" && state.loginPhone) {
+    setLoginMode(client, state, "code", state.loginPhone);
+  }
   attachClientEvents(client, state);
   state.client = client;
 
@@ -463,6 +490,7 @@ function publicState(state) {
     error: state.lastError,
     restart_count: state.restartCount,
     pairing_busy: state.pairingBusy,
+    auth_mode: state.authMode,
     needs_attention: state.status !== "ready",
     fault_at: state.faultAt,
     status_since: state.statusSince
@@ -512,7 +540,7 @@ app.get("/sessions/:session/state", async (req, res) => {
   const state = getSession(req.params.session);
   if (!state.client) return res.json({ error: "no client" });
   try {
-    const waState = await state.client.getState();
+    const waState = await deadline(state.client.getState(), 5000, "state probe");
     // If WhatsApp is CONNECTED but the bridge event never fired, sync the status.
     if (waState === "CONNECTED" && state.status === "authenticated") {
       state.status = "ready";
@@ -838,34 +866,59 @@ app.post("/sessions/:session/cancel-pairing", async (req, res) => {
   if (state.status === "ready") return res.json({ ok: true, status: "ready" });
   if (state.pairingBusy) return res.status(409).json({ error: "Espera a que termine la solicitud actual." });
   state.pairingPhone = null;
-  state.pairingCode = null;
-  // Soft-restart to get a clean WhatsApp Web page in pure QR mode.
-  await restartClient(state, { wipeAuth: false, reason: "cancel_pairing" });
-  res.json({ ok: true, status: state.status });
+  if (state.status === "authenticated") return res.json({ ok: true, status: state.status });
+  setLoginMode(state.client, state, "qr");
+  try {
+    await deadline((async () => {
+      await state.client.cancelPairingCode();
+      // A browser restored directly in code mode has no QR listener yet.
+      await state.client.inject();
+    })(), 20000, "return to QR");
+    if (!["ready", "authenticated"].includes(state.status)) state.status = "qr";
+    res.json({ ok: true, status: state.status });
+  } catch (error) {
+    markFault(state, error);
+    res.status(503).json({ error: "No se pudo cambiar al QR. Espera un minuto." });
+  }
+});
+
+app.get("/sessions/:session/pairing-progress", (req, res) => {
+  const state = getSession(req.params.session);
+  res.set("Cache-Control", "no-store");
+  res.json({ ...publicState(state), code: state.pairingCode, code_at: state.pairingCodeAt });
 });
 
 app.post("/sessions/:session/pairing-code", async (req, res) => {
   const sessionName = normalizeSession(req.params.session);
   const phone = String(req.body?.phone || "").replace(/\D/g, "");
-  if (!phone) return res.status(400).json({ error: "phone is required" });
+  if (!/^[1-9][0-9]{7,14}$/.test(phone)) return res.status(400).json({ error: "Introduce el número completo con prefijo internacional." });
 
   const state = getSession(sessionName);
   if (state.status === "ready") return res.json({ code: null, note: "already connected" });
+  if (state.status === "authenticated") return res.status(409).json({ error: "La vinculación está sincronizando. No solicites otro código." });
 
   if (state.pairingBusy || state.restarting) {
     return res.status(409).json({ error: "Ya hay una solicitud en curso. Espera unos segundos." });
   }
-  if (state.status !== "qr" || state.faultAt) {
+  if (!["qr", "pairing"].includes(state.status) || state.faultAt) {
     if (state.status !== "starting") await restartClient(state, { reason: "pairing_recovery" });
     return res.status(409).json({ error: "La conexión se está recuperando sin borrar el acceso. Espera un minuto y vuelve a intentarlo." });
   }
   state.pairingBusy = true;
   state.pairingPhone = null;
-  state.pairingCode = null;
+  if (state.authMode === "code" && state.loginPhone === phone && state.pairingCode && Date.now() - state.pairingCodeAt < 170000) {
+    state.pairingBusy = false;
+    return res.json({ code: state.pairingCode });
+  }
+  setLoginMode(state.client, state, "code", phone);
   try {
     console.log(`[whatsapp:${sessionName}] pairing request started`);
     const code = await deadline(state.client.requestPairingCode(phone), 20000, "pairing");
+    if (["ready", "authenticated"].includes(state.status)) {
+      return res.json({ code: null, note: state.status === "ready" ? "already connected" : null });
+    }
     state.pairingCode = code;
+    state.pairingCodeAt = Date.now();
     state.lastError = "";
     console.log(`[whatsapp:${sessionName}] pairing request completed`);
     return res.json({ code });
@@ -898,7 +951,7 @@ setInterval(async () => {
       await restartClient(state, { reason });
       continue;
     }
-    if (state.status === "qr") {
+    if (["qr", "pairing"].includes(state.status)) {
       state.probing = true;
       try {
         const responsive = await deadline(state.client.pupPage.evaluate(() => (

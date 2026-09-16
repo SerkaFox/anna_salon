@@ -11,6 +11,7 @@ assert '<img ' not in response.text
 assert 'no-store' in response.headers.get('Cache-Control', '')
 assert session.get(url + "qr.png", timeout=30).status_code == 403
 assert session.get(url + "pairing/", timeout=30, allow_redirects=False).status_code == 302
+assert session.get(url + "pairing-progress/", timeout=30).status_code == 403
 print("Unauthenticated page/QR/pairing: protected; no-store enabled")
 
 csrf = session.cookies.get("csrftoken")
@@ -30,3 +31,11 @@ if '<img ' in response.text:
     print("Authenticated QR: fresh PNG available")
 else:
     print("Authenticated page rendered; QR not displayed (ready or initialization)")
+
+progress = session.get(url + 'pairing-progress/', timeout=30)
+assert progress.status_code == 200 and 'no-store' in progress.headers.get('Cache-Control', '')
+assert 'auth_mode' in progress.json()
+pairing = session.get(url + 'pairing/', timeout=30)
+assert pairing.status_code == 200
+assert 'pairing-progress/' in pairing.text
+print('Code-linking page and live progress: available; no pairing requested')
