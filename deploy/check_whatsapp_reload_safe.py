@@ -12,5 +12,5 @@ from whatsapp_bot.models import WhatsAppConnection
 
 state = get_status(WhatsAppConnection.objects.get(name='main'))
 print('Pre-reload WhatsApp status:', state.get('status'))
-if state.get('status') in ('ready', 'authenticated') or state.get('pairing_busy'):
+if state.get('status') in ('ready', 'authenticated', 'pairing') or state.get('pairing_busy'):
     raise SystemExit('Reload refused: WhatsApp connected or currently pairing')
