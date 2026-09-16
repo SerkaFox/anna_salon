@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WhatsApp — {{ name }}</title>
-  {% if not show_login and connection.status != "ready" %}
+  {% if not show_login and bridge_status != "ready" %}
   <meta http-equiv="refresh" content="4">
   {% endif %}
   <style>
@@ -53,10 +53,10 @@
   <h1>WhatsApp · {{ name }}</h1>
 
   {% if show_login %}
-    <p class="sub">Introduce el PIN de acceso</p>
+    <p class="sub">Introduce la contraseña de acceso</p>
     <form method="post" class="login-block">
       {% csrf_token %}
-      <label for="wa_pin">PIN</label>
+      <label for="wa_pin">Contraseña</label>
       <input id="wa_pin" type="password" name="pin" inputmode="numeric" pattern="[0-9]*"
              autocomplete="off" autofocus placeholder="····" style="font-size:2rem;letter-spacing:0.4em;text-align:center;">
       <button type="submit">Entrar →</button>
@@ -66,14 +66,14 @@
   {% else %}
   <p class="sub">{{ now|date:"d/m/Y H:i:s" }}</p>
 
-  {% if connection.status == "ready" %}
+  {% if bridge_status == "ready" %}
     <div class="status ready">✓ Conectado</div>
     <div class="phone">{{ connection.phone }}</div>
     <p class="hint">El bot está activo y enviando mensajes desde este número.</p>
 
   {% elif bridge_error %}
     <div class="status error">✗ Error de bridge</div>
-    <div class="err">{{ bridge_error }}</div>
+    <div class="err">La conexión se está recuperando. Espera un minuto. El acceso guardado no se borra.</div>
 
   {% elif has_qr %}
     <div class="status qr">Escanea el QR</div>
@@ -92,11 +92,14 @@
     <p class="hint">El bridge está arrancando la sesión. La página se recarga automáticamente.</p>
   {% endif %}
 
-  <p class="hint" style="margin-top:28px;border-top:1px solid #2a2a2a;padding-top:16px;">
-    Para desconectar y generar nuevo QR:<br>
-    <code>python manage.py whatsapp_reset {{ connection.name }}</code>
-  </p>
+  <p class="hint">Acceso protegido durante 30 minutos. No compartas esta página ni el código QR.</p>
   {% endif %}{# end else (not show_login) #}
 </div>
+<script>
+document.querySelectorAll('form').forEach(form => form.addEventListener('submit', () => {
+  const button = form.querySelector('button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Espera…'; }
+}));
+</script>
 </body>
 </html>

@@ -1,0 +1,11 @@
+[Unit]
+Description=BRIMOON WhatsApp status and owner outage alerts
+After=network-online.target anna.service brimoon-whatsapp-bridge.service
+
+[Service]
+Type=oneshot
+User=seradmin
+WorkingDirectory=/home/seradmin/anna
+ExecStart=/home/seradmin/anna/venv/bin/python manage.py monitor_whatsapp_connection --session main --alert
+TimeoutStartSec=45
+NoNewPrivileges=true

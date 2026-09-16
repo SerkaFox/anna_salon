@@ -8,6 +8,7 @@ urlpatterns = [
     path("connect/<str:name>/", views.whatsapp_connect, name="connect"),
     path("connect/<str:name>/qr.png", views.whatsapp_qr_image, name="qr_image"),
     path("connect/<str:name>/pairing/", views.whatsapp_pairing_code, name="pairing_code"),
+    path("connect/<str:name>/return-to-qr/", views.whatsapp_return_to_qr, name="return_to_qr"),
     path("token/<str:token>/", views.login_link, name="login_link"),
     path("button-reply/", views.button_reply_webhook, name="button_reply"),
 ]

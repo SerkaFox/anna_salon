@@ -9,29 +9,27 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.views.decorators.cache import never_cache
 
 from . import bridge
 from .models import WhatsAppConnection, WhatsAppLoginLink, WhatsAppMessage
+from .connect_access import has_access, password_login
 
 logger = logging.getLogger(__name__)
 
 
+@never_cache
 def whatsapp_connect(request, name):
     login_error = ""
-    pin = getattr(settings, "WHATSAPP_CONNECT_PIN", "1234")
-    session_key = f"wa_connect_auth_{name}"
 
     # PIN login form submission
-    if request.method == "POST" and not request.session.get(session_key):
-        entered = request.POST.get("pin", "").strip()
-        if entered == pin:
-            request.session[session_key] = True
+    if request.method == "POST" and not has_access(request, name):
+        login_error = password_login(request, name)
+        if not login_error:
             return redirect(request.path)
-        else:
-            login_error = "PIN incorrecto."
 
     # Show PIN form if not authenticated via session or Django
-    if not request.session.get(session_key) and not request.user.is_authenticated:
+    if not has_access(request, name):
         return render(request, "whatsapp_bot/connect.html", {
             "show_login": True,
             "login_error": login_error,
@@ -47,9 +45,13 @@ def whatsapp_connect(request, name):
         has_qr = bool(data.get("qr", ""))
         status = data.get("status", connection.status)
         phone = data.get("phone", connection.phone or "")
-        connection.status = status
+        connection.status = (
+            WhatsAppConnection.Statuses.CONNECTED if status == "ready"
+            else WhatsAppConnection.Statuses.QR_PENDING if status in {"qr", "starting", "authenticated"}
+            else WhatsAppConnection.Statuses.ERROR
+        )
         connection.phone = phone
-        connection.last_error = ""
+        connection.last_error = str(data.get("error") or "")
         connection.save(update_fields=["status", "phone", "last_error", "updated_at"])
     except bridge.WhatsAppBridgeError as exc:
         bridge_error = str(exc)
@@ -64,15 +66,15 @@ def whatsapp_connect(request, name):
         "bridge_error": bridge_error,
         "name": name,
         "now": timezone.now(),
+        "bridge_status": status if not bridge_error else "error",
     })
 
 
+@never_cache
 def whatsapp_pairing_code(request, name):
     """Request a WhatsApp pairing code (no-QR alternative)."""
-    pin = getattr(settings, "WHATSAPP_CONNECT_PIN", "1234")
-    session_key = f"wa_connect_auth_{name}"
-    if not request.session.get(session_key) and not request.user.is_authenticated:
-        return HttpResponse(status=403)
+    if not has_access(request, name):
+        return redirect("whatsapp_bot:connect", name=name)
 
     connection, _ = WhatsAppConnection.objects.get_or_create(name=name)
     pairing_code = None
@@ -84,7 +86,8 @@ def whatsapp_pairing_code(request, name):
             result = bridge.request_pairing_code(connection, phone)
             pairing_code = result.get("code") or result.get("note")
         except bridge.WhatsAppBridgeError as exc:
-            error = str(exc)
+            logger.warning("WhatsApp pairing failed for %s: %s", name, exc)
+            error = "WhatsApp no pudo generar el código. Espera un minuto y vuelve a intentarlo, o utiliza el QR. No se ha borrado el acceso guardado."
 
     return render(request, "whatsapp_bot/pairing_code.html", {
         "name": name,
@@ -95,11 +98,10 @@ def whatsapp_pairing_code(request, name):
     })
 
 
+@never_cache
 def whatsapp_qr_image(request, name):
     """Return the current QR code as a PNG image."""
-    pin = getattr(settings, "WHATSAPP_CONNECT_PIN", "1234")
-    session_key = f"wa_connect_auth_{name}"
-    if not request.session.get(session_key) and not request.user.is_authenticated:
+    if not has_access(request, name):
         return HttpResponse(status=403)
 
     try:
@@ -117,6 +119,18 @@ def whatsapp_qr_image(request, name):
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return HttpResponse(buf.getvalue(), content_type="image/png")
+
+
+@never_cache
+@require_POST
+def whatsapp_return_to_qr(request, name):
+    if not has_access(request, name):
+        return redirect("whatsapp_bot:connect", name=name)
+    try:
+        bridge.cancel_pairing(WhatsAppConnection.objects.get_or_create(name=name)[0])
+    except bridge.WhatsAppBridgeError as exc:
+        logger.warning("WhatsApp return to QR failed for %s: %s", name, exc)
+    return redirect("whatsapp_bot:connect", name=name)
 
 
 @csrf_exempt
@@ -339,11 +353,15 @@ def button_reply_webhook(request):
 
 
 # Keep old token-based view for backwards compatibility
+@never_cache
 def login_link(request, token):
     try:
         login_obj = WhatsAppLoginLink.objects.select_related("connection").get(token=token)
     except WhatsAppLoginLink.DoesNotExist as exc:
         raise Http404 from exc
+
+    if not has_access(request, login_obj.connection.name):
+        return redirect("whatsapp_bot:connect", name=login_obj.connection.name)
 
     qr_payload = None
     bridge_error = ""

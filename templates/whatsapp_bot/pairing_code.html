@@ -54,7 +54,10 @@
       3. <strong>Vincular con número de teléfono</strong><br>
       4. Introduce el código de arriba
     </div>
-    <a class="back" href="/whatsapp/connect/{{ name }}/">← Volver a la página principal</a>
+    <a class="back" href="/whatsapp/connect/{{ name }}/">← Comprobar conexión</a>
+    <form method="post" action="{% url 'whatsapp_bot:return_to_qr' name %}">
+      {% csrf_token %}<button type="submit" class="btn">Volver al QR sin borrar el acceso</button>
+    </form>
 
   {% elif pairing_code == "already connected" %}
     <p class="sub" style="color:#25d366;font-size:15px;">✓ Ya está conectado</p>
@@ -69,8 +72,16 @@
       <button type="submit" class="btn">Obtener código →</button>
       {% if error %}<div class="err">{{ error }}</div>{% endif %}
     </form>
-    <a class="back" href="/whatsapp/connect/{{ name }}/">← Usar QR en su lugar</a>
+    <form method="post" action="{% url 'whatsapp_bot:return_to_qr' name %}">
+      {% csrf_token %}<button type="submit" class="btn">Usar QR sin borrar el acceso</button>
+    </form>
   {% endif %}
 </div>
+<script>
+document.querySelectorAll('form').forEach(form => form.addEventListener('submit', () => {
+  const button = form.querySelector('button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Solicitando…'; }
+}));
+</script>
 </body>
 </html>

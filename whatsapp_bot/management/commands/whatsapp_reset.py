@@ -9,15 +9,18 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("name", help="Connection name (e.g. main, aura_demo)")
+        parser.add_argument("--confirm-delete-login", action="store_true")
 
     def handle(self, *args, **options):
+        if not options["confirm_delete_login"]:
+            raise CommandError("Saved login NOT deleted. Explicit --confirm-delete-login is required.")
         name = options["name"]
         connection, created = WhatsAppConnection.objects.get_or_create(name=name)
         if created:
             self.stdout.write(f"Created new connection '{name}'.")
 
         try:
-            bridge.reset_session(connection)
+            bridge.reset_session(connection, confirm=True)
             self.stdout.write(self.style.SUCCESS(f"Bridge session '{name}' reset OK."))
         except bridge.WhatsAppBridgeError as exc:
             raise CommandError(f"Bridge error: {exc}")

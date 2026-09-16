@@ -1,12 +1,16 @@
 import express from "express";
 import qrcode from "qrcode";
 import pkg from "whatsapp-web.js";
+import { deadline, guardPageBindings, recoveryReason } from "./resilience.js";
 
 // whatsapp-web.js calls requestPairingCode() without await inside initialize(),
 // so a WhatsApp API rejection becomes an unhandled promise rejection that would
 // crash Node. Catch it here so the bridge stays alive.
 process.on("unhandledRejection", (reason) => {
-  console.error("[bridge] unhandled rejection (suppressed crash):", reason?.message || reason);
+  console.error("[bridge] unhandled rejection:", reason?.stack || reason);
+  if (/context|binding|protocol|target closed|session closed/i.test(String(reason?.message || reason))) {
+    for (const state of sessions.values()) markFault(state, reason);
+  }
 });
 
 const { Client, LocalAuth, Buttons, List } = pkg;
@@ -22,7 +26,7 @@ const BUTTON_REPLY_WEBHOOK_URL = process.env.WHATSAPP_BUTTON_REPLY_WEBHOOK_URL |
 // Self-healing tuning. A "soft" restart recreates the Puppeteer/browser
 // client but keeps the LocalAuth session folder on disk, so it reconnects
 // without requiring a new QR scan. Only /sessions/:session/reset wipes auth.
-const HEALTH_CHECK_INTERVAL_MS = Number(process.env.WHATSAPP_HEALTHCHECK_INTERVAL_MS || 3 * 60 * 1000);
+const HEALTH_CHECK_INTERVAL_MS = Number(process.env.WHATSAPP_HEALTHCHECK_INTERVAL_MS || 60000);
 const HEALTH_CHECK_TIMEOUT_MS = Number(process.env.WHATSAPP_HEALTHCHECK_TIMEOUT_MS || 15000);
 const RESTART_COOLDOWN_MS = Number(process.env.WHATSAPP_RESTART_COOLDOWN_MS || 60000);
 const MAX_CONSECUTIVE_RESTARTS = Number(process.env.WHATSAPP_MAX_AUTO_RESTARTS || 5);
@@ -43,6 +47,43 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   return next();
+}
+
+function markFault(state, error) {
+  state.lastError = error?.message || String(error);
+  state.faultAt ||= Date.now();
+  state.qr = "";
+  state.qrImage = "";
+  console.error(`[whatsapp:${state.name}] browser fault:`, error?.stack || error);
+}
+
+function initializeClient(client, state) {
+  const inject = client.inject.bind(client);
+  client.inject = async (...args) => {
+    const page = client.pupPage;
+    guardPageBindings(page);
+    if (page && !page.__brimoonDiagnostics) {
+      page.__brimoonDiagnostics = true;
+      page.on("framenavigated", frame => {
+        if (frame.parentFrame()) return;
+        let path = "unknown";
+        try { const url = new URL(frame.url()); path = url.origin + url.pathname; } catch (_) {}
+        console.log(`[whatsapp:${state.name}] navigation: ${path} logout_redirect=${frame.url().includes("post_logout=1")}`);
+      });
+      page.on("error", error => markFault(state, error));
+      page.on("close", () => { if (state.client === client && !state.restarting) markFault(state, new Error("browser page closed")); });
+    }
+    try { return await inject(...args); }
+    catch (error) {
+      if (state.client === client && !state.restarting) markFault(state, error);
+      throw error;
+    }
+  };
+  client.initialize().catch(error => {
+    if (state.client !== client) return;
+    state.status = "error";
+    markFault(state, error);
+  });
 }
 
 function isExplicitDeclineReply(value) {
@@ -147,6 +188,7 @@ function normalizeSession(value) {
 function buildClient(sessionName) {
   const puppeteer = {
     headless: true,
+    protocolTimeout: 30000,
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
   };
   if (CHROME_PATH) {
@@ -166,6 +208,12 @@ function buildClient(sessionName) {
 }
 
 function attachClientEvents(client, state) {
+  for (const event of ["qr", "ready", "authenticated", "auth_failure", "disconnected"]) {
+    client.on(event, detail => {
+      state.statusSince = Date.now();
+      console.log(`[whatsapp:${state.name}] event=${event}${event === "disconnected" || event === "auth_failure" ? ` reason=${String(detail)}` : ""}`);
+    });
+  }
   client.on("qr", async (qr) => {
     state.qr = qr;
     state.qrImage = await qrcode.toDataURL(qr);
@@ -174,14 +222,14 @@ function attachClientEvents(client, state) {
 
     // If a pairing code was requested, call requestPairingCode now that the
     // page is in the correct auth-needed state (qr event confirms this).
-    if (state.pairingPhone) {
+    if (state.pairingPhone && !state.pairingBusy) {
       const phone = state.pairingPhone;
       state.pairingPhone = null; // clear now so subsequent QR events don't re-trigger
       console.log(`[whatsapp:${state.name}] QR ready — requesting pairing code for ${phone}`);
       try {
-        const code = await client.requestPairingCode(phone);
+        const code = await deadline(client.requestPairingCode(phone), 20000, "pairing");
         state.pairingCode = code;
-        console.log(`[whatsapp:${state.name}] pairing code: ${code}`);
+        console.log(`[whatsapp:${state.name}] pairing code issued`);
       } catch (err) {
         console.error(`[whatsapp:${state.name}] requestPairingCode error:`, err?.message || err);
         state.lastError = err?.message || String(err);
@@ -194,6 +242,8 @@ function attachClientEvents(client, state) {
     state.qr = "";
     state.qrImage = "";
     state.readyAt = new Date().toISOString();
+    state.faultAt = null;
+    state.lastError = "";
     state.restartCount = 0;
     const info = client.info || {};
     state.phone = info.wid?.user || "";
@@ -212,11 +262,12 @@ function attachClientEvents(client, state) {
   client.on("disconnected", (reason) => {
     state.status = "disconnected";
     state.lastError = String(reason || "");
+    if (!/LOGOUT|UNPAIRED|CONFLICT/i.test(String(reason))) markFault(state, new Error(`Disconnected: ${reason}`));
   });
 
   client.on("code", (code) => {
     state.pairingCode = code;
-    console.log(`[whatsapp:${state.name}] pairing code received: ${code}`);
+    console.log(`[whatsapp:${state.name}] pairing code received`);
   });
 
   client.on("vote_update", async (vote) => {
@@ -306,6 +357,11 @@ function getSession(name) {
     pairingCode: null,
     pairingPhone: null,
     authenticatedAt: null,
+    statusSince: Date.now(),
+    faultAt: null,
+    pairingBusy: false,
+    probing: false,
+    recentRestarts: [],
   };
 
   const client = buildClient(sessionName);
@@ -313,10 +369,7 @@ function getSession(name) {
   state.client = client;
   sessions.set(sessionName, state);
 
-  client.initialize().catch((error) => {
-    state.status = "error";
-    state.lastError = error?.message || String(error);
-  });
+  initializeClient(client, state);
 
   return state;
 }
@@ -335,8 +388,9 @@ async function restartClient(state, { wipeAuth = false, reason = "" } = {}) {
     if (now - state.lastRestartAt < RESTART_COOLDOWN_MS) {
       return;
     }
-    if (state.restartCount >= MAX_CONSECUTIVE_RESTARTS) {
-      state.lastError = `Auto-restart limit reached (${MAX_CONSECUTIVE_RESTARTS}); manual /reset required.`;
+    state.recentRestarts = state.recentRestarts.filter(t => now - t < 3600000);
+    if (state.recentRestarts.length >= MAX_CONSECUTIVE_RESTARTS) {
+      state.lastError = `Recovery limit reached (${MAX_CONSECUTIVE_RESTARTS}/hour); administrator assistance required. Login files preserved.`;
       return;
     }
   }
@@ -344,14 +398,17 @@ async function restartClient(state, { wipeAuth = false, reason = "" } = {}) {
   state.restarting = true;
   state.lastRestartAt = now;
   state.restartCount += 1;
+  state.recentRestarts.push(now);
   console.log(`[whatsapp:${state.name}] restarting client (wipeAuth=${wipeAuth}, reason=${reason || "n/a"})`);
 
   try {
     if (state.client) {
-      await state.client.destroy();
+      await deadline(state.client.destroy(), 10000, "browser shutdown");
     }
   } catch (_) {
-    // ignore — client may already be in a broken/detached state
+    // Only this session's browser is targeted; never a shared process/service.
+    const pid = state.client?.pupBrowser?.process()?.pid;
+    if (pid) { try { process.kill(pid, "SIGTERM"); } catch (_) {} }
   }
 
   if (wipeAuth) {
@@ -368,16 +425,16 @@ async function restartClient(state, { wipeAuth = false, reason = "" } = {}) {
   state.qrImage = "";
   state.lastError = "";
   state.pairingCode = null;
+  state.pairingPhone = null;
+  state.faultAt = null;
+  state.statusSince = Date.now();
+  state.authenticatedAt = null;
 
   const client = buildClient(state.name);
   attachClientEvents(client, state);
   state.client = client;
 
-  client.initialize().catch((error) => {
-    state.status = "error";
-    state.lastError = error?.message || String(error);
-    console.error(`[whatsapp:${state.name}] initialize error:`, state.lastError);
-  });
+  initializeClient(client, state);
 
   state.restarting = false;
 }
@@ -404,7 +461,11 @@ function publicState(state) {
     phone: state.phone,
     ready_at: state.readyAt,
     error: state.lastError,
-    restart_count: state.restartCount
+    restart_count: state.restartCount,
+    pairing_busy: state.pairingBusy,
+    needs_attention: state.status !== "ready",
+    fault_at: state.faultAt,
+    status_since: state.statusSince
   };
 }
 
@@ -489,6 +550,9 @@ app.post("/sessions/:session/restart", async (req, res) => {
 
 // Destructive: wipes the saved session, always requires a new QR scan.
 app.post("/sessions/:session/reset", async (req, res) => {
+  if (req.body?.confirm !== "DELETE_SAVED_LOGIN") {
+    return res.status(400).json({ error: "Explicit DELETE_SAVED_LOGIN confirmation required" });
+  }
   const state = getSession(req.params.session);
   await restartClient(state, { wipeAuth: true, reason: "manual_reset" });
   res.json({ ok: true, session: state.name });
@@ -771,6 +835,8 @@ app.post("/sessions/:session/cancel-pairing", async (req, res) => {
   const sessionName = normalizeSession(req.params.session);
   const state = sessions.get(sessionName);
   if (!state) return res.status(404).json({ error: "session not found" });
+  if (state.status === "ready") return res.json({ ok: true, status: "ready" });
+  if (state.pairingBusy) return res.status(409).json({ error: "Espera a que termine la solicitud actual." });
   state.pairingPhone = null;
   state.pairingCode = null;
   // Soft-restart to get a clean WhatsApp Web page in pure QR mode.
@@ -786,40 +852,39 @@ app.post("/sessions/:session/pairing-code", async (req, res) => {
   const state = getSession(sessionName);
   if (state.status === "ready") return res.json({ code: null, note: "already connected" });
 
-  // Clear any stale code and set the phone so the qr event handler fires requestPairingCode.
+  if (state.pairingBusy || state.restarting) {
+    return res.status(409).json({ error: "Ya hay una solicitud en curso. Espera unos segundos." });
+  }
+  if (state.status !== "qr" || state.faultAt) {
+    if (state.status !== "starting") await restartClient(state, { reason: "pairing_recovery" });
+    return res.status(409).json({ error: "La conexión se está recuperando sin borrar el acceso. Espera un minuto y vuelve a intentarlo." });
+  }
+  state.pairingBusy = true;
+  state.pairingPhone = null;
   state.pairingCode = null;
-  state.pairingPhone = phone;
-
-  // If already in QR state, call requestPairingCode immediately (page is ready).
-  if (state.status === "qr" && state.client) {
-    console.log(`[whatsapp:${sessionName}] already in QR state — requesting pairing code for ${phone}`);
-    state.client.requestPairingCode(phone).then((code) => {
-      state.pairingCode = code;
-      state.pairingPhone = null; // clear so QR events don't re-trigger
-      console.log(`[whatsapp:${sessionName}] pairing code: ${code}`);
-    }).catch((err) => {
-      console.error(`[whatsapp:${sessionName}] requestPairingCode error:`, err?.message || err);
-      state.lastError = err?.message || String(err);
-    });
-  } else if (state.status !== "starting") {
-    // Not in a usable state — do a fresh reset so QR event fires.
-    await restartClient(state, { wipeAuth: true, reason: "pairing_code_request" });
-  }
-  // If status is "starting", just wait — the qr event will trigger requestPairingCode.
-
-  // Wait up to 120 s for the code to arrive.
-  const deadline = Date.now() + 120000;
-  while (Date.now() < deadline) {
-    if (state.pairingCode) {
-      return res.json({ code: state.pairingCode });
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  return res.status(504).json({ error: "timeout waiting for pairing code" });
+  try {
+    console.log(`[whatsapp:${sessionName}] pairing request started`);
+    const code = await deadline(state.client.requestPairingCode(phone), 20000, "pairing");
+    state.pairingCode = code;
+    state.lastError = "";
+    console.log(`[whatsapp:${sessionName}] pairing request completed`);
+    return res.json({ code });
+  } catch (error) {
+    markFault(state, error);
+    return res.status(504).json({ error: "WhatsApp no respondió. Se recuperará la conexión sin borrar el acceso. Espera un minuto o utiliza el QR." });
+  } finally { state.pairingBusy = false; }
 });
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`WhatsApp bridge listening on 0.0.0.0:${PORT}`);
+});
+
+process.once("SIGTERM", async () => {
+  for (const state of sessions.values()) {
+    state.restarting = true;
+    try { await deadline(state.client.destroy(), 8000, "shutdown"); } catch (_) {}
+  }
+  process.exit(0);
 });
 
 // Proactively probes every connected session so a detached/stuck browser
@@ -827,11 +892,30 @@ app.listen(PORT, "0.0.0.0", () => {
 // instead of only reacting after a send has already failed.
 setInterval(async () => {
   for (const state of sessions.values()) {
-    if (state.restarting) continue;
+    if (state.restarting || state.probing || state.pairingBusy) continue;
+    const reason = recoveryReason(state);
+    if (reason) {
+      await restartClient(state, { reason });
+      continue;
+    }
+    if (state.status === "qr") {
+      state.probing = true;
+      try {
+        const responsive = await deadline(state.client.pupPage.evaluate(() => (
+          document.readyState !== "loading" && Boolean(window.Debug?.VERSION)
+        )), HEALTH_CHECK_TIMEOUT_MS, "QR browser healthcheck");
+        if (!responsive && Date.now() - state.statusSince > 120000) {
+          markFault(state, new Error("QR page is not initialized"));
+        }
+      } catch (error) { markFault(state, error); }
+      finally { state.probing = false; }
+      continue;
+    }
 
     // If stuck in authenticated, check the actual WA state and auto-promote to ready.
     // If stuck for >90s it means initialize() stalled — restart to retry.
     if (state.status === "authenticated" && state.client) {
+      state.probing = true;
       const stuckMs = state.authenticatedAt ? Date.now() - state.authenticatedAt : 0;
       try {
         const waState = await Promise.race([
@@ -854,19 +938,24 @@ setInterval(async () => {
           await restartClient(state, { reason: "authenticated_stuck" });
         }
       }
+      state.probing = false;
       continue;
     }
 
     if (state.status !== "ready") continue;
-
+    state.probing = true;
     try {
-      await Promise.race([
-        state.client.getState(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("healthcheck timeout")), HEALTH_CHECK_TIMEOUT_MS))
-      ]);
+      const waState = await deadline(state.client.getState(), HEALTH_CHECK_TIMEOUT_MS, "healthcheck");
+      if (waState !== "CONNECTED") {
+        console.warn(`[whatsapp:${state.name}] actual state=${waState}, bridge was ready`);
+        state.status = ["UNPAIRED", "UNPAIRED_IDLE"].includes(waState) ? "qr" : "disconnected";
+        state.statusSince = Date.now();
+        state.lastError = `WhatsApp state: ${waState}`;
+        if (state.status === "disconnected") markFault(state, new Error(state.lastError));
+      }
     } catch (error) {
       console.warn(`[whatsapp:${state.name}] healthcheck failed, self-healing:`, error?.message || error);
       await restartClient(state, { reason: "healthcheck" });
-    }
+    } finally { state.probing = false; }
   }
 }, HEALTH_CHECK_INTERVAL_MS);

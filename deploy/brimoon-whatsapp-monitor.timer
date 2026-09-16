@@ -1,0 +1,10 @@
+[Unit]
+Description=Check BRIMOON WhatsApp every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+Unit=brimoon-whatsapp-monitor.service
+
+[Install]
+WantedBy=timers.target

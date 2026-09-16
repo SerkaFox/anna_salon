@@ -40,6 +40,8 @@ def _request(path, payload=None, *, timeout=15):
         raise WhatsAppBridgeError(f"Bridge HTTP {exc.code}: {detail}") from exc
     except URLError as exc:
         raise WhatsAppBridgeError(f"Bridge unavailable: {exc.reason}") from exc
+    except (TimeoutError, OSError) as exc:
+        raise WhatsAppBridgeError("WhatsApp no respondió a tiempo. Inténtalo de nuevo en un minuto.") from exc
     if not raw:
         return {}
     try:
@@ -56,8 +58,10 @@ def get_status(connection):
     return _request(f"/sessions/{connection.name}/status")
 
 
-def reset_session(connection):
-    return _request(f"/sessions/{connection.name}/reset", {})
+def reset_session(connection, *, confirm=False):
+    if not confirm:
+        raise WhatsAppBridgeError("Explicit confirmation required to delete saved WhatsApp login.")
+    return _request(f"/sessions/{connection.name}/reset", {"confirm": "DELETE_SAVED_LOGIN"})
 
 
 def send_message(connection, *, to_phone, body):
@@ -75,6 +79,10 @@ def send_message(connection, *, to_phone, body):
 def request_pairing_code(connection, phone):
     """Request a WhatsApp pairing code (no-QR linking). Returns {"code": "XXXX-XXXX"} or raises."""
     return _request(f"/sessions/{connection.name}/pairing-code", {"phone": phone}, timeout=30)
+
+
+def cancel_pairing(connection):
+    return _request(f"/sessions/{connection.name}/cancel-pairing", {}, timeout=25)
 
 
 def send_buttons_message(connection, *, to_phone, body, buttons, title="", footer=""):
