@@ -1,11 +1,13 @@
 from django.urls import path
 
 from . import views
+from .health import health
 
 
 app_name = "mobile_api"
 
 urlpatterns = [
+    path("health/", health, name="health"),
     path("app-update/", views.AppUpdateView.as_view(), name="app_update"),
     path("password-recovery/", views.PasswordRecoveryView.as_view(), name="password_recovery"),
     path("me/", views.MeView.as_view(), name="me"),

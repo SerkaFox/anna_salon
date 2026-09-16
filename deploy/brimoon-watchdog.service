@@ -1,0 +1,13 @@
+[Unit]
+Description=BRIMOON website API WhatsApp Telegram watchdog
+OnFailure=sergey-service-alert@%n.service
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=seradmin
+WorkingDirectory=/home/seradmin/anna
+ExecStart=/usr/bin/python3 /home/seradmin/anna/deploy/brimoon_watchdog.py
+TimeoutStartSec=100
+NoNewPrivileges=true
+UMask=0077
