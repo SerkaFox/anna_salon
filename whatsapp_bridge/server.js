@@ -186,20 +186,29 @@ function normalizeSession(value) {
 }
 
 function buildClient(sessionName) {
+  const chromePath = CHROME_PATH || "/usr/bin/google-chrome";
   const puppeteer = {
     headless: true,
+    executablePath: chromePath,
     protocolTimeout: 30000,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+    defaultViewport: { width: 1280, height: 800 },
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--window-size=1280,800",
+      "--lang=es-ES,es",
+    ]
   };
-  if (CHROME_PATH) {
-    puppeteer.executablePath = CHROME_PATH;
-  }
   return new Client({
     authStrategy: new LocalAuth({
       clientId: sessionName,
       dataPath: process.env.WHATSAPP_AUTH_DATA_PATH || "./sessions"
     }),
     puppeteer,
+    userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.128 Safari/537.36",
+    deviceName: "Linux",
+    browserName: "Chrome",
     // Pin to the latest locally-cached WhatsApp Web version so initialize()
     // doesn't stall trying to download the outdated default (2.3000.1017054665).
     webVersion: "2.3000.1045866108",
