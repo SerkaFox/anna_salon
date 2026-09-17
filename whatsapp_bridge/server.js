@@ -942,8 +942,17 @@ app.post("/sessions/:session/pairing-code", async (req, res) => {
     console.log(`[whatsapp:${sessionName}] pairing request completed`);
     return res.json({ code });
   } catch (error) {
-    markFault(state, error);
-    return res.status(504).json({ error: "WhatsApp no respondió. Se recuperará la conexión sin borrar el acceso. Espera un minuto o utiliza el QR." });
+    const msg = String(error?.message || error);
+    // "t" is WhatsApp's rate-limit / not-ready response — not a browser crash.
+    // markFault here would trigger a recovery restart that immediately retries
+    // requestPairingCode, creating a tight loop. Instead just surface the error
+    // and let the library's built-in intervalMs retry handle it.
+    if (msg !== "t" && !/^pairing timed out$/i.test(msg)) {
+      markFault(state, error);
+    } else {
+      state.lastError = msg;
+    }
+    return res.status(504).json({ error: "WhatsApp no generó el código. Espera 2-3 minutos y vuelve a intentarlo." });
   } finally { state.pairingBusy = false; }
 });
 
