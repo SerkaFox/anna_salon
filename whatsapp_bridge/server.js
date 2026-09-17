@@ -29,7 +29,7 @@ const BUTTON_REPLY_WEBHOOK_URL = process.env.WHATSAPP_BUTTON_REPLY_WEBHOOK_URL |
 const HEALTH_CHECK_INTERVAL_MS = Number(process.env.WHATSAPP_HEALTHCHECK_INTERVAL_MS || 60000);
 const HEALTH_CHECK_TIMEOUT_MS = Number(process.env.WHATSAPP_HEALTHCHECK_TIMEOUT_MS || 15000);
 const RESTART_COOLDOWN_MS = Number(process.env.WHATSAPP_RESTART_COOLDOWN_MS || 60000);
-const MAX_CONSECUTIVE_RESTARTS = Number(process.env.WHATSAPP_MAX_AUTO_RESTARTS || 5);
+const MAX_CONSECUTIVE_RESTARTS = Number(process.env.WHATSAPP_MAX_AUTO_RESTARTS || 10);
 const SEND_RECOVERY_TIMEOUT_MS = Number(process.env.WHATSAPP_SEND_RECOVERY_TIMEOUT_MS || 25000);
 
 const sessions = new Map();
@@ -249,6 +249,7 @@ function attachClientEvents(client, state) {
     state.faultAt = null;
     state.lastError = "";
     state.restartCount = 0;
+    state.recentRestarts = [];  // reset hourly limit after successful connection
     state.pairingCode = null;
     state.pairingCodeAt = null;
     const info = client.info || {};
@@ -278,7 +279,19 @@ function attachClientEvents(client, state) {
     state.lastError = String(reason || "");
     state.pairingCode = null;
     state.pairingCodeAt = null;
-    if (!/LOGOUT|UNPAIRED|CONFLICT/i.test(String(reason))) markFault(state, new Error(`Disconnected: ${reason}`));
+    if (/LOGOUT|UNPAIRED|CONFLICT/i.test(String(reason))) {
+      // WhatsApp-initiated logout: schedule an automatic soft restart so the
+      // bridge returns to QR/pairing without waiting for a manual reconnect.
+      // This does NOT count toward the hourly fault limit.
+      const delay = /LOGOUT/i.test(String(reason)) ? 15000 : 5000;
+      setTimeout(() => {
+        if (state.client === client || state.status === "disconnected") {
+          restartClient(state, { reason: `auto_${String(reason).toLowerCase()}` });
+        }
+      }, delay);
+    } else {
+      markFault(state, new Error(`Disconnected: ${reason}`));
+    }
   });
 
   client.on("code", (code) => {
@@ -407,14 +420,20 @@ async function restartClient(state, { wipeAuth = false, reason = "" } = {}) {
     return;
   }
   const now = Date.now();
+  // Auto-logout restarts (LOGOUT/UNPAIRED from WhatsApp) use a shorter cooldown
+  // and a separate counter so they don't consume the fault-recovery budget.
+  const isLogoutRestart = /^auto_(logout|unpaired|conflict)/.test(reason);
   if (!wipeAuth) {
-    if (now - state.lastRestartAt < RESTART_COOLDOWN_MS) {
+    const cooldown = isLogoutRestart ? 10000 : RESTART_COOLDOWN_MS;
+    if (now - state.lastRestartAt < cooldown) {
       return;
     }
-    state.recentRestarts = state.recentRestarts.filter(t => now - t < 3600000);
-    if (state.recentRestarts.length >= MAX_CONSECUTIVE_RESTARTS) {
-      state.lastError = `Recovery limit reached (${MAX_CONSECUTIVE_RESTARTS}/hour); administrator assistance required. Login files preserved.`;
-      return;
+    if (!isLogoutRestart) {
+      state.recentRestarts = state.recentRestarts.filter(t => now - t < 3600000);
+      if (state.recentRestarts.length >= MAX_CONSECUTIVE_RESTARTS) {
+        state.lastError = `Recovery limit reached (${MAX_CONSECUTIVE_RESTARTS}/hour); administrator assistance required. Login files preserved.`;
+        return;
+      }
     }
   }
 
