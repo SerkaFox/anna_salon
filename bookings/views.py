@@ -120,6 +120,7 @@ def booking_list(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
     source = request.GET.get("source", "").strip()
+    cancelled_since = request.GET.get("cancelled_since", "").strip()
 
     bookings = scope_bookings_queryset(
         Booking.objects.select_related(
@@ -142,6 +143,20 @@ def booking_list(request):
 
     if source:
         bookings = bookings.filter(source=source)
+
+    if cancelled_since == "today":
+        bookings = bookings.filter(
+            status=Booking.Statuses.CANCELLED,
+            updated_at__date=timezone.localdate(),
+        ).order_by("-updated_at")
+        status = Booking.Statuses.CANCELLED
+    elif cancelled_since == "week":
+        week_start = timezone.localdate() - timezone.timedelta(days=timezone.localdate().weekday())
+        bookings = bookings.filter(
+            status=Booking.Statuses.CANCELLED,
+            updated_at__date__gte=week_start,
+        ).order_by("-updated_at")
+        status = Booking.Statuses.CANCELLED
 
     bookings = list(bookings)
     for booking in bookings:
@@ -205,6 +220,7 @@ def booking_list(request):
         "query": query,
         "status": status,
         "source": source,
+        "cancelled_since": cancelled_since,
         "bookings_count": len(bookings),
         "status_choices": Booking.Statuses.choices,
         "source_choices": Booking.Sources.choices,
