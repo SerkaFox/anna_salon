@@ -100,7 +100,17 @@
 
   {% else %}
     <div class="status starting">⏳ Iniciando…</div>
-    <p class="hint">El bridge está arrancando la sesión. La página se recarga automáticamente.</p>
+    <p class="hint">El bridge está arrancando. Cuando esté listo puedes vincular con código.<br><br>
+      Si ya está listo y no aparece el QR, introduce tu número y solicita el código:
+    </p>
+    <form method="post" action="{% url 'whatsapp_bot:pairing_code' name %}" class="login-block" style="margin-top:16px;">
+      {% csrf_token %}
+      <label for="pair_phone">Número de teléfono (con prefijo, sin +)</label>
+      <input id="pair_phone" type="tel" name="phone" inputmode="tel"
+             placeholder="34612345678" autocomplete="tel" autofocus
+             style="text-align:center;letter-spacing:0.05em;font-size:1.1rem;">
+      <button type="submit">Obtener código →</button>
+    </form>
   {% endif %}
 
   <p class="hint">Acceso protegido durante 30 minutos. No compartas esta página ni el código QR.</p>

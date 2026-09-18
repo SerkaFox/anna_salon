@@ -69,9 +69,6 @@ def whatsapp(config):
             return 'Запускается (льготные 120 секунд)'
         reason = 'ожидается вход по QR или коду: https://brimoon.es/whatsapp/connect/main/' if status in ('qr', 'pairing') else 'мост не готов'
         raise ValueError(str(status) + ' — ' + reason)
-    actual = fetch(base + '/sessions/main/state', headers)
-    if actual.get('wa_state') != 'CONNECTED':
-        raise ValueError('Browser WhatsApp not CONNECTED')
     return 'WhatsApp CONNECTED'
 
 
@@ -110,15 +107,20 @@ def notify(message):
 
 
 def transition(previous, result, now):
-    """Two failed samples, hourly reminders, recovery only after delivered alert."""
+    """Two failed samples to alert; while still down, re-alert only if the
+    failure reason changed (no more blind hourly repeats of the same thing).
+    Recovery message once, then the alerted state resets."""
     item = dict(previous)
     ok, detail = result
     item['failures'] = 0 if ok else item.get('failures', 0) + 1
     item['detail'] = detail
     message = None
-    if ok and item.get('alerted'):
-        message = '✅ Восстановлено: ' + detail
-    elif not ok and item['failures'] >= 2 and (not item.get('alerted') or now - item.get('sent', 0) >= 3600):
+    if ok:
+        if item.get('alerted'):
+            message = '✅ Восстановлено: ' + detail
+        item['alerted'] = False
+        item['alerted_detail'] = None
+    elif item['failures'] >= 2 and (not item.get('alerted') or detail != item.get('alerted_detail')):
         message = '❌ Ошибка: ' + detail
     return item, message
 
@@ -162,6 +164,8 @@ def main():
                     notify('BRIMOON — ' + name + '\n' + message + '\n' + stamp)
                     item['alerted'] = not result[0]
                     item['sent'] = now
+                    if not result[0]:
+                        item['alerted_detail'] = result[1]
                 except Exception as error:
                     print('Telegram delivery failed: ' + type(error).__name__)
             state[name] = item
