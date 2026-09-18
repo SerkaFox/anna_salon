@@ -10,7 +10,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, DecimalField, Q, Sum
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, TruncDate
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -3051,6 +3051,32 @@ class CalendarDayView(MobileApiMixin, APIView):
     def get(self, request):
         selected_date = _parse_date_param(request)
         bookings = _mobile_bookings_queryset(get_bookings_for_day(selected_date), request.user)
+        cancellation_dates = []
+        cancelled_period = request.query_params.get("cancelled")
+        if cancelled_period is not None:
+            if request.user.role not in {"owner", "admin", "employee"}:
+                raise PermissionDenied("Sin acceso a las cancelaciones del salón.")
+            if cancelled_period not in {"all", "today", "week"}:
+                raise serializers.ValidationError({"cancelled": "Periodo inválido."})
+            bookings = _mobile_bookings_queryset(
+                Booking.objects.select_related("client", "employee", "service", "zone")
+                .prefetch_related("online_payments", "prepayment", "payments")
+                .filter(status=Booking.Statuses.CANCELLED),
+                request.user,
+            ).annotate(cancellation_recorded_at=Coalesce("cancelled_at", "updated_at"))
+            if cancelled_period != "all":
+                today = timezone.localdate()
+                lower_date = today if cancelled_period == "today" else today - timedelta(days=today.weekday())
+                lower, _ = get_day_bounds(lower_date)
+                _, upper = get_day_bounds(today)
+                bookings = bookings.filter(cancellation_recorded_at__gte=lower, cancellation_recorded_at__lt=upper)
+            cancellation_dates = [
+                {"date": item["visit_date"].isoformat(), "count": item["count"]}
+                for item in bookings.annotate(visit_date=TruncDate("start_at"))
+                .values("visit_date").annotate(count=Count("pk")).order_by("visit_date")
+            ]
+            day_start, day_end = get_day_bounds(selected_date)
+            bookings = bookings.filter(start_at__lt=day_end, end_at__gt=day_start).order_by("start_at", "pk")
         employees = _mobile_employees_queryset(Employee.objects.filter(is_active=True), request.user).order_by("first_name", "last_name")
         employee_payload = []
 
@@ -3077,6 +3103,7 @@ class CalendarDayView(MobileApiMixin, APIView):
             {
                 "date": selected_date.isoformat(),
                 "bookings": BookingSerializer(bookings, many=True, context={"request": request}).data,
+                "cancellation_dates": cancellation_dates,
                 "employees": employee_payload,
             }
         )

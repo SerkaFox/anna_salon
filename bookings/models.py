@@ -156,6 +156,23 @@ class Booking(models.Model):
 
     created_at = models.DateTimeField("Creada", auto_now_add=True)
     updated_at = models.DateTimeField("Actualizada", auto_now=True)
+    cancelled_at = models.DateTimeField("Cancelada", null=True, blank=True, db_index=True)
+
+    def save(self, *args, **kwargs):
+        fields = kwargs.get("update_fields")
+        tracks_status = fields is None or "status" in fields
+        changed = False
+        if tracks_status and self.status == self.Statuses.CANCELLED and self.cancelled_at is None:
+            previous = None if self._state.adding else type(self).objects.filter(pk=self.pk).values_list("status", flat=True).first()
+            if previous != self.Statuses.CANCELLED:
+                self.cancelled_at = timezone.now()
+                changed = True
+        elif tracks_status and self.status != self.Statuses.CANCELLED and self.cancelled_at is not None:
+            self.cancelled_at = None
+            changed = True
+        if changed and fields is not None:
+            kwargs["update_fields"] = set(fields) | {"cancelled_at"}
+        return super().save(*args, **kwargs)
 
     class Meta:
         ordering = ["-start_at"]
