@@ -113,3 +113,18 @@ class CancelledCalendarTests(TestCase):
         booking = self._create_booking(status=Booking.Statuses.CANCELLED)
         response = self.api_client.post(reverse('mobile_api:booking_restore', args=[booking.pk]), {'employee': booking.employee_id, 'start_at': self.base_start.isoformat()}, format='json')
         self.assertEqual(response.status_code, 400)
+
+    def test_restore_accepts_standard_editor_changes(self):
+        self.api_client.force_authenticate(self.owner_user)
+        booking = self._create_booking(status=Booking.Statuses.CANCELLED)
+        start = timezone.now().replace(hour=22, minute=0, second=0, microsecond=0) + timedelta(days=2)
+        old_price = booking.client_price_snapshot
+        response = self.api_client.post(reverse('mobile_api:booking_restore', args=[booking.pk]), {'employee': booking.employee_id, 'client': booking.client_id, 'start_at': start.isoformat(), 'extra_duration_minutes': 15, 'cleanup_duration_minutes': 15, 'notes': 'Restored via standard editor'}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        booking.refresh_from_db()
+        self.assertEqual(booking.notes, 'Restored via standard editor')
+        self.assertEqual(booking.extra_duration_minutes, 15)
+        self.assertEqual(booking.cleanup_duration_minutes, 15)
+        self.assertEqual(booking.end_at - booking.start_at, timedelta(minutes=booking.service.duration_minutes + 30))
+        self.assertEqual(booking.client_price_snapshot, old_price)
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)

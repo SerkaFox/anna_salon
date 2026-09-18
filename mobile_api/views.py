@@ -2806,15 +2806,26 @@ class BookingRestoreView(MobileApiMixin, APIView):
         # Serialize restorations targeting the same employee. Preserve historical
         # service/price/payment snapshots rather than rebuilding a new order.
         Employee.objects.select_for_update().get(pk=employee.pk)
-        end = start + (booking.end_at - booking.start_at)
-        zone = None
-        if booking.service.requires_zone:
+        previous = {'start_at': booking.start_at.isoformat(), 'employee_id': booking.employee_id}
+        previous_duration = booking.end_at - booking.start_at
+        editor = None
+        saved_prices = {name: getattr(booking, name) for name in ['price_snapshot', 'original_client_price_snapshot', 'client_price_snapshot', 'discount_amount_snapshot', 'employee_percent_snapshot', 'employee_amount_snapshot', 'salon_amount_snapshot', 'service_items_snapshot']}
+        same_services = 'services' not in request.data and (not request.data.get('service') or str(request.data['service']) == str(booking.service_id))
+        same_client = not request.data.get('client') or str(request.data['client']) == str(booking.client_id)
+        if any(name in request.data for name in ['client', 'service', 'notes', 'extra_duration_minutes', 'cleanup_duration_minutes']):
+            payload = _normalize_id_aliases(request.data)
+            payload['status'] = Booking.Statuses.CONFIRMED
+            payload.pop('prepayment_required', None)
+            editor = BookingWriteSerializer(instance=booking, data=payload, partial=True, context={'request': request})
+            editor.is_valid(raise_exception=True)
+        end = editor._booking_form.cleaned_data['end_at'] if editor else start + previous_duration
+        zone = editor._booking_form.cleaned_data.get('zone') if editor else None
+        if editor is None and booking.service.requires_zone:
             zone = find_available_zone(booking.service, start, end, exclude_booking_id=booking.pk, employee=employee)
             if zone is None:
                 raise serializers.ValidationError({"zone": "No hay zona libre para este horario."})
-        previous = {'start_at': booking.start_at.isoformat(), 'employee_id': booking.employee_id}
         service_ids = {item.get('service_id') for item in booking.service_items_snapshot if item.get('service_id')}
-        if service_ids and employee.services.filter(pk__in=service_ids).count() != len(service_ids):
+        if same_services and service_ids and employee.services.filter(pk__in=service_ids).count() != len(service_ids):
             raise serializers.ValidationError({'employee': 'Este empleado no realiza todos los servicios de la reserva.'})
         form = BookingForm(data={
             'client': booking.client_id, 'employee': employee.pk,
@@ -2824,7 +2835,7 @@ class BookingRestoreView(MobileApiMixin, APIView):
             'status': Booking.Statuses.CONFIRMED, 'source': booking.source,
             'notes': booking.notes,
         }, instance=booking, allow_outside_schedule=True)
-        if not form.is_valid():
+        if editor is None and not form.is_valid():
             raise serializers.ValidationError(dict(form.errors))
         from whatsapp_bot.models import WhatsAppMessage
         # Keep old messages as history, but detach the previous appointment
@@ -2835,6 +2846,13 @@ class BookingRestoreView(MobileApiMixin, APIView):
         archived_message_ids = list(lifecycle.values_list('pk', flat=True))
         lifecycle.exclude(status=WhatsAppMessage.Statuses.SENT).update(status=WhatsAppMessage.Statuses.SKIPPED)
         lifecycle.update(booking=None)
+        if editor is not None:
+            booking = editor.save()
+            end, zone = booking.end_at, booking.zone
+            if same_services and same_client:
+                for name, value in saved_prices.items():
+                    setattr(booking, name, value)
+                booking.save(update_fields=list(saved_prices))
         booking.start_at, booking.end_at, booking.employee, booking.zone = start, end, employee, zone
         booking.status = Booking.Statuses.CONFIRMED
         booking.client_response = Booking.ClientResponses.PENDING
