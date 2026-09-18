@@ -65,3 +65,51 @@ class CancelledCalendarTests(TestCase):
         booking.save(update_fields=['status'])
         booking.refresh_from_db()
         self.assertIsNone(booking.cancelled_at)
+
+    def test_restore_preserves_order_and_prevents_duplicate_restoration(self):
+        self.api_client.force_authenticate(self.owner_user)
+        booking = self._create_booking(status=Booking.Statuses.CANCELLED)
+        start = timezone.now().replace(hour=22, minute=0, second=0, microsecond=0) + timedelta(days=2)
+        snapshots = (booking.duration_snapshot, booking.client_price_snapshot, booking.service_items_snapshot)
+        response = self.api_client.post(reverse('mobile_api:booking_restore', args=[booking.pk]), {'employee': booking.employee_id, 'start_at': start.isoformat()}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
+        self.assertIsNone(booking.cancelled_at)
+        self.assertIsNone(booking.prepayment_deadline_at)
+        self.assertEqual(snapshots, (booking.duration_snapshot, booking.client_price_snapshot, booking.service_items_snapshot))
+        response = self.api_client.post(reverse('mobile_api:booking_restore', args=[booking.pk]), {'employee': booking.employee_id, 'start_at': start.isoformat()}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_restore_conflict_and_client_denied(self):
+        self.api_client.force_authenticate(self.owner_user)
+        start = timezone.now().replace(hour=12, minute=0, second=0, microsecond=0) + timedelta(days=3)
+        self._create_booking(start_at=start)
+        booking = self._create_booking(status=Booking.Statuses.CANCELLED)
+        response = self.api_client.post(reverse('mobile_api:booking_restore', args=[booking.pk]), {'employee': booking.employee_id, 'start_at': start.isoformat()}, format='json')
+        self.assertEqual(response.status_code, 400)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, Booking.Statuses.CANCELLED)
+        self.owner_user.role = 'client'
+        self.owner_user.save(update_fields=['role'])
+        response = self.api_client.post(reverse('mobile_api:booking_restore', args=[booking.pk]), {'employee': booking.employee_id, 'start_at': start.isoformat()}, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_restore_archives_old_reminders_without_erasing_delivery_history(self):
+        from whatsapp_bot.models import WhatsAppConnection, WhatsAppMessage
+        self.api_client.force_authenticate(self.owner_user)
+        booking = self._create_booking(status=Booking.Statuses.CANCELLED)
+        message = WhatsAppMessage.objects.create(connection=WhatsAppConnection.objects.get_or_create(name='main')[0], booking=booking, client=booking.client, kind=WhatsAppMessage.Kinds.REMINDER_24H, to_phone='34600000000', body='Old visit', status=WhatsAppMessage.Statuses.SENT, sent_at=timezone.now())
+        start = timezone.now().replace(hour=22, minute=0, second=0, microsecond=0) + timedelta(days=2)
+        response = self.api_client.post(reverse('mobile_api:booking_restore', args=[booking.pk]), {'employee': booking.employee_id, 'start_at': start.isoformat()}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        message.refresh_from_db()
+        self.assertIsNone(message.booking_id)
+        self.assertEqual(message.status, WhatsAppMessage.Statuses.SENT)
+        self.assertEqual(message.body, 'Old visit')
+
+    def test_restore_rejects_past_time(self):
+        self.api_client.force_authenticate(self.owner_user)
+        booking = self._create_booking(status=Booking.Statuses.CANCELLED)
+        response = self.api_client.post(reverse('mobile_api:booking_restore', args=[booking.pk]), {'employee': booking.employee_id, 'start_at': self.base_start.isoformat()}, format='json')
+        self.assertEqual(response.status_code, 400)

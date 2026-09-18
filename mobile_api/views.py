@@ -2783,6 +2783,73 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
         )
 
 
+class BookingRestoreView(MobileApiMixin, APIView):
+    @transaction.atomic
+    def post(self, request, pk):
+        from bookings.forms import BookingForm
+
+        if request.user.role not in {"owner", "admin", "employee"}:
+            raise PermissionDenied("Solo el personal puede restaurar reservas.")
+        booking = generics.get_object_or_404(Booking.objects.select_for_update(), pk=pk)
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        if booking.status != Booking.Statuses.CANCELLED:
+            raise serializers.ValidationError({"detail": "Esta reserva ya no está cancelada."})
+        fields = serializers.Serializer(data=request.data)
+        fields.fields['start_at'] = serializers.DateTimeField()
+        fields.fields['employee'] = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True))
+        fields.is_valid(raise_exception=True)
+        start = fields.validated_data['start_at']
+        employee = fields.validated_data['employee']
+        if start <= timezone.now():
+            raise serializers.ValidationError({"start_at": "Selecciona una fecha futura."})
+        # Serialize restorations targeting the same employee. Preserve historical
+        # service/price/payment snapshots rather than rebuilding a new order.
+        Employee.objects.select_for_update().get(pk=employee.pk)
+        end = start + (booking.end_at - booking.start_at)
+        zone = None
+        if booking.service.requires_zone:
+            zone = find_available_zone(booking.service, start, end, exclude_booking_id=booking.pk, employee=employee)
+            if zone is None:
+                raise serializers.ValidationError({"zone": "No hay zona libre para este horario."})
+        previous = {'start_at': booking.start_at.isoformat(), 'employee_id': booking.employee_id}
+        service_ids = {item.get('service_id') for item in booking.service_items_snapshot if item.get('service_id')}
+        if service_ids and employee.services.filter(pk__in=service_ids).count() != len(service_ids):
+            raise serializers.ValidationError({'employee': 'Este empleado no realiza todos los servicios de la reserva.'})
+        form = BookingForm(data={
+            'client': booking.client_id, 'employee': employee.pk,
+            'service': booking.service_id, 'zone': zone.pk if zone else '',
+            'start_at': timezone.localtime(start).strftime('%Y-%m-%dT%H:%M'),
+            'end_at': timezone.localtime(end).strftime('%Y-%m-%dT%H:%M'),
+            'status': Booking.Statuses.CONFIRMED, 'source': booking.source,
+            'notes': booking.notes,
+        }, instance=booking, allow_outside_schedule=True)
+        if not form.is_valid():
+            raise serializers.ValidationError(dict(form.errors))
+        from whatsapp_bot.models import WhatsAppMessage
+        # Keep old messages as history, but detach the previous appointment
+        # lifecycle so its refusal/reminder cannot act on the restored visit.
+        lifecycle = booking.whatsapp_messages.exclude(kind__in=[
+            WhatsAppMessage.Kinds.PAYMENT_RECEIPT, WhatsAppMessage.Kinds.MANUAL,
+        ])
+        archived_message_ids = list(lifecycle.values_list('pk', flat=True))
+        lifecycle.exclude(status=WhatsAppMessage.Statuses.SENT).update(status=WhatsAppMessage.Statuses.SKIPPED)
+        lifecycle.update(booking=None)
+        booking.start_at, booking.end_at, booking.employee, booking.zone = start, end, employee, zone
+        booking.status = Booking.Statuses.CONFIRMED
+        booking.client_response = Booking.ClientResponses.PENDING
+        booking.client_responded_at = None
+        booking.prepayment_deadline_at = None
+        booking.prepayment_requested_at = None
+        booking.prepayment_policy = Booking.PrepaymentPolicies.EXEMPT
+        booking.save(update_fields=['start_at', 'end_at', 'employee', 'zone', 'status', 'client_response', 'client_responded_at', 'prepayment_deadline_at', 'prepayment_requested_at', 'prepayment_policy', 'updated_at'])
+        booking.refresh_from_db()
+        log_event(actor=request.user, section='booking', action='restore', instance=booking,
+                  message='Reserva cancelada restaurada por el personal.',
+                  metadata={'previous': previous, 'start_at': start.isoformat(), 'employee_id': employee.pk, 'archived_message_ids': archived_message_ids})
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+
 class BookingRescheduleView(MobileApiMixin, APIView):
     def post(self, request, pk):
         booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
