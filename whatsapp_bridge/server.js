@@ -128,6 +128,14 @@ async function connectSession(state) {
     defaultQueryTimeoutMs: 30000,
     retryRequestDelayMs: 2000,
     maxMsgRetryCount: 3,
+    // Baileys needs the original message back (poll creation, in particular)
+    // to decrypt things like incoming poll votes internally — without this
+    // it silently can't, which is why pollUpdateMessage.vote arrived as raw
+    // ciphertext instead of a decrypted selectedOptions list.
+    getMessage: async (key) => {
+      const record = key?.id ? pollMessages.get(key.id) : null;
+      return record?.message?.message || undefined;
+    },
   });
 
   state.sock = sock;
