@@ -6,7 +6,7 @@ import path from "path";
 import https from "https";
 import { fileURLToPath } from "url";
 
-let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser, isJidUser;
+let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser, isJidUser, getAggregateVotesInPollMessage;
 try {
   const baileys = await import("@whiskeysockets/baileys");
   makeWASocket = baileys.default;
@@ -14,6 +14,7 @@ try {
   DisconnectReason = baileys.DisconnectReason;
   jidNormalizedUser = baileys.jidNormalizedUser;
   isJidUser = baileys.isJidUser;
+  getAggregateVotesInPollMessage = baileys.getAggregateVotesInPollMessage;
 } catch (e) {
   console.error("[bridge] Baileys not installed:", e.message);
   process.exit(1);
@@ -26,9 +27,18 @@ process.on("unhandledRejection", (reason) => {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.WHATSAPP_BRIDGE_PORT || 8125);
 const TOKEN = process.env.WHATSAPP_BRIDGE_TOKEN || "";
+const BUTTON_REPLY_WEBHOOK_URL = process.env.WHATSAPP_BUTTON_REPLY_WEBHOOK_URL || "";
 const AUTH_BASE = process.env.WHATSAPP_AUTH_DATA_PATH
   ? path.resolve(process.env.WHATSAPP_AUTH_DATA_PATH)
   : path.join(__dirname, "sessions");
+
+// Maps a client's phone (digits) to the pending decline/keep button ids of the
+// last reminder/confirmation sent to them, so an incoming reply (text or poll
+// vote) can be forwarded to Django's button_reply_webhook.
+const pendingReplies = new Map();
+// Maps a sent poll message id to its full WAMessage + accumulated vote updates,
+// required by Baileys to decrypt later poll votes.
+const pollMessages = new Map();
 
 const RECONNECT_DELAY_MS = 5000;
 const LOGOUT_RECONNECT_DELAY_MS = 3000;
@@ -123,6 +133,16 @@ async function connectSession(state) {
   state.sock = sock;
 
   sock.ev.on("creds.update", saveCreds);
+
+  sock.ev.on("messages.upsert", async ({ messages }) => {
+    for (const msg of messages || []) {
+      try {
+        await handleIncomingMessage(state, msg);
+      } catch (error) {
+        console.warn(`[whatsapp:${state.name}] handleIncomingMessage error:`, error?.message || error);
+      }
+    }
+  });
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -226,6 +246,160 @@ async function waitForWsUp(state, timeoutMs = 15000) {
     await sleep(300);
   }
   // Proceed anyway — requestPairingCode may still work or fail gracefully
+}
+
+// ---- incoming reply handling (text replies + poll votes) ----
+
+function isExplicitDeclineReply(value) {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLocaleLowerCase("es")
+    .replace(/[.!?,;:]+$/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+  return new Set(["no", "no voy", "no quiero", "no puedo", "no puedo ir"]).has(normalized);
+}
+
+// Extracts the decline/keep button ids Django embeds in poll/button payloads,
+// e.g. "confirm_decline_42" / "decline_42" / "attend_42" / "keep_booking_42".
+function extractBookingButtons(buttons) {
+  const find = (prefixes) => {
+    for (const button of buttons) {
+      const id = String(button.id || "");
+      if (prefixes.some((prefix) => id.startsWith(prefix))) {
+        return { id, label: String(button.body || "") };
+      }
+    }
+    return { id: "", label: "" };
+  };
+  const decline = find(["confirm_decline_", "decline_"]);
+  const keep = find(["attend_", "keep_booking_"]);
+  return {
+    declineButtonId: decline.id,
+    declineButtonLabel: decline.label,
+    keepButtonId: keep.id,
+    keepButtonLabel: keep.label,
+  };
+}
+
+function postJson(urlString, payload) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlString);
+    const data = JSON.stringify(payload);
+    const req = https.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: url.pathname + url.search,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(data),
+          ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+        },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk) => { body += chunk; });
+        res.on("end", () => resolve({ statusCode: res.statusCode, body }));
+      }
+    );
+    req.on("error", reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+// Forwards a captured decline (or keep) button id to Django, exactly as a
+// native WhatsApp button tap would have. Idempotent per mapping.
+async function postButtonReply(state, mapping, buttonId) {
+  if (!BUTTON_REPLY_WEBHOOK_URL || mapping.handled || !buttonId) return false;
+  mapping.handled = true;
+  pendingReplies.delete(mapping.toDigits);
+  console.log(`[whatsapp:${state.name}] captured client reply phone=${mapping.toDigits} button_id=${buttonId}`);
+  try {
+    const { statusCode, body } = await postJson(BUTTON_REPLY_WEBHOOK_URL, {
+      session: state.name,
+      from_phone: mapping.toDigits,
+      button_id: buttonId,
+    });
+    console.log(`[whatsapp:${state.name}] button_reply_webhook status=${statusCode} body=${body}`);
+  } catch (error) {
+    console.warn(`[whatsapp:${state.name}] button_reply_webhook error:`, error?.message || error);
+  }
+  return true;
+}
+
+// Records what a client should be able to reply (text or poll vote) to, right
+// after a poll/buttons message asking for attendance/decline was sent to them.
+function registerReplyMapping(digits, buttons, messageId, sentMessage) {
+  const { declineButtonId, declineButtonLabel, keepButtonId, keepButtonLabel } = extractBookingButtons(buttons);
+  if (!declineButtonId) return;
+  pendingReplies.set(digits, {
+    toDigits: digits,
+    declineButtonId,
+    declineButtonLabel,
+    keepButtonId,
+    keepButtonLabel,
+    handled: false,
+  });
+  if (messageId && sentMessage) {
+    pollMessages.set(messageId, { message: sentMessage, updates: [] });
+  }
+}
+
+async function handleIncomingMessage(state, msg) {
+  if (!msg?.message || msg.key?.fromMe) return;
+  const remoteJid = msg.key?.remoteJid || "";
+  if (!remoteJid || remoteJid.endsWith("@g.us") || remoteJid === "status@broadcast") return;
+
+  // Ignore anything older than a few minutes (reconnect backfill/history sync).
+  const messageTs = Number(msg.messageTimestamp || 0) * 1000;
+  if (messageTs && Date.now() - messageTs > 5 * 60 * 1000) return;
+
+  const digits = remoteJid.split("@")[0].replace(/\D/g, "");
+
+  let content = msg.message;
+  if (content.ephemeralMessage) content = content.ephemeralMessage.message;
+  if (content.viewOnceMessage) content = content.viewOnceMessage.message;
+  if (content.viewOnceMessageV2) content = content.viewOnceMessageV2.message;
+  if (!content) return;
+
+  const text = content.conversation || content.extendedTextMessage?.text || "";
+  if (text) {
+    console.log(`[whatsapp:${state.name}] incoming text from ${digits}: "${text}"`);
+    const mapping = pendingReplies.get(digits);
+    if (mapping && !mapping.handled && isExplicitDeclineReply(text)) {
+      await postButtonReply(state, mapping, mapping.declineButtonId);
+    }
+    return;
+  }
+
+  if (content.pollUpdateMessage) {
+    const pollId = content.pollUpdateMessage.pollCreationMessageKey?.id || "";
+    const record = pollId ? pollMessages.get(pollId) : null;
+    console.log(`[whatsapp:${state.name}] poll vote update from ${digits} pollId=${pollId} known=${Boolean(record)}`);
+    if (!record || !getAggregateVotesInPollMessage) return;
+    record.updates.push(content.pollUpdateMessage);
+    try {
+      const results = getAggregateVotesInPollMessage({
+        message: record.message,
+        pollUpdates: record.updates,
+      });
+      console.log(`[whatsapp:${state.name}] poll aggregate pollId=${pollId}:`, JSON.stringify(results));
+      const votedOption = (results || []).find(
+        (option) => Array.isArray(option.voters) && option.voters.some((voter) => String(voter).includes(digits))
+      );
+      const mapping = pendingReplies.get(digits);
+      if (votedOption && mapping && !mapping.handled) {
+        const buttonId = votedOption.name === mapping.keepButtonLabel ? mapping.keepButtonId : mapping.declineButtonId;
+        await postButtonReply(state, mapping, buttonId);
+      }
+    } catch (error) {
+      console.warn(`[whatsapp:${state.name}] poll decrypt error:`, error?.message || error);
+    }
+  }
 }
 
 // ---- HTTP ----
@@ -413,6 +587,7 @@ app.post("/messages/poll", async (req, res) => {
       },
     });
     const id = msg?.key?.id || "";
+    registerReplyMapping(digits, buttons, id, msg);
     return res.json({ id, message_id: id });
   } catch (error) {
     console.error(`[whatsapp:${state.name}] poll error:`, error?.message);
@@ -446,6 +621,7 @@ app.post("/messages/buttons", async (req, res) => {
       },
     });
     const id = msg?.key?.id || "";
+    registerReplyMapping(digits, buttons, id, msg);
     return res.json({ id, message_id: id });
   } catch (error) {
     console.error(`[whatsapp:${state.name}] buttons error:`, error?.message);
