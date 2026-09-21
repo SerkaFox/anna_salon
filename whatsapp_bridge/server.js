@@ -316,7 +316,7 @@ function postJson(urlString, payload) {
 async function postButtonReply(state, mapping, buttonId) {
   if (!BUTTON_REPLY_WEBHOOK_URL || mapping.handled || !buttonId) return false;
   mapping.handled = true;
-  pendingReplies.delete(mapping.toDigits);
+  clearReplyMapping(mapping);
   console.log(`[whatsapp:${state.name}] captured client reply phone=${mapping.toDigits} button_id=${buttonId}`);
   try {
     const { statusCode, body } = await postJson(BUTTON_REPLY_WEBHOOK_URL, {
@@ -333,20 +333,39 @@ async function postButtonReply(state, mapping, buttonId) {
 
 // Records what a client should be able to reply (text or poll vote) to, right
 // after a poll/buttons message asking for attendance/decline was sent to them.
+//
+// WhatsApp sometimes addresses a contact's replies via a LID (a linked-device
+// pseudo-id) instead of their real phone number, even in a plain 1:1 chat —
+// this affected the old whatsapp-web.js bridge too. Keying only by phone
+// digits then silently misses every reply from such a chat, so we also key
+// by the exact remoteJid Baileys used to send, and match incoming replies
+// against both.
 function registerReplyMapping(digits, buttons, messageId, sentMessage) {
   const { declineButtonId, declineButtonLabel, keepButtonId, keepButtonLabel } = extractBookingButtons(buttons);
   if (!declineButtonId) return;
-  pendingReplies.set(digits, {
+  const mapping = {
     toDigits: digits,
+    remoteJid: sentMessage?.key?.remoteJid || "",
     declineButtonId,
     declineButtonLabel,
     keepButtonId,
     keepButtonLabel,
     handled: false,
-  });
+  };
+  pendingReplies.set(digits, mapping);
+  if (mapping.remoteJid) pendingReplies.set(mapping.remoteJid, mapping);
   if (messageId && sentMessage) {
     pollMessages.set(messageId, { message: sentMessage, updates: [] });
   }
+}
+
+function lookupReplyMapping(remoteJid, digits) {
+  return pendingReplies.get(remoteJid) || pendingReplies.get(digits) || null;
+}
+
+function clearReplyMapping(mapping) {
+  pendingReplies.delete(mapping.toDigits);
+  if (mapping.remoteJid) pendingReplies.delete(mapping.remoteJid);
 }
 
 async function handleIncomingMessage(state, msg) {
@@ -368,10 +387,12 @@ async function handleIncomingMessage(state, msg) {
 
   const text = content.conversation || content.extendedTextMessage?.text || "";
   if (text) {
-    console.log(`[whatsapp:${state.name}] incoming text from ${digits}: "${text}"`);
-    const mapping = pendingReplies.get(digits);
+    console.log(`[whatsapp:${state.name}] incoming text from ${digits} (jid=${remoteJid}): "${text}"`);
+    const mapping = lookupReplyMapping(remoteJid, digits);
     if (mapping && !mapping.handled && isExplicitDeclineReply(text)) {
       await postButtonReply(state, mapping, mapping.declineButtonId);
+    } else if (!mapping) {
+      console.log(`[whatsapp:${state.name}] no pending mapping for jid=${remoteJid} digits=${digits}`);
     }
     return;
   }
@@ -379,7 +400,15 @@ async function handleIncomingMessage(state, msg) {
   if (content.pollUpdateMessage) {
     const pollId = content.pollUpdateMessage.pollCreationMessageKey?.id || "";
     const record = pollId ? pollMessages.get(pollId) : null;
-    console.log(`[whatsapp:${state.name}] poll vote update from ${digits} pollId=${pollId} known=${Boolean(record)}`);
+    console.log(`[whatsapp:${state.name}] poll vote update from ${digits} (jid=${remoteJid}) pollId=${pollId} known=${Boolean(record)}`);
+    console.log(`[whatsapp:${state.name}] RAW pollUpdateMessage:`, JSON.stringify(content.pollUpdateMessage, null, 2));
+    if (record) {
+      const creation = record.message?.message?.pollCreationMessage
+        || record.message?.message?.pollCreationMessageV2
+        || record.message?.message?.pollCreationMessageV3;
+      console.log(`[whatsapp:${state.name}] RAW stored poll creation message:`, JSON.stringify(record.message, null, 2));
+      console.log(`[whatsapp:${state.name}] RAW poll creation options node:`, JSON.stringify(creation, null, 2));
+    }
     if (!record || !getAggregateVotesInPollMessage) return;
     record.updates.push(content.pollUpdateMessage);
     try {
@@ -391,13 +420,13 @@ async function handleIncomingMessage(state, msg) {
       const votedOption = (results || []).find(
         (option) => Array.isArray(option.voters) && option.voters.some((voter) => String(voter).includes(digits))
       );
-      const mapping = pendingReplies.get(digits);
+      const mapping = lookupReplyMapping(remoteJid, digits);
       if (votedOption && mapping && !mapping.handled) {
         const buttonId = votedOption.name === mapping.keepButtonLabel ? mapping.keepButtonId : mapping.declineButtonId;
         await postButtonReply(state, mapping, buttonId);
       }
     } catch (error) {
-      console.warn(`[whatsapp:${state.name}] poll decrypt error:`, error?.message || error);
+      console.warn(`[whatsapp:${state.name}] poll decrypt error:`, error?.stack || error);
     }
   }
 }
