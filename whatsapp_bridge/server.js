@@ -450,14 +450,6 @@ async function handleIncomingMessage(state, sock, msg) {
     const pollId = content.pollUpdateMessage.pollCreationMessageKey?.id || "";
     const record = pollId ? pollMessages.get(pollId) : null;
     console.log(`[whatsapp:${state.name}] poll vote update from ${digits} (jid=${remoteJid}) pollId=${pollId} known=${Boolean(record)}`);
-    console.log(`[whatsapp:${state.name}] RAW pollUpdateMessage:`, JSON.stringify(content.pollUpdateMessage, null, 2));
-    if (record) {
-      const creation = record.message?.message?.pollCreationMessage
-        || record.message?.message?.pollCreationMessageV2
-        || record.message?.message?.pollCreationMessageV3;
-      console.log(`[whatsapp:${state.name}] RAW stored poll creation message:`, JSON.stringify(record.message, null, 2));
-      console.log(`[whatsapp:${state.name}] RAW poll creation options node:`, JSON.stringify(creation, null, 2));
-    }
     if (!record || !getAggregateVotesInPollMessage) return;
     record.updates.push(content.pollUpdateMessage);
     try {
