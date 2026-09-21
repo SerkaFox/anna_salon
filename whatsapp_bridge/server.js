@@ -661,7 +661,16 @@ app.post("/messages", async (req, res) => {
   }
 });
 
-// Poll message (used by Brimoon for appointment confirmations)
+// Poll message (used by Brimoon for appointment confirmations).
+//
+// This used to send a native WhatsApp poll, but its votes can't be reliably
+// read back (see git history: getPNForLID/getMessage/LID-aware caching were
+// all tried and the vote still arrives undecryptable) — the same dead end
+// the previous whatsapp-web.js bridge hit before deliberately switching to
+// plain text. A tappable poll that silently does nothing is worse than no
+// poll: it lets a client believe they've declined when nothing happened.
+// Send plain text instead; `body` already spells out the exact reply
+// phrases, and registerReplyMapping keeps the text-reply path working.
 app.post("/messages/poll", async (req, res) => {
   const { session = "main", to, body, buttons } = req.body || {};
   if (!to || !body || !Array.isArray(buttons) || buttons.length < 2) {
@@ -676,14 +685,7 @@ app.post("/messages/poll", async (req, res) => {
     if (!exists) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
 
     const jid = toJid(digits);
-    const options = buttons.map(b => String(b.body || b.id || b));
-    const msg = await state.sock.sendMessage(jid, {
-      poll: {
-        name: String(body),
-        values: options,
-        selectableCount: 1,
-      },
-    });
+    const msg = await state.sock.sendMessage(jid, { text: String(body) });
     const id = msg?.key?.id || "";
     registerReplyMapping(digits, buttons, id, msg, lid);
     return res.json({ id, message_id: id });
@@ -693,7 +695,7 @@ app.post("/messages/poll", async (req, res) => {
   }
 });
 
-// Buttons message — Baileys sends as text on personal numbers
+// Buttons message — sent as plain text (see /messages/poll comment above).
 app.post("/messages/buttons", async (req, res) => {
   const { session = "main", to, body, buttons, footer } = req.body || {};
   if (!to || !body || !Array.isArray(buttons)) {
@@ -708,16 +710,8 @@ app.post("/messages/buttons", async (req, res) => {
     if (!exists) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
 
     const jid = toJid(digits);
-    // Personal numbers: send as poll (interactive) instead of deprecated buttonsMessage
-    const options = buttons.map(b => String(b.body || b.id || b));
-    const pollName = footer ? `${body}\n\n${footer}` : String(body);
-    const msg = await state.sock.sendMessage(jid, {
-      poll: {
-        name: pollName,
-        values: options,
-        selectableCount: 1,
-      },
-    });
+    const text = footer ? `${body}\n\n${footer}` : String(body);
+    const msg = await state.sock.sendMessage(jid, { text });
     const id = msg?.key?.id || "";
     registerReplyMapping(digits, buttons, id, msg, lid);
     return res.json({ id, message_id: id });
