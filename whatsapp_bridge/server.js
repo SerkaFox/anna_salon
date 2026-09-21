@@ -137,7 +137,7 @@ async function connectSession(state) {
   sock.ev.on("messages.upsert", async ({ messages }) => {
     for (const msg of messages || []) {
       try {
-        await handleIncomingMessage(state, msg);
+        await handleIncomingMessage(state, sock, msg);
       } catch (error) {
         console.warn(`[whatsapp:${state.name}] handleIncomingMessage error:`, error?.message || error);
       }
@@ -373,13 +373,48 @@ function lookupReplyMapping(remoteJid, digits) {
   return pendingReplies.get(remoteJid) || pendingReplies.get(digits) || null;
 }
 
+// Baileys keeps its own LID<->phone-number mapping internally (it needs it to
+// route/decrypt sessions correctly), even though onWhatsApp() doesn't surface
+// it. If a reply arrives via a LID jid we've never registered, ask that store
+// directly before giving up — logs whatever shape it finds either way, since
+// the exact method name isn't confirmed for this Baileys version yet.
+async function resolveMapping(sock, remoteJid, digits) {
+  const direct = lookupReplyMapping(remoteJid, digits);
+  if (direct || !remoteJid.endsWith("@lid")) return direct;
+
+  const lidStore = sock?.signalRepository?.lidMapping;
+  if (!lidStore) {
+    console.log(`[bridge] no signalRepository.lidMapping available to resolve ${remoteJid}`);
+    return null;
+  }
+  console.log(
+    `[bridge] lidMapping methods:`,
+    Object.getOwnPropertyNames(Object.getPrototypeOf(lidStore)).join(",")
+  );
+  for (const method of ["getPNForLID", "getPNForLid", "getPnForLid", "getPNForLIDSync"]) {
+    if (typeof lidStore[method] !== "function") continue;
+    try {
+      const pnJid = await lidStore[method](remoteJid);
+      console.log(`[bridge] ${method}(${remoteJid}) ->`, pnJid);
+      if (pnJid) {
+        const pnDigits = String(pnJid).split("@")[0].replace(/\D/g, "");
+        const mapping = lookupReplyMapping(pnJid, pnDigits);
+        if (mapping) return mapping;
+      }
+    } catch (error) {
+      console.warn(`[bridge] ${method} failed:`, error?.message || error);
+    }
+  }
+  return null;
+}
+
 function clearReplyMapping(mapping) {
   pendingReplies.delete(mapping.toDigits);
   if (mapping.remoteJid) pendingReplies.delete(mapping.remoteJid);
   if (mapping.lidJid) pendingReplies.delete(mapping.lidJid);
 }
 
-async function handleIncomingMessage(state, msg) {
+async function handleIncomingMessage(state, sock, msg) {
   if (!msg?.message || msg.key?.fromMe) return;
   const remoteJid = msg.key?.remoteJid || "";
   if (!remoteJid || remoteJid.endsWith("@g.us") || remoteJid === "status@broadcast") return;
@@ -399,7 +434,7 @@ async function handleIncomingMessage(state, msg) {
   const text = content.conversation || content.extendedTextMessage?.text || "";
   if (text) {
     console.log(`[whatsapp:${state.name}] incoming text from ${digits} (jid=${remoteJid}): "${text}"`);
-    const mapping = lookupReplyMapping(remoteJid, digits);
+    const mapping = await resolveMapping(sock, remoteJid, digits);
     if (mapping && !mapping.handled && isExplicitDeclineReply(text)) {
       await postButtonReply(state, mapping, mapping.declineButtonId);
     } else if (!mapping) {
@@ -431,7 +466,7 @@ async function handleIncomingMessage(state, msg) {
       const votedOption = (results || []).find(
         (option) => Array.isArray(option.voters) && option.voters.some((voter) => String(voter).includes(digits))
       );
-      const mapping = lookupReplyMapping(remoteJid, digits);
+      const mapping = await resolveMapping(sock, remoteJid, digits);
       if (votedOption && mapping && !mapping.handled) {
         const buttonId = votedOption.name === mapping.keepButtonLabel ? mapping.keepButtonId : mapping.declineButtonId;
         await postButtonReply(state, mapping, buttonId);
