@@ -228,21 +228,34 @@ function toJid(phone) {
   return `${String(phone).replace(/\D/g, "")}@s.whatsapp.net`;
 }
 
-// Returns { exists, lid }. `lid` is the contact's linked-device pseudo-jid
-// when WhatsApp reports one for this number — replies/votes from a contact
-// sometimes arrive addressed via this LID instead of their phone number, so
-// callers should also register pending-reply mappings under it up front.
+// Returns { exists, lid }. `lid` is the contact's linked-device pseudo-jid —
+// onWhatsApp() itself doesn't report one, but Baileys keeps its own LID<->PN
+// table (needed for its own session routing) that we can query directly.
+// Replies/votes from a contact sometimes arrive addressed via this LID
+// instead of their phone number, so callers should register pending-reply
+// mappings under it up front, and can even send straight to it.
 async function checkOnWhatsApp(sock, phone) {
+  const digits = String(phone).replace(/\D/g, "");
+  let exists = true;
   try {
-    const digits = String(phone).replace(/\D/g, "");
     const results = await sock.onWhatsApp(`${digits}@s.whatsapp.net`);
     console.log(`[bridge] onWhatsApp(${digits}) raw:`, JSON.stringify(results));
-    const match = results?.find(r => r.exists);
-    return { exists: Boolean(match), lid: match?.lid || "" };
+    exists = Boolean(results?.some(r => r.exists));
   } catch (error) {
     console.warn(`[bridge] onWhatsApp(${phone}) check failed:`, error?.message || error);
-    return { exists: true, lid: "" }; // assume exists if check fails
   }
+
+  let lid = "";
+  try {
+    const lidStore = sock?.signalRepository?.lidMapping;
+    const resolved = await lidStore?.getLIDForPN?.(`${digits}@s.whatsapp.net`);
+    console.log(`[bridge] getLIDForPN(${digits}@s.whatsapp.net) ->`, resolved);
+    if (resolved) lid = String(resolved).split(":")[0].replace(/@.*/, "") + "@lid";
+  } catch (error) {
+    console.warn(`[bridge] getLIDForPN(${digits}) failed:`, error?.message || error);
+  }
+
+  return { exists, lid };
 }
 
 // Wait until the socket has received a QR (or connected), meaning WS is up.
@@ -365,7 +378,14 @@ function registerReplyMapping(digits, buttons, messageId, sentMessage, lid) {
   if (mapping.remoteJid) pendingReplies.set(mapping.remoteJid, mapping);
   if (lidJid) pendingReplies.set(lidJid, mapping);
   if (messageId && sentMessage) {
-    pollMessages.set(messageId, { message: sentMessage, updates: [] });
+    // Incoming vote updates reference the poll via the LID jid when the
+    // contact has one, even though we sent it to their phone-based jid.
+    // Store a copy addressed the same way votes will be, since Baileys'
+    // vote decryption likely uses the poll's own key.remoteJid as context.
+    const pollMessage = lidJid
+      ? { ...sentMessage, key: { ...sentMessage.key, remoteJid: lidJid } }
+      : sentMessage;
+    pollMessages.set(messageId, { message: pollMessage, updates: [] });
   }
 }
 
