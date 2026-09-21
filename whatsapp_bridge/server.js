@@ -397,7 +397,10 @@ async function resolveMapping(sock, remoteJid, digits) {
       const pnJid = await lidStore[method](remoteJid);
       console.log(`[bridge] ${method}(${remoteJid}) ->`, pnJid);
       if (pnJid) {
-        const pnDigits = String(pnJid).split("@")[0].replace(/\D/g, "");
+        // pnJid looks like "34607025851:0@s.whatsapp.net" — the ":0" device
+        // suffix must be dropped before the colon, not stripped digit-by-digit
+        // (that would splice its "0" onto the real number).
+        const pnDigits = String(pnJid).split("@")[0].split(":")[0].replace(/\D/g, "");
         const mapping = lookupReplyMapping(pnJid, pnDigits);
         if (mapping) return mapping;
       }
@@ -423,7 +426,7 @@ async function handleIncomingMessage(state, sock, msg) {
   const messageTs = Number(msg.messageTimestamp || 0) * 1000;
   if (messageTs && Date.now() - messageTs > 5 * 60 * 1000) return;
 
-  const digits = remoteJid.split("@")[0].replace(/\D/g, "");
+  const digits = remoteJid.split("@")[0].split(":")[0].replace(/\D/g, "");
 
   let content = msg.message;
   if (content.ephemeralMessage) content = content.ephemeralMessage.message;
