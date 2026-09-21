@@ -228,13 +228,20 @@ function toJid(phone) {
   return `${String(phone).replace(/\D/g, "")}@s.whatsapp.net`;
 }
 
+// Returns { exists, lid }. `lid` is the contact's linked-device pseudo-jid
+// when WhatsApp reports one for this number — replies/votes from a contact
+// sometimes arrive addressed via this LID instead of their phone number, so
+// callers should also register pending-reply mappings under it up front.
 async function checkOnWhatsApp(sock, phone) {
   try {
     const digits = String(phone).replace(/\D/g, "");
     const results = await sock.onWhatsApp(`${digits}@s.whatsapp.net`);
-    return results?.some(r => r.exists) ?? false;
-  } catch (_) {
-    return true; // assume exists if check fails
+    console.log(`[bridge] onWhatsApp(${digits}) raw:`, JSON.stringify(results));
+    const match = results?.find(r => r.exists);
+    return { exists: Boolean(match), lid: match?.lid || "" };
+  } catch (error) {
+    console.warn(`[bridge] onWhatsApp(${phone}) check failed:`, error?.message || error);
+    return { exists: true, lid: "" }; // assume exists if check fails
   }
 }
 
@@ -340,12 +347,14 @@ async function postButtonReply(state, mapping, buttonId) {
 // digits then silently misses every reply from such a chat, so we also key
 // by the exact remoteJid Baileys used to send, and match incoming replies
 // against both.
-function registerReplyMapping(digits, buttons, messageId, sentMessage) {
+function registerReplyMapping(digits, buttons, messageId, sentMessage, lid) {
   const { declineButtonId, declineButtonLabel, keepButtonId, keepButtonLabel } = extractBookingButtons(buttons);
   if (!declineButtonId) return;
+  const lidJid = lid ? (lid.includes("@") ? lid : `${lid}@lid`) : "";
   const mapping = {
     toDigits: digits,
     remoteJid: sentMessage?.key?.remoteJid || "",
+    lidJid,
     declineButtonId,
     declineButtonLabel,
     keepButtonId,
@@ -354,6 +363,7 @@ function registerReplyMapping(digits, buttons, messageId, sentMessage) {
   };
   pendingReplies.set(digits, mapping);
   if (mapping.remoteJid) pendingReplies.set(mapping.remoteJid, mapping);
+  if (lidJid) pendingReplies.set(lidJid, mapping);
   if (messageId && sentMessage) {
     pollMessages.set(messageId, { message: sentMessage, updates: [] });
   }
@@ -366,6 +376,7 @@ function lookupReplyMapping(remoteJid, digits) {
 function clearReplyMapping(mapping) {
   pendingReplies.delete(mapping.toDigits);
   if (mapping.remoteJid) pendingReplies.delete(mapping.remoteJid);
+  if (mapping.lidJid) pendingReplies.delete(mapping.lidJid);
 }
 
 async function handleIncomingMessage(state, msg) {
@@ -579,7 +590,7 @@ app.post("/messages", async (req, res) => {
 
   const digits = String(to).replace(/\D/g, "");
   try {
-    const exists = await checkOnWhatsApp(state.sock, digits);
+    const { exists } = await checkOnWhatsApp(state.sock, digits);
     if (!exists) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
 
     const jid = toJid(digits);
@@ -603,7 +614,7 @@ app.post("/messages/poll", async (req, res) => {
 
   const digits = String(to).replace(/\D/g, "");
   try {
-    const exists = await checkOnWhatsApp(state.sock, digits);
+    const { exists, lid } = await checkOnWhatsApp(state.sock, digits);
     if (!exists) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
 
     const jid = toJid(digits);
@@ -616,7 +627,7 @@ app.post("/messages/poll", async (req, res) => {
       },
     });
     const id = msg?.key?.id || "";
-    registerReplyMapping(digits, buttons, id, msg);
+    registerReplyMapping(digits, buttons, id, msg, lid);
     return res.json({ id, message_id: id });
   } catch (error) {
     console.error(`[whatsapp:${state.name}] poll error:`, error?.message);
@@ -635,7 +646,7 @@ app.post("/messages/buttons", async (req, res) => {
 
   const digits = String(to).replace(/\D/g, "");
   try {
-    const exists = await checkOnWhatsApp(state.sock, digits);
+    const { exists, lid } = await checkOnWhatsApp(state.sock, digits);
     if (!exists) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
 
     const jid = toJid(digits);
@@ -650,7 +661,7 @@ app.post("/messages/buttons", async (req, res) => {
       },
     });
     const id = msg?.key?.id || "";
-    registerReplyMapping(digits, buttons, id, msg);
+    registerReplyMapping(digits, buttons, id, msg, lid);
     return res.json({ id, message_id: id });
   } catch (error) {
     console.error(`[whatsapp:${state.name}] buttons error:`, error?.message);
