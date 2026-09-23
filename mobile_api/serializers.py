@@ -734,6 +734,8 @@ class ZoneWriteSerializer(serializers.ModelSerializer):
 
 
 class BookingSerializer(serializers.ModelSerializer):
+    cancellation_recorded_at = serializers.SerializerMethodField()
+    cancellation_date_is_estimated = serializers.SerializerMethodField()
     client_name = serializers.CharField(source="client.full_name", read_only=True)
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
     service_name = serializers.CharField(source="service_names", read_only=True)
@@ -817,7 +819,18 @@ class BookingSerializer(serializers.ModelSerializer):
             "salon_amount_snapshot",
             "created_at",
             "updated_at",
+            "cancelled_at",
+            "cancellation_recorded_at",
+            "cancellation_date_is_estimated",
         ]
+
+    def get_cancellation_recorded_at(self, obj):
+        if obj.status != Booking.Statuses.CANCELLED:
+            return None
+        return _format_local_datetime(obj.cancelled_at or obj.updated_at)
+
+    def get_cancellation_date_is_estimated(self, obj):
+        return obj.status == Booking.Statuses.CANCELLED and obj.cancelled_at is None
 
     def get_start_at(self, obj):
         return _format_local_datetime(obj.start_at)

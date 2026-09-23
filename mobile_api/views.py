@@ -10,7 +10,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, DecimalField, Q, Sum
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, TruncDate
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -2783,6 +2783,91 @@ class AvailabilitySlotsView(MobileApiMixin, APIView):
         )
 
 
+class BookingRestoreView(MobileApiMixin, APIView):
+    @transaction.atomic
+    def post(self, request, pk):
+        from bookings.forms import BookingForm
+
+        if request.user.role not in {"owner", "admin", "employee"}:
+            raise PermissionDenied("Solo el personal puede restaurar reservas.")
+        booking = generics.get_object_or_404(Booking.objects.select_for_update(), pk=pk)
+        if not _mobile_can_access_booking(request.user, booking):
+            raise PermissionDenied("Sin acceso a esta reserva.")
+        if booking.status != Booking.Statuses.CANCELLED:
+            raise serializers.ValidationError({"detail": "Esta reserva ya no está cancelada."})
+        fields = serializers.Serializer(data=request.data)
+        fields.fields['start_at'] = serializers.DateTimeField()
+        fields.fields['employee'] = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.filter(is_active=True))
+        fields.is_valid(raise_exception=True)
+        start = fields.validated_data['start_at']
+        employee = fields.validated_data['employee']
+        if start <= timezone.now():
+            raise serializers.ValidationError({"start_at": "Selecciona una fecha futura."})
+        # Serialize restorations targeting the same employee. Preserve historical
+        # service/price/payment snapshots rather than rebuilding a new order.
+        Employee.objects.select_for_update().get(pk=employee.pk)
+        previous = {'start_at': booking.start_at.isoformat(), 'employee_id': booking.employee_id}
+        previous_duration = booking.end_at - booking.start_at
+        editor = None
+        saved_prices = {name: getattr(booking, name) for name in ['price_snapshot', 'original_client_price_snapshot', 'client_price_snapshot', 'discount_amount_snapshot', 'employee_percent_snapshot', 'employee_amount_snapshot', 'salon_amount_snapshot', 'service_items_snapshot']}
+        same_services = 'services' not in request.data and (not request.data.get('service') or str(request.data['service']) == str(booking.service_id))
+        same_client = not request.data.get('client') or str(request.data['client']) == str(booking.client_id)
+        if any(name in request.data for name in ['client', 'service', 'notes', 'extra_duration_minutes', 'cleanup_duration_minutes']):
+            payload = _normalize_id_aliases(request.data)
+            payload['status'] = Booking.Statuses.CONFIRMED
+            payload.pop('prepayment_required', None)
+            editor = BookingWriteSerializer(instance=booking, data=payload, partial=True, context={'request': request})
+            editor.is_valid(raise_exception=True)
+        end = editor._booking_form.cleaned_data['end_at'] if editor else start + previous_duration
+        zone = editor._booking_form.cleaned_data.get('zone') if editor else None
+        if editor is None and booking.service.requires_zone:
+            zone = find_available_zone(booking.service, start, end, exclude_booking_id=booking.pk, employee=employee)
+            if zone is None:
+                raise serializers.ValidationError({"zone": "No hay zona libre para este horario."})
+        service_ids = {item.get('service_id') for item in booking.service_items_snapshot if item.get('service_id')}
+        if same_services and service_ids and employee.services.filter(pk__in=service_ids).count() != len(service_ids):
+            raise serializers.ValidationError({'employee': 'Este empleado no realiza todos los servicios de la reserva.'})
+        form = BookingForm(data={
+            'client': booking.client_id, 'employee': employee.pk,
+            'service': booking.service_id, 'zone': zone.pk if zone else '',
+            'start_at': timezone.localtime(start).strftime('%Y-%m-%dT%H:%M'),
+            'end_at': timezone.localtime(end).strftime('%Y-%m-%dT%H:%M'),
+            'status': Booking.Statuses.CONFIRMED, 'source': booking.source,
+            'notes': booking.notes,
+        }, instance=booking, allow_outside_schedule=True)
+        if editor is None and not form.is_valid():
+            raise serializers.ValidationError(dict(form.errors))
+        from whatsapp_bot.models import WhatsAppMessage
+        # Keep old messages as history, but detach the previous appointment
+        # lifecycle so its refusal/reminder cannot act on the restored visit.
+        lifecycle = booking.whatsapp_messages.exclude(kind__in=[
+            WhatsAppMessage.Kinds.PAYMENT_RECEIPT, WhatsAppMessage.Kinds.MANUAL,
+        ])
+        archived_message_ids = list(lifecycle.values_list('pk', flat=True))
+        lifecycle.exclude(status=WhatsAppMessage.Statuses.SENT).update(status=WhatsAppMessage.Statuses.SKIPPED)
+        lifecycle.update(booking=None)
+        if editor is not None:
+            booking = editor.save()
+            end, zone = booking.end_at, booking.zone
+            if same_services and same_client:
+                for name, value in saved_prices.items():
+                    setattr(booking, name, value)
+                booking.save(update_fields=list(saved_prices))
+        booking.start_at, booking.end_at, booking.employee, booking.zone = start, end, employee, zone
+        booking.status = Booking.Statuses.CONFIRMED
+        booking.client_response = Booking.ClientResponses.PENDING
+        booking.client_responded_at = None
+        booking.prepayment_deadline_at = None
+        booking.prepayment_requested_at = None
+        booking.prepayment_policy = Booking.PrepaymentPolicies.EXEMPT
+        booking.save(update_fields=['start_at', 'end_at', 'employee', 'zone', 'status', 'client_response', 'client_responded_at', 'prepayment_deadline_at', 'prepayment_requested_at', 'prepayment_policy', 'updated_at'])
+        booking.refresh_from_db()
+        log_event(actor=request.user, section='booking', action='restore', instance=booking,
+                  message='Reserva cancelada restaurada por el personal.',
+                  metadata={'previous': previous, 'start_at': start.isoformat(), 'employee_id': employee.pk, 'archived_message_ids': archived_message_ids})
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+
 class BookingRescheduleView(MobileApiMixin, APIView):
     def post(self, request, pk):
         booking = generics.get_object_or_404(Booking.objects.select_related("client", "employee", "service", "zone"), pk=pk)
@@ -3051,6 +3136,32 @@ class CalendarDayView(MobileApiMixin, APIView):
     def get(self, request):
         selected_date = _parse_date_param(request)
         bookings = _mobile_bookings_queryset(get_bookings_for_day(selected_date), request.user)
+        cancellation_dates = []
+        cancelled_period = request.query_params.get("cancelled")
+        if cancelled_period is not None:
+            if request.user.role not in {"owner", "admin", "employee"}:
+                raise PermissionDenied("Sin acceso a las cancelaciones del salón.")
+            if cancelled_period not in {"all", "today", "week"}:
+                raise serializers.ValidationError({"cancelled": "Periodo inválido."})
+            bookings = _mobile_bookings_queryset(
+                Booking.objects.select_related("client", "employee", "service", "zone")
+                .prefetch_related("online_payments", "prepayment", "payments")
+                .filter(status=Booking.Statuses.CANCELLED),
+                request.user,
+            ).annotate(cancellation_recorded_at=Coalesce("cancelled_at", "updated_at"))
+            if cancelled_period != "all":
+                today = timezone.localdate()
+                lower_date = today if cancelled_period == "today" else today - timedelta(days=today.weekday())
+                lower, _ = get_day_bounds(lower_date)
+                _, upper = get_day_bounds(today)
+                bookings = bookings.filter(cancellation_recorded_at__gte=lower, cancellation_recorded_at__lt=upper)
+            cancellation_dates = [
+                {"date": item["visit_date"].isoformat(), "count": item["count"]}
+                for item in bookings.annotate(visit_date=TruncDate("start_at"))
+                .values("visit_date").annotate(count=Count("pk")).order_by("visit_date")
+            ]
+            day_start, day_end = get_day_bounds(selected_date)
+            bookings = bookings.filter(start_at__lt=day_end, end_at__gt=day_start).order_by("start_at", "pk")
         employees = _mobile_employees_queryset(Employee.objects.filter(is_active=True), request.user).order_by("first_name", "last_name")
         employee_payload = []
 
@@ -3077,6 +3188,7 @@ class CalendarDayView(MobileApiMixin, APIView):
             {
                 "date": selected_date.isoformat(),
                 "bookings": BookingSerializer(bookings, many=True, context={"request": request}).data,
+                "cancellation_dates": cancellation_dates,
                 "employees": employee_payload,
             }
         )
