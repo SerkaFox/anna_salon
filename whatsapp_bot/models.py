@@ -145,9 +145,8 @@ TEMPLATE_DEFAULTS = {
     WhatsAppMessage.Kinds.REMINDER_24H: (
         "Hola {client_name} 👋 Te recordamos tu cita en {salon_name} mañana "
         "{date} a las {time} para {service_name}.\n\n"
-        "Si no puedes venir, responde a este mensaje escribiendo una de estas frases:\n"
-        "No\nNo voy\nNo quiero\nNo puedo\n\n"
-        "Si no respondes, confirmaremos automáticamente tu cita dentro de 30 minutos."
+        "Responde a este mensaje con *Sí* o *No*.\n"
+        "Si no respondes, confirmaremos automáticamente tu asistencia en 30 minutos."
     ),
     WhatsAppMessage.Kinds.REMINDER_2H: (
         "Hola {client_name} 👋 Te esperamos en {salon_name} en 2 horas, "

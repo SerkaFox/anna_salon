@@ -547,13 +547,12 @@ def _send_reminder_24h_buttons(message):
         f"Hola {booking.client.first_name or booking.client.full_name} 👋\n"
         f"Te recordamos tu cita en BRIMOON Studio mañana {local_start:%d/%m/%Y} "
         f"a las {local_start:%H:%M} para {booking.service_names}.\n\n"
-        "Si no puedes venir, responde a este mensaje escribiendo una de estas frases:\n"
-        "No\nNo voy\nNo quiero\nNo puedo\n\n"
-        "Si no respondes, confirmaremos automáticamente tu cita dentro de 30 minutos."
+        "Responde a este mensaje con *Sí* o *No*.\n"
+        "Si no respondes, confirmaremos automáticamente tu asistencia en 30 minutos."
     )
     buttons = [
-        {"id": f"attend_{booking.pk}", "body": "Asistencia automática"},
-        {"id": f"confirm_decline_{booking.pk}", "body": "No asistiré"},
+        {"id": f"attend_{booking.pk}", "body": "Sí, voy"},
+        {"id": f"confirm_decline_{booking.pk}", "body": "No, no voy"},
     ]
     try:
         return bridge.send_poll_message(
@@ -582,13 +581,12 @@ def send_cancellation_confirmation(booking):
         f"📅 {local_start:%d/%m/%Y} a las {local_start:%H:%M}\n"
         f"💅 {booking.service_names}\n\n"
         f"{refund_text}\n\n"
-        "Si realmente no vas a venir, responde a este mensaje escribiendo una de estas frases:\n"
-        "No\nNo voy\nNo quiero\nNo puedo\n\n"
-        "Solo cancelaremos la cita después de recibir una de estas respuestas."
+        "Responde *Sí* para mantener la cita o *No* para cancelarla.\n"
+        "Solo cancelaremos al recibir tu confirmación."
     )
     buttons = [
-        {"id": f"attend_{booking.pk}", "body": "Mantener cita"},
-        {"id": f"confirm_decline_{booking.pk}", "body": "No asistiré"},
+        {"id": f"attend_{booking.pk}", "body": "Sí, mantengo la cita"},
+        {"id": f"confirm_decline_{booking.pk}", "body": "No, cancelo"},
     ]
     if getattr(settings, "WHATSAPP_DRY_RUN", True):
         return {"message_id": "dry-run"}

@@ -6,7 +6,7 @@ import path from "path";
 import https from "https";
 import { fileURLToPath } from "url";
 
-let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser, isJidUser;
+let makeWASocket, useMultiFileAuthState, DisconnectReason, jidNormalizedUser, isJidUser, getAggregateVotesInPollMessage;
 try {
   const baileys = await import("@whiskeysockets/baileys");
   makeWASocket = baileys.default;
@@ -14,6 +14,7 @@ try {
   DisconnectReason = baileys.DisconnectReason;
   jidNormalizedUser = baileys.jidNormalizedUser;
   isJidUser = baileys.isJidUser;
+  getAggregateVotesInPollMessage = baileys.getAggregateVotesInPollMessage;
 } catch (e) {
   console.error("[bridge] Baileys not installed:", e.message);
   process.exit(1);
@@ -26,9 +27,18 @@ process.on("unhandledRejection", (reason) => {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.WHATSAPP_BRIDGE_PORT || 8125);
 const TOKEN = process.env.WHATSAPP_BRIDGE_TOKEN || "";
+const BUTTON_REPLY_WEBHOOK_URL = process.env.WHATSAPP_BUTTON_REPLY_WEBHOOK_URL || "";
 const AUTH_BASE = process.env.WHATSAPP_AUTH_DATA_PATH
   ? path.resolve(process.env.WHATSAPP_AUTH_DATA_PATH)
   : path.join(__dirname, "sessions");
+
+// Maps a client's phone (digits) to the pending decline/keep button ids of the
+// last reminder/confirmation sent to them, so an incoming reply (text or poll
+// vote) can be forwarded to Django's button_reply_webhook.
+const pendingReplies = new Map();
+// Maps a sent poll message id to its full WAMessage + accumulated vote updates,
+// required by Baileys to decrypt later poll votes.
+const pollMessages = new Map();
 
 const RECONNECT_DELAY_MS = 5000;
 const LOGOUT_RECONNECT_DELAY_MS = 3000;
@@ -118,11 +128,29 @@ async function connectSession(state) {
     defaultQueryTimeoutMs: 30000,
     retryRequestDelayMs: 2000,
     maxMsgRetryCount: 3,
+    // Baileys needs the original message back (poll creation, in particular)
+    // to decrypt things like incoming poll votes internally — without this
+    // it silently can't, which is why pollUpdateMessage.vote arrived as raw
+    // ciphertext instead of a decrypted selectedOptions list.
+    getMessage: async (key) => {
+      const record = key?.id ? pollMessages.get(key.id) : null;
+      return record?.message?.message || undefined;
+    },
   });
 
   state.sock = sock;
 
   sock.ev.on("creds.update", saveCreds);
+
+  sock.ev.on("messages.upsert", async ({ messages }) => {
+    for (const msg of messages || []) {
+      try {
+        await handleIncomingMessage(state, sock, msg);
+      } catch (error) {
+        console.warn(`[whatsapp:${state.name}] handleIncomingMessage error:`, error?.message || error);
+      }
+    }
+  });
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -208,14 +236,34 @@ function toJid(phone) {
   return `${String(phone).replace(/\D/g, "")}@s.whatsapp.net`;
 }
 
+// Returns { exists, lid }. `lid` is the contact's linked-device pseudo-jid —
+// onWhatsApp() itself doesn't report one, but Baileys keeps its own LID<->PN
+// table (needed for its own session routing) that we can query directly.
+// Replies/votes from a contact sometimes arrive addressed via this LID
+// instead of their phone number, so callers should register pending-reply
+// mappings under it up front, and can even send straight to it.
 async function checkOnWhatsApp(sock, phone) {
+  const digits = String(phone).replace(/\D/g, "");
+  let exists = true;
   try {
-    const digits = String(phone).replace(/\D/g, "");
     const results = await sock.onWhatsApp(`${digits}@s.whatsapp.net`);
-    return results?.some(r => r.exists) ?? false;
-  } catch (_) {
-    return true; // assume exists if check fails
+    console.log(`[bridge] onWhatsApp(${digits}) raw:`, JSON.stringify(results));
+    exists = Boolean(results?.some(r => r.exists));
+  } catch (error) {
+    console.warn(`[bridge] onWhatsApp(${phone}) check failed:`, error?.message || error);
   }
+
+  let lid = "";
+  try {
+    const lidStore = sock?.signalRepository?.lidMapping;
+    const resolved = await lidStore?.getLIDForPN?.(`${digits}@s.whatsapp.net`);
+    console.log(`[bridge] getLIDForPN(${digits}@s.whatsapp.net) ->`, resolved);
+    if (resolved) lid = String(resolved).split(":")[0].replace(/@.*/, "") + "@lid";
+  } catch (error) {
+    console.warn(`[bridge] getLIDForPN(${digits}) failed:`, error?.message || error);
+  }
+
+  return { exists, lid };
 }
 
 // Wait until the socket has received a QR (or connected), meaning WS is up.
@@ -226,6 +274,241 @@ async function waitForWsUp(state, timeoutMs = 15000) {
     await sleep(300);
   }
   // Proceed anyway — requestPairingCode may still work or fail gracefully
+}
+
+// ---- incoming reply handling (text replies + poll votes) ----
+
+function normalizeReply(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLocaleLowerCase("es")
+    .replace(/[.!?,;:¡¿]+/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function isExplicitDeclineReply(value) {
+  return normalizeReply(value) === "no";
+}
+
+function isExplicitAttendReply(value) {
+  return new Set(["si", "si voy"]).has(normalizeReply(value));
+}
+
+// Extracts the decline/keep button ids Django embeds in poll/button payloads,
+// e.g. "confirm_decline_42" / "decline_42" / "attend_42" / "keep_booking_42".
+function extractBookingButtons(buttons) {
+  const find = (prefixes) => {
+    for (const button of buttons) {
+      const id = String(button.id || "");
+      if (prefixes.some((prefix) => id.startsWith(prefix))) {
+        return { id, label: String(button.body || "") };
+      }
+    }
+    return { id: "", label: "" };
+  };
+  const decline = find(["confirm_decline_", "decline_"]);
+  const keep = find(["attend_", "keep_booking_"]);
+  return {
+    declineButtonId: decline.id,
+    declineButtonLabel: decline.label,
+    keepButtonId: keep.id,
+    keepButtonLabel: keep.label,
+  };
+}
+
+function postJson(urlString, payload) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlString);
+    const data = JSON.stringify(payload);
+    const req = https.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: url.pathname + url.search,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(data),
+          ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+        },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk) => { body += chunk; });
+        res.on("end", () => resolve({ statusCode: res.statusCode, body }));
+      }
+    );
+    req.on("error", reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+// Forwards a captured decline (or keep) button id to Django, exactly as a
+// native WhatsApp button tap would have. Idempotent per mapping.
+async function postButtonReply(state, mapping, buttonId) {
+  if (!BUTTON_REPLY_WEBHOOK_URL || mapping.handled || !buttonId) return false;
+  mapping.handled = true;
+  clearReplyMapping(mapping);
+  console.log(`[whatsapp:${state.name}] captured client reply phone=${mapping.toDigits} button_id=${buttonId}`);
+  try {
+    const { statusCode, body } = await postJson(BUTTON_REPLY_WEBHOOK_URL, {
+      session: state.name,
+      from_phone: mapping.toDigits,
+      button_id: buttonId,
+    });
+    console.log(`[whatsapp:${state.name}] button_reply_webhook status=${statusCode} body=${body}`);
+  } catch (error) {
+    console.warn(`[whatsapp:${state.name}] button_reply_webhook error:`, error?.message || error);
+  }
+  return true;
+}
+
+// Records what a client should be able to reply (text or poll vote) to, right
+// after a poll/buttons message asking for attendance/decline was sent to them.
+//
+// WhatsApp sometimes addresses a contact's replies via a LID (a linked-device
+// pseudo-id) instead of their real phone number, even in a plain 1:1 chat —
+// this affected the old whatsapp-web.js bridge too. Keying only by phone
+// digits then silently misses every reply from such a chat, so we also key
+// by the exact remoteJid Baileys used to send, and match incoming replies
+// against both.
+function registerReplyMapping(digits, buttons, messageId, sentMessage, lid) {
+  const { declineButtonId, declineButtonLabel, keepButtonId, keepButtonLabel } = extractBookingButtons(buttons);
+  if (!declineButtonId) return;
+  const lidJid = lid ? (lid.includes("@") ? lid : `${lid}@lid`) : "";
+  const mapping = {
+    toDigits: digits,
+    remoteJid: sentMessage?.key?.remoteJid || "",
+    lidJid,
+    declineButtonId,
+    declineButtonLabel,
+    keepButtonId,
+    keepButtonLabel,
+    handled: false,
+  };
+  pendingReplies.set(digits, mapping);
+  if (mapping.remoteJid) pendingReplies.set(mapping.remoteJid, mapping);
+  if (lidJid) pendingReplies.set(lidJid, mapping);
+  if (messageId && sentMessage) {
+    // Incoming vote updates reference the poll via the LID jid when the
+    // contact has one, even though we sent it to their phone-based jid.
+    // Store a copy addressed the same way votes will be, since Baileys'
+    // vote decryption likely uses the poll's own key.remoteJid as context.
+    const pollMessage = lidJid
+      ? { ...sentMessage, key: { ...sentMessage.key, remoteJid: lidJid } }
+      : sentMessage;
+    pollMessages.set(messageId, { message: pollMessage, updates: [] });
+  }
+}
+
+function lookupReplyMapping(remoteJid, digits) {
+  return pendingReplies.get(remoteJid) || pendingReplies.get(digits) || null;
+}
+
+// Baileys keeps its own LID<->phone-number mapping internally (it needs it to
+// route/decrypt sessions correctly), even though onWhatsApp() doesn't surface
+// it. If a reply arrives via a LID jid we've never registered, ask that store
+// directly before giving up — logs whatever shape it finds either way, since
+// the exact method name isn't confirmed for this Baileys version yet.
+async function resolveMapping(sock, remoteJid, digits) {
+  const direct = lookupReplyMapping(remoteJid, digits);
+  if (direct || !remoteJid.endsWith("@lid")) return direct;
+
+  const lidStore = sock?.signalRepository?.lidMapping;
+  if (!lidStore) {
+    console.log(`[bridge] no signalRepository.lidMapping available to resolve ${remoteJid}`);
+    return null;
+  }
+  console.log(
+    `[bridge] lidMapping methods:`,
+    Object.getOwnPropertyNames(Object.getPrototypeOf(lidStore)).join(",")
+  );
+  for (const method of ["getPNForLID", "getPNForLid", "getPnForLid", "getPNForLIDSync"]) {
+    if (typeof lidStore[method] !== "function") continue;
+    try {
+      const pnJid = await lidStore[method](remoteJid);
+      console.log(`[bridge] ${method}(${remoteJid}) ->`, pnJid);
+      if (pnJid) {
+        // pnJid looks like "34607025851:0@s.whatsapp.net" — the ":0" device
+        // suffix must be dropped before the colon, not stripped digit-by-digit
+        // (that would splice its "0" onto the real number).
+        const pnDigits = String(pnJid).split("@")[0].split(":")[0].replace(/\D/g, "");
+        const mapping = lookupReplyMapping(pnJid, pnDigits);
+        if (mapping) return mapping;
+      }
+    } catch (error) {
+      console.warn(`[bridge] ${method} failed:`, error?.message || error);
+    }
+  }
+  return null;
+}
+
+function clearReplyMapping(mapping) {
+  pendingReplies.delete(mapping.toDigits);
+  if (mapping.remoteJid) pendingReplies.delete(mapping.remoteJid);
+  if (mapping.lidJid) pendingReplies.delete(mapping.lidJid);
+}
+
+async function handleIncomingMessage(state, sock, msg) {
+  if (!msg?.message || msg.key?.fromMe) return;
+  const remoteJid = msg.key?.remoteJid || "";
+  if (!remoteJid || remoteJid.endsWith("@g.us") || remoteJid === "status@broadcast") return;
+
+  // Ignore anything older than a few minutes (reconnect backfill/history sync).
+  const messageTs = Number(msg.messageTimestamp || 0) * 1000;
+  if (messageTs && Date.now() - messageTs > 5 * 60 * 1000) return;
+
+  const digits = remoteJid.split("@")[0].split(":")[0].replace(/\D/g, "");
+
+  let content = msg.message;
+  if (content.ephemeralMessage) content = content.ephemeralMessage.message;
+  if (content.viewOnceMessage) content = content.viewOnceMessage.message;
+  if (content.viewOnceMessageV2) content = content.viewOnceMessageV2.message;
+  if (!content) return;
+
+  const text = content.conversation || content.extendedTextMessage?.text || "";
+  if (text) {
+    console.log(`[whatsapp:${state.name}] incoming text from ${digits} (jid=${remoteJid}): "${text}"`);
+    const mapping = await resolveMapping(sock, remoteJid, digits);
+    if (mapping && !mapping.handled) {
+      if (isExplicitDeclineReply(text)) {
+        await postButtonReply(state, mapping, mapping.declineButtonId);
+      } else if (isExplicitAttendReply(text) && mapping.keepButtonId) {
+        await postButtonReply(state, mapping, mapping.keepButtonId);
+      }
+    } else if (!mapping) {
+      console.log(`[whatsapp:${state.name}] no pending mapping for jid=${remoteJid} digits=${digits}`);
+    }
+    return;
+  }
+
+  if (content.pollUpdateMessage) {
+    const pollId = content.pollUpdateMessage.pollCreationMessageKey?.id || "";
+    const record = pollId ? pollMessages.get(pollId) : null;
+    console.log(`[whatsapp:${state.name}] poll vote update from ${digits} (jid=${remoteJid}) pollId=${pollId} known=${Boolean(record)}`);
+    if (!record || !getAggregateVotesInPollMessage) return;
+    record.updates.push(content.pollUpdateMessage);
+    try {
+      const results = getAggregateVotesInPollMessage({
+        message: record.message,
+        pollUpdates: record.updates,
+      });
+      console.log(`[whatsapp:${state.name}] poll aggregate pollId=${pollId}:`, JSON.stringify(results));
+      const votedOption = (results || []).find(
+        (option) => Array.isArray(option.voters) && option.voters.some((voter) => String(voter).includes(digits))
+      );
+      const mapping = await resolveMapping(sock, remoteJid, digits);
+      if (votedOption && mapping && !mapping.handled) {
+        const buttonId = votedOption.name === mapping.keepButtonLabel ? mapping.keepButtonId : mapping.declineButtonId;
+        await postButtonReply(state, mapping, buttonId);
+      }
+    } catch (error) {
+      console.warn(`[whatsapp:${state.name}] poll decrypt error:`, error?.stack || error);
+    }
+  }
 }
 
 // ---- HTTP ----
@@ -376,7 +659,7 @@ app.post("/messages", async (req, res) => {
 
   const digits = String(to).replace(/\D/g, "");
   try {
-    const exists = await checkOnWhatsApp(state.sock, digits);
+    const { exists } = await checkOnWhatsApp(state.sock, digits);
     if (!exists) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
 
     const jid = toJid(digits);
@@ -389,7 +672,16 @@ app.post("/messages", async (req, res) => {
   }
 });
 
-// Poll message (used by Brimoon for appointment confirmations)
+// Poll message (used by Brimoon for appointment confirmations).
+//
+// This used to send a native WhatsApp poll, but its votes can't be reliably
+// read back (see git history: getPNForLID/getMessage/LID-aware caching were
+// all tried and the vote still arrives undecryptable) — the same dead end
+// the previous whatsapp-web.js bridge hit before deliberately switching to
+// plain text. A tappable poll that silently does nothing is worse than no
+// poll: it lets a client believe they've declined when nothing happened.
+// Send plain text instead; `body` already spells out the exact reply
+// phrases, and registerReplyMapping keeps the text-reply path working.
 app.post("/messages/poll", async (req, res) => {
   const { session = "main", to, body, buttons } = req.body || {};
   if (!to || !body || !Array.isArray(buttons) || buttons.length < 2) {
@@ -400,19 +692,13 @@ app.post("/messages/poll", async (req, res) => {
 
   const digits = String(to).replace(/\D/g, "");
   try {
-    const exists = await checkOnWhatsApp(state.sock, digits);
+    const { exists, lid } = await checkOnWhatsApp(state.sock, digits);
     if (!exists) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
 
     const jid = toJid(digits);
-    const options = buttons.map(b => String(b.body || b.id || b));
-    const msg = await state.sock.sendMessage(jid, {
-      poll: {
-        name: String(body),
-        values: options,
-        selectableCount: 1,
-      },
-    });
+    const msg = await state.sock.sendMessage(jid, { text: String(body) });
     const id = msg?.key?.id || "";
+    registerReplyMapping(digits, buttons, id, msg, lid);
     return res.json({ id, message_id: id });
   } catch (error) {
     console.error(`[whatsapp:${state.name}] poll error:`, error?.message);
@@ -420,7 +706,7 @@ app.post("/messages/poll", async (req, res) => {
   }
 });
 
-// Buttons message — Baileys sends as text on personal numbers
+// Buttons message — sent as plain text (see /messages/poll comment above).
 app.post("/messages/buttons", async (req, res) => {
   const { session = "main", to, body, buttons, footer } = req.body || {};
   if (!to || !body || !Array.isArray(buttons)) {
@@ -431,21 +717,14 @@ app.post("/messages/buttons", async (req, res) => {
 
   const digits = String(to).replace(/\D/g, "");
   try {
-    const exists = await checkOnWhatsApp(state.sock, digits);
+    const { exists, lid } = await checkOnWhatsApp(state.sock, digits);
     if (!exists) return res.status(422).json({ error: `Number not registered on WhatsApp: +${digits}` });
 
     const jid = toJid(digits);
-    // Personal numbers: send as poll (interactive) instead of deprecated buttonsMessage
-    const options = buttons.map(b => String(b.body || b.id || b));
-    const pollName = footer ? `${body}\n\n${footer}` : String(body);
-    const msg = await state.sock.sendMessage(jid, {
-      poll: {
-        name: pollName,
-        values: options,
-        selectableCount: 1,
-      },
-    });
+    const text = footer ? `${body}\n\n${footer}` : String(body);
+    const msg = await state.sock.sendMessage(jid, { text });
     const id = msg?.key?.id || "";
+    registerReplyMapping(digits, buttons, id, msg, lid);
     return res.json({ id, message_id: id });
   } catch (error) {
     console.error(`[whatsapp:${state.name}] buttons error:`, error?.message);
