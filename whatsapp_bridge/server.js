@@ -293,7 +293,10 @@ function isExplicitDeclineReply(value) {
 }
 
 function isExplicitAttendReply(value) {
-  return new Set(["si", "si voy"]).has(normalizeReply(value));
+  return new Set([
+    "si", "si voy", "voy", "vale", "ok", "okey", "okay", "claro", "perfecto",
+    "acuerdo", "de acuerdo", "si vale", "si claro", "si ok",
+  ]).has(normalizeReply(value));
 }
 
 // Extracts the decline/keep button ids Django embeds in poll/button payloads,
