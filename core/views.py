@@ -1179,23 +1179,33 @@ def public_multi_booking_week_slots(request):
             status=400,
         )
 
+    try:
+        wanted = max(1, min(int(request.GET.get("days", 5)), 10))
+    except (TypeError, ValueError):
+        wanted = 5
     days = []
-    for offset in range(7):
-        date_value = start_date + timedelta(days=offset)
+    next_from = None
+    date_value = start_date
+    # Only days that actually have free time are returned; scan forward
+    # (bounded) until enough of them are found.
+    for _offset in range(60):
         if not _date_within_booking_window(date_value):
             break
-        days.append(
-            {
-                "date": date_value.isoformat(),
-                "blocks": find_multi_service_slots(date_value, services),
-            }
-        )
+        blocks = find_multi_service_slots(date_value, services)
+        if blocks:
+            days.append({"date": date_value.isoformat(), "blocks": blocks})
+        date_value += timedelta(days=1)
+        if len(days) >= wanted:
+            break
+    if _date_within_booking_window(date_value):
+        next_from = date_value.isoformat()
     return JsonResponse(
         {
             "ok": True,
             "start": start_date.isoformat(),
             "total_duration": sum(service.duration_minutes for service in services),
             "days": days,
+            "next_from": next_from,
         }
     )
 

@@ -181,7 +181,7 @@ class PublicBookingTests(TestCase):
         self.assertEqual(wrong_zone_response.status_code, 200)
         self.assertFalse(wrong_zone_response.json()["slots"])
 
-    def test_public_booking_week_slots_returns_seven_days(self):
+    def test_public_booking_week_slots_returns_only_days_with_free_time(self):
         response = self.browser.get(
             reverse("public_multi_booking_week_slots"),
             {"services": str(self.service.pk), "start": self.date},
@@ -190,7 +190,11 @@ class PublicBookingTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
         self.assertTrue(payload["ok"])
-        self.assertEqual(len(payload["days"]), 7)
+        self.assertLessEqual(len(payload["days"]), 5)
+        self.assertTrue(payload["days"])
+        for day in payload["days"]:
+            self.assertGreater(len(day["blocks"]), 0)
+        self.assertIn("next_from", payload)
         self.assertEqual(payload["days"][0]["date"], self.date)
         self.assertGreater(len(payload["days"][0]["blocks"]), 0)
 

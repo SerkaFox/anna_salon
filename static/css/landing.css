@@ -1490,11 +1490,16 @@ img { max-width: 100%; }
   background: linear-gradient(145deg, rgba(7,61,46,0.3), rgba(6,16,24,0.5));
 }
 .week-availability[hidden] { display: none; }
-.week-availability__head { margin-bottom: 14px; }
+.week-availability__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.week-availability__other-date { display: grid; gap: 4px; color: var(--muted); font-size: .78rem; }
+.week-availability__other-date .lux-input { min-height: 38px; padding: 6px 10px; }
+.week-availability__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.week-availability__actions[hidden] { display: none; }
+.week-slot-time.is-selected { border-color: rgba(240,208,145,0.9); background: rgba(214,167,92,0.34); color: var(--gold-light); }
 .week-availability__head strong { color: var(--gold-light); font-size: 1.05rem; }
 .week-availability__head p { min-height: 1.2em; margin: 5px 0 0; color: var(--muted); }
 .week-availability__scroll { overflow-x: auto; padding: 2px 2px 10px; scrollbar-color: rgba(240,208,145,0.42) rgba(255,255,255,0.06); }
-.week-availability__grid { display: grid; grid-template-columns: repeat(7, minmax(132px, 1fr)); gap: 10px; min-width: 984px; }
+.week-availability__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .week-availability__day {
   padding: 10px;
   border: 1px solid rgba(240,208,145,0.16);

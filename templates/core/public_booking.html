@@ -72,32 +72,26 @@
       </div>
 
       <div class="booking-date-range" data-date-range hidden>
-        <label class="lux-field">
-          <span>{{ t.public_booking_date }}</span>
-          <input class="lux-input" type="date" name="date" min="{{ today }}" max="{{ booking_last_date }}" value="{{ booking_values.date|default:today }}" data-date-input required>
-        </label>
-        <label class="lux-field">
-          <span>{{ t.public_booking_range }}</span>
-          <select class="lux-input" data-time-range>
-            <option value="all">{{ t.public_booking_range_all }}</option>
-            <option value="10-12">10:00 - 12:00</option>
-            <option value="12-15">12:00 - 15:00</option>
-            <option value="15-18">15:00 - 18:00</option>
-            <option value="18-21">18:00 - 21:00</option>
-          </select>
-        </label>
+        <input type="hidden" name="date" value="{{ booking_values.date|default:today }}" min="{{ today }}" max="{{ booking_last_date }}" data-date-input>
       </div>
-      <div class="booking-date-strip" data-date-strip aria-label="{{ t.public_booking_date }}"></div>
 
       <section class="week-availability" data-week-availability hidden>
         <div class="week-availability__head">
           <div>
-            <strong data-week-title>Horas disponibles esta semana</strong>
+            <strong data-week-title>Próximas horas libres</strong>
             <p data-week-status></p>
           </div>
+          <label class="week-availability__other-date">
+            <span data-other-date-label>Otra fecha</span>
+            <input class="lux-input" type="date" min="{{ today }}" max="{{ booking_last_date }}" data-other-date-input>
+          </label>
         </div>
         <div class="week-availability__scroll">
           <div class="week-availability__grid" data-week-grid></div>
+        </div>
+        <div class="week-availability__actions">
+          <button class="btn-lux btn-lux-outline btn-lux-small" type="button" data-week-more hidden>Ver más fechas</button>
+          <button class="btn-lux btn-lux-ghost btn-lux-small" type="button" data-open-waitlist data-week-waitlist hidden>{{ t.public_waitlist_submit }}</button>
         </div>
       </section>
 
@@ -109,7 +103,7 @@
         <button class="btn-lux btn-lux-outline btn-lux-small" type="button" data-edit-slot>{{ t.public_booking_edit_time }}</button>
       </div>
 
-      <div class="slot-picker" data-slot-picker hidden>
+      <div class="slot-picker" data-slot-picker hidden style="display:none">
         <div class="slot-picker__head">
           <div>
             <strong>{{ t.public_booking_time }}</strong>
@@ -290,7 +284,12 @@
     const serviceSearchInput = form.querySelector('[data-service-search]');
     const serviceNoResults = form.querySelector('[data-service-no-results]');
     const dateInput = form.querySelector('[data-date-input]');
-    const rangeSelect = form.querySelector('[data-time-range]');
+    const rangeSelect = null;
+    const otherDateInput = form.querySelector('[data-other-date-input]');
+    const otherDateLabel = form.querySelector('[data-other-date-label]');
+    const weekMoreButton = form.querySelector('[data-week-more]');
+    const weekWaitlistButton = form.querySelector('[data-week-waitlist]');
+    let weekNextFrom = '';
     const dateRangeSection = form.querySelector('[data-date-range]');
     const grid = form.querySelector('[data-slot-grid]');
     const dateStrip = form.querySelector('[data-date-strip]');
@@ -403,12 +402,14 @@
       secondaryEmailHelp: '{{ t.public_booking_contact_secondary_email_help|escapejs }}'
     };
     const weekCopy = {
-      es: { title: 'Horas disponibles esta semana', loading: 'Buscando horas libres…', empty: 'No hay horas libres', more: 'Ver todas', less: 'Ocultar' },
-      ru: { title: 'Свободное время на неделю', loading: 'Ищем свободное время…', empty: 'Нет свободного времени', more: 'Показать все', less: 'Скрыть' },
-      en: { title: 'Available times this week', loading: 'Looking for available times…', empty: 'No available times', more: 'Show all', less: 'Show less' },
-      de: { title: 'Freie Zeiten diese Woche', loading: 'Freie Zeiten werden gesucht…', empty: 'Keine freien Zeiten', more: 'Alle anzeigen', less: 'Weniger anzeigen' },
-      fr: { title: 'Horaires disponibles cette semaine', loading: 'Recherche des horaires libres…', empty: 'Aucun horaire libre', more: 'Tout afficher', less: 'Réduire' }
-    }[currentLanguage] || { title: 'Horas disponibles esta semana', loading: 'Buscando horas libres…', empty: 'No hay horas libres', more: 'Ver todas', less: 'Ocultar' };
+      es: { title: 'Próximas horas libres', loading: 'Buscando horas libres…', empty: 'No hay horas libres en estas fechas.', more: 'Ver todas', less: 'Ocultar', otherDate: 'Otra fecha', moreDates: 'Ver más fechas' },
+      ru: { title: 'Ближайшее свободное время', loading: 'Ищем свободное время…', empty: 'В эти даты нет свободного времени.', more: 'Показать все', less: 'Скрыть', otherDate: 'Другая дата', moreDates: 'Показать другие даты' },
+      en: { title: 'Next available times', loading: 'Looking for available times…', empty: 'No available times on these dates.', more: 'Show all', less: 'Show less', otherDate: 'Other date', moreDates: 'Show more dates' },
+      de: { title: 'Nächste freie Zeiten', loading: 'Freie Zeiten werden gesucht…', empty: 'An diesen Tagen sind keine Zeiten frei.', more: 'Alle anzeigen', less: 'Weniger anzeigen', otherDate: 'Anderes Datum', moreDates: 'Weitere Termine anzeigen' },
+      fr: { title: 'Prochains horaires libres', loading: 'Recherche des horaires libres…', empty: 'Aucun horaire libre à ces dates.', more: 'Tout afficher', less: 'Réduire', otherDate: 'Autre date', moreDates: 'Voir plus de dates' }
+    }[currentLanguage] || { title: 'Próximas horas libres', loading: 'Buscando horas libres…', empty: 'No hay horas libres en estas fechas.', more: 'Ver todas', less: 'Ocultar', otherDate: 'Otra fecha', moreDates: 'Ver más fechas' };
+    if (otherDateLabel) otherDateLabel.textContent = weekCopy.otherDate;
+    if (weekMoreButton) weekMoreButton.textContent = weekCopy.moreDates;
     if (weekTitle) weekTitle.textContent = weekCopy.title;
     const waitlistCtaText = '{{ t.public_waitlist_inline_cta|escapejs }}';
     const passwordRecoverySuccess = '{{ t.public_booking_recovery_success|escapejs }}';
@@ -499,7 +500,6 @@
       const hasItems = cart.length > 0;
       if (cartPanel) cartPanel.hidden = !hasItems;
       if (dateRangeSection) dateRangeSection.hidden = !hasItems;
-      if (slotPicker) slotPicker.hidden = !hasItems;
       if (weekAvailability) weekAvailability.hidden = !hasItems;
 
       if (cartList) {
@@ -533,13 +533,11 @@
       });
 
       resetBlock();
-      if (hasItems && dateInput && dateInput.value) {
-        renderDateStrip();
-        loadBlocks();
+      if (hasItems) {
+        if (otherDateInput) otherDateInput.value = '';
         loadWeekAvailability();
-      } else if (hasItems) {
-        renderDateStrip();
-        if (status) status.textContent = messages.choose;
+      } else if (weekGrid) {
+        weekGrid.innerHTML = '';
       }
     }
 
@@ -880,36 +878,36 @@
       syncWaitlistForm();
     }
 
-    function chooseWeekBlock(day, block) {
+    function chooseWeekBlock(day, block, buttonEl, columnEl) {
       dateInput.value = day.date;
-      renderDateStrip();
       renderBlocks(day.blocks || []);
+      if (weekGrid) {
+        weekGrid.querySelectorAll('.week-slot-time.is-selected').forEach(function (b) { b.classList.remove('is-selected'); });
+        weekGrid.querySelectorAll('.week-availability__day.is-active').forEach(function (d) { d.classList.remove('is-active'); });
+      }
+      if (buttonEl) buttonEl.classList.add('is-selected');
+      if (columnEl) columnEl.classList.add('is-active');
       const card = Array.from(grid.querySelectorAll('.block-slot-card')).find(function (item) {
         return item.dataset.startAt === block.start_at;
       });
       if (card) selectBlock(block, card);
     }
 
-    function renderWeekAvailability(days) {
+    function renderWeekAvailability(days, append) {
       if (!weekGrid) return;
-      weekGrid.innerHTML = '';
+      if (!append) weekGrid.innerHTML = '';
       const formatterWeekday = new Intl.DateTimeFormat(currentLanguage, { weekday: 'short' });
       const formatterDate = new Intl.DateTimeFormat(currentLanguage, { day: 'numeric', month: 'short' });
       days.forEach(function (day) {
         const date = parseIsoDate(day.date);
         if (!date) return;
+        if (!(day.blocks || []).length) return;
         const column = document.createElement('article');
         column.className = 'week-availability__day';
-        if (day.date === dateInput.value) column.classList.add('is-active');
         const head = document.createElement('button');
         head.type = 'button';
         head.className = 'week-availability__day-head';
         head.innerHTML = '<strong>' + formatterWeekday.format(date) + '</strong><span>' + formatterDate.format(date) + '</span>';
-        head.addEventListener('click', function () {
-          dateInput.value = day.date;
-          renderDateStrip();
-          renderBlocks(day.blocks || []);
-        });
         column.appendChild(head);
         const times = document.createElement('div');
         times.className = 'week-availability__times';
@@ -926,7 +924,7 @@
             button.className = 'week-slot-time';
             if (index >= 8) button.hidden = true;
             button.textContent = block.label;
-            button.addEventListener('click', function () { chooseWeekBlock(day, block); });
+            button.addEventListener('click', function () { chooseWeekBlock(day, block, button, column); });
             times.appendChild(button);
           });
           if (visibleBlocks.length > 8) {
@@ -945,20 +943,23 @@
         column.appendChild(times);
         weekGrid.appendChild(column);
       });
-      if (weekStatus) weekStatus.textContent = '';
+      if (weekStatus) weekStatus.textContent = weekGrid.children.length ? '' : weekCopy.empty;
     }
 
-    function loadWeekAvailability() {
+    function loadWeekAvailability(startOverride, append) {
       if (!cart.length || !dateInput || !form.dataset.weekSlotsUrl) return;
       activeWeekRequest += 1;
       const requestId = activeWeekRequest;
-      const start = dateInput.value;
+      const start = startOverride || dateInput.getAttribute('min') || dateInput.value;
       if (!start) return;
       if (weekStatus) weekStatus.textContent = weekCopy.loading;
-      if (weekGrid) weekGrid.innerHTML = '';
+      if (!append && weekGrid) weekGrid.innerHTML = '';
+      if (weekMoreButton) weekMoreButton.hidden = true;
+      if (weekWaitlistButton) weekWaitlistButton.hidden = true;
       const params = new URLSearchParams({
         services: cart.map(function (item) { return item.id; }).join(','),
-        start: start
+        start: start,
+        days: '5'
       });
       fetch(form.dataset.weekSlotsUrl + '?' + params.toString(), { headers: { 'Accept': 'application/json' } })
         .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
@@ -966,7 +967,13 @@
           if (activeWeekRequest !== requestId) return;
           if (!result.ok || !result.data.ok) throw new Error(result.data.message || messages.error);
           weekDays = result.data.days || [];
-          renderWeekAvailability(weekDays);
+          renderWeekAvailability(weekDays, append);
+          weekNextFrom = result.data.next_from || '';
+          const hasAny = weekGrid && weekGrid.children.length > 0;
+          if (weekMoreButton) weekMoreButton.hidden = !weekNextFrom;
+          if (weekWaitlistButton) weekWaitlistButton.hidden = hasAny || !!weekNextFrom;
+          if (!hasAny && weekNextFrom) { loadWeekAvailability(weekNextFrom, false); return; }
+          if (!hasAny) { if (dateInput && !dateInput.value) dateInput.value = start; syncWaitlistForm(); }
         })
         .catch(function (error) {
           if (activeWeekRequest !== requestId) return;
@@ -1181,13 +1188,21 @@
         contactInput.addEventListener(eventName, syncContactFields);
       });
     }
-    if (dateInput) dateInput.addEventListener('change', function () { renderDateStrip(); loadBlocks(); loadWeekAvailability(); });
-    if (rangeSelect) rangeSelect.addEventListener('change', function () { loadBlocks(); renderWeekAvailability(weekDays); });
+    if (otherDateInput) {
+      otherDateInput.addEventListener('change', function () {
+        if (otherDateInput.value) loadWeekAvailability(otherDateInput.value, false);
+      });
+    }
+    if (weekMoreButton) {
+      weekMoreButton.addEventListener('click', function () {
+        if (weekNextFrom) loadWeekAvailability(weekNextFrom, true);
+      });
+    }
     if (editSlotButton) {
       editSlotButton.addEventListener('click', function () {
         form.classList.remove('is-time-selected');
         if (selectedSummary) selectedSummary.hidden = true;
-        if (slotPicker) slotPicker.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (weekAvailability) weekAvailability.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     }
     syncContactFields();
