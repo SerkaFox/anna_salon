@@ -16,6 +16,83 @@ from .models import Booking, BookingPrepayment, BookingWaitlistEntry
 logger = logging.getLogger(__name__)
 
 
+def booking_group_members(booking):
+    """All bookings created together with this one (itself included)."""
+    if not booking.booking_group_id:
+        return Booking.objects.filter(pk=booking.pk)
+    return Booking.objects.filter(booking_group_id=booking.booking_group_id)
+
+
+def booking_group_holder(booking):
+    """The group's first booking, which carries the shared online prepayment."""
+    if not booking.booking_group_id:
+        return booking
+    return booking_group_members(booking).order_by("pk").first() or booking
+
+
+def is_booking_group_member(booking):
+    """True for a non-holder booking whose prepayment is covered by the holder."""
+    return bool(booking.booking_group_id) and booking_group_holder(booking).pk != booking.pk
+
+
+def active_group_siblings(booking):
+    """Other bookings of the same group that have not been cancelled."""
+    if not booking.booking_group_id:
+        return Booking.objects.none()
+    return (
+        booking_group_members(booking)
+        .exclude(pk=booking.pk)
+        .exclude(status=Booking.Statuses.CANCELLED)
+    )
+
+
+def booking_group_total(booking):
+    """Client price of the whole (non-cancelled) group, or of the booking alone."""
+    if not booking.booking_group_id:
+        return booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+    total = Decimal("0.00")
+    for member in booking_group_members(booking).exclude(
+        status=Booking.Statuses.CANCELLED
+    ):
+        total += member.client_price_snapshot or member.price_snapshot or Decimal("0.00")
+    return total
+
+
+def booking_group_service_names(booking):
+    members = booking_group_members(booking).exclude(status=Booking.Statuses.CANCELLED)
+    return " + ".join(member.service_names for member in members.order_by("pk"))
+
+
+def group_prepayment_paid(booking):
+    """True when the group's holder has a captured online payment."""
+    holder = booking_group_holder(booking)
+    return holder.online_payments.filter(status=OnlinePayment.Statuses.PAID).exists()
+
+
+def confirm_booking_group(booking):
+    """Confirm the pending siblings once the group's shared prepayment is paid."""
+    if not booking.booking_group_id:
+        return 0
+    return active_group_siblings(booking).filter(
+        status=Booking.Statuses.PENDING
+    ).update(status=Booking.Statuses.CONFIRMED, updated_at=timezone.now())
+
+
+def sync_group_prepayment_window(holder):
+    """Give the group's siblings the same prepayment window as the holder."""
+    if not holder.booking_group_id:
+        return 0
+    return active_group_siblings(holder).exclude(
+        status__in={Booking.Statuses.DONE, Booking.Statuses.NO_SHOW}
+    ).update(
+        prepayment_policy=holder.prepayment_policy,
+        prepayment_requested_at=holder.prepayment_requested_at,
+        prepayment_deadline_at=holder.prepayment_deadline_at,
+        status=Booking.Statuses.PENDING,
+        updated_at=timezone.now(),
+    )
+
+
 def calculate_booking_prepayment_amount(booking):
     total = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
     return calculate_deposit_amount(total)

@@ -1,3 +1,4 @@
+from decimal import Decimal
 import json
 import logging
 
@@ -275,6 +276,7 @@ def button_reply_webhook(request):
             if not duplicate_group:
                 return JsonResponse({"ok": True, "reason": "booking already closed"})
             responded_at = timezone.now()
+            refunded_total = Decimal("0.00")
             for duplicate in duplicate_group:
                 duplicate.client_response = Booking.ClientResponses.DECLINED
                 duplicate.client_responded_at = responded_at
@@ -285,7 +287,12 @@ def button_reply_webhook(request):
                         "updated_at",
                     ]
                 )
-                cancel_booking(duplicate, force_refund=True)
+                _message, refunds = cancel_booking(duplicate, force_refund=True)
+                for refund in refunds:
+                    try:
+                        refunded_total += Decimal(str(getattr(refund, "amount", 0) or 0))
+                    except Exception:
+                        pass
                 log_event(
                     actor=None,
                     section="booking",
@@ -300,7 +307,16 @@ def button_reply_webhook(request):
                     },
                 )
         from .services import queue_and_send
-        queue_and_send(booking, kind=WhatsAppMessage.Kinds.BOOKING_CANCELLED)
+        refund_message = (
+            f" Te hemos devuelto {refunded_total:.2f} € de la señal."
+            if refunded_total > 0
+            else ""
+        )
+        queue_and_send(
+            booking,
+            kind=WhatsAppMessage.Kinds.CLIENT_DECLINED,
+            extra_context={"refund_message": refund_message},
+        )
         return JsonResponse(
             {
                 "ok": True,
@@ -340,6 +356,11 @@ def button_reply_webhook(request):
         booking.save(update_fields=["client_response", "client_responded_at", "updated_at"])
     log_event(actor=None, section="booking", action="client_attending", instance=booking,
               message=f"Cliente confirmó asistencia por WhatsApp a la reserva #{booking.pk}.")
+    try:
+        from .services import queue_and_send
+        queue_and_send(booking, kind=WhatsAppMessage.Kinds.CLIENT_ATTENDING)
+    except Exception:
+        logger.exception("Could not send attendance thanks for booking %s.", booking.pk)
 
     # Check if deposit is due — send payment link via WhatsApp
     from bookings.services import get_booking_deposit_amount

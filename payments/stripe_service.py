@@ -12,7 +12,14 @@ from django.utils import timezone
 from salon.preferences import calculate_deposit_amount
 
 from bookings.models import Booking
-from bookings.services import create_booking_prepayment
+from bookings.services import (
+    booking_group_holder,
+    booking_group_service_names,
+    booking_group_total,
+    confirm_booking_group,
+    create_booking_prepayment,
+    sync_group_prepayment_window,
+)
 
 from .models import Payment, PaymentRefund
 
@@ -66,6 +73,14 @@ def get_booking_checkout_amount(booking):
 
 
 def get_booking_deposit_amount(booking):
+    if booking.booking_group_id:
+        holder = booking_group_holder(booking)
+        if holder.pk != booking.pk:
+            # The group's first booking carries the single shared deposit.
+            return Decimal("0.00")
+        total = Decimal(booking_group_total(booking))
+        fixed = _decimal_setting(getattr(settings, "BOOKING_DEPOSIT_AMOUNT_EUR", ""))
+        return fixed if fixed is not None else calculate_deposit_amount(total)
     fixed_amount = _decimal_setting(getattr(settings, "BOOKING_DEPOSIT_AMOUNT_EUR", ""))
     if fixed_amount is not None:
         return fixed_amount
@@ -160,6 +175,9 @@ def request_booking_prepayment(booking, request, *, timeout_minutes=30):
     from whatsapp_bot.models import WhatsAppMessage
     from whatsapp_bot.services import queue_and_send
 
+    if booking.booking_group_id:
+        booking = booking_group_holder(booking)
+
     if get_booking_online_paid_amount(booking) > Decimal("0.00"):
         raise ValidationError(
             "El prepago ya está realizado. No se puede enviar otro enlace para evitar un cobro duplicado."
@@ -204,6 +222,7 @@ def request_booking_prepayment(booking, request, *, timeout_minutes=30):
             "updated_at",
         ]
     )
+    sync_group_prepayment_window(booking)
     payment = existing or create_pending_stripe_payment(
         booking,
         get_booking_deposit_amount(booking),
@@ -217,6 +236,7 @@ def request_booking_prepayment(booking, request, *, timeout_minutes=30):
         kind=WhatsAppMessage.Kinds.PREPAYMENT_REQUEST,
         extra_context={
             "payment_amount": f"{payment.amount:.2f}",
+            "service_name": booking_group_service_names(booking),
             "payment_url": get_public_payment_url(payment, request),
             "payment_deadline": local_deadline.strftime("%H:%M"),
         },
@@ -268,6 +288,7 @@ def expire_booking_prepayment(booking):
                         booking.status = Booking.Statuses.CONFIRMED
                         booking.save(update_fields=["status", "updated_at"])
                     create_booking_prepayment(booking, payment)
+                    confirm_booking_group(booking)
                     try:
                         from whatsapp_bot.services import queue_payment_receipt
                         queue_payment_receipt(booking, payment)
@@ -460,6 +481,7 @@ def _mark_paid(payment, event, *, session=None, intent=None):
         booking.status = Booking.Statuses.CONFIRMED
         booking.save(update_fields=["status", "updated_at"])
     create_booking_prepayment(booking, payment)
+    confirm_booking_group(booking)
     try:
         from whatsapp_bot.services import queue_payment_receipt
         queue_payment_receipt(booking, payment)

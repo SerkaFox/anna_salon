@@ -380,6 +380,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   window.setClientPortalTab = function (tab, updateHash = true) {
     const selected = validTabs.includes(tab) ? tab : "home";
+    if (selected === "booking") {
+      // New bookings use the same page as first-time visitors (service cart,
+      // date and time picker, prepayment) — no separate old form.
+      window.location.href = "{% url 'public_booking' %}";
+      return;
+    }
     portalViews.forEach(function (view) {
       view.classList.toggle("is-active", view.dataset.clientView === selected);
     });
@@ -416,7 +422,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const requestedTab = window.location.hash.replace("#", "");
   const bookingHasErrors = Boolean(document.querySelector("[data-portal-booking-form] .errorlist, [data-portal-booking-form] .form-errors"));
-  window.setClientPortalTab(bookingHasErrors ? "booking" : requestedTab, false);
+  window.setClientPortalTab(bookingHasErrors || requestedTab === "nueva-reserva" ? "booking" : requestedTab, false);
 
   const serviceSelect = document.getElementById("id_service");
   const employeeSelect = document.getElementById("id_employee");

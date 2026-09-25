@@ -10,6 +10,7 @@ from accounts.permissions import can_access_booking, can_access_employee, get_cl
 from bookings.client_actions import booking_amount_due, booking_refundable_until, can_client_cancel, can_client_reschedule
 from bookings.forms import BookingForm
 from bookings.models import Booking, BookingWaitlistEntry
+from bookings.services import booking_group_holder, booking_group_members
 from bookings.utils import booking_payment_summary, combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
 from clients.models import Client, ClientRewardRule
 from clients.rewards import client_reward_progress
@@ -694,7 +695,7 @@ class ServiceWriteSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context["request"]
-        if not request.user.can_manage_staff:
+        if not (request.user.can_manage_staff or get_employee_profile(request.user)):
             raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar servicios."]})
         requires_zone = attrs.get("requires_zone", self.instance.requires_zone if self.instance else False)
         if "allowed_zones" in attrs:
@@ -728,7 +729,7 @@ class ZoneWriteSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context["request"]
-        if not request.user.can_manage_staff:
+        if not (request.user.can_manage_staff or get_employee_profile(request.user)):
             raise serializers.ValidationError({"non_field_errors": ["Sin permiso para editar zonas."]})
         return attrs
 
@@ -764,6 +765,9 @@ class BookingSerializer(serializers.ModelSerializer):
     prepayment_state = serializers.SerializerMethodField()
     prepayment_state_label = serializers.SerializerMethodField()
     prepayment_checkout_url = serializers.SerializerMethodField()
+    booking_group_id = serializers.SerializerMethodField()
+    group_size = serializers.SerializerMethodField()
+    group_prepayment_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -791,6 +795,9 @@ class BookingSerializer(serializers.ModelSerializer):
             "prepayment_state",
             "prepayment_state_label",
             "prepayment_checkout_url",
+            "booking_group_id",
+            "group_size",
+            "group_prepayment_amount",
             "price_snapshot",
             "duration_snapshot",
             "extra_duration_minutes",
@@ -823,6 +830,21 @@ class BookingSerializer(serializers.ModelSerializer):
             "cancellation_recorded_at",
             "cancellation_date_is_estimated",
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated and not is_admin_user(user):
+            # Staff see prices of visits but not what the salon earns: the
+            # salon share/commission is admin-only, and an employee only sees
+            # their own share.
+            data.pop("salon_amount_snapshot", None)
+            own = get_employee_profile(user)
+            if own is None or own.pk != instance.employee_id:
+                data.pop("employee_percent_snapshot", None)
+                data.pop("employee_amount_snapshot", None)
+        return data
 
     def get_cancellation_recorded_at(self, obj):
         if obj.status != Booking.Statuses.CANCELLED:
@@ -904,11 +926,59 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_can_reschedule(self, obj):
         return can_client_reschedule(obj)
 
+    def _online_paid(self, booking):
+        payments = getattr(booking, "_prefetched_objects_cache", {}).get(
+            "online_payments", booking.online_payments.all()
+        )
+        paid_statuses = {
+            OnlinePayment.Statuses.PAID,
+            OnlinePayment.Statuses.PARTIALLY_REFUNDED,
+            OnlinePayment.Statuses.REFUND_PENDING,
+        }
+        return sum(
+            (
+                max(item.amount - item.amount_refunded, Decimal("0.00"))
+                for item in payments
+                if item.status in paid_statuses
+            ),
+            Decimal("0.00"),
+        )
+
+    def _group_info(self, obj):
+        """Shared-prepayment info for bookings created together, else None."""
+        if not obj.booking_group_id:
+            return None
+        cached = getattr(obj, "_mobile_group_info", None)
+        if cached is not None:
+            return cached
+        holder = booking_group_holder(obj)
+        members = booking_group_members(obj).exclude(status=Booking.Statuses.CANCELLED)
+        info = {
+            "holder_id": holder.pk,
+            "is_holder": holder.pk == obj.pk,
+            "size": members.count(),
+            "prepaid": self._online_paid(holder),
+        }
+        obj._mobile_group_info = info
+        return info
+
+    def get_booking_group_id(self, obj):
+        return str(obj.booking_group_id) if obj.booking_group_id else None
+
+    def get_group_size(self, obj):
+        info = self._group_info(obj)
+        return info["size"] if info else 1
+
+    def get_group_prepayment_amount(self, obj):
+        info = self._group_info(obj)
+        return str(info["prepaid"]) if info and info["prepaid"] > 0 else None
+
     def get_prepayment_state(self, obj):
         if obj.prepayment_policy == Booking.PrepaymentPolicies.EXEMPT:
             return "exempt"
         if obj.prepayment_policy == Booking.PrepaymentPolicies.REQUIRED:
-            if self._payment_info(obj)["paid_total"] > 0:
+            group = self._group_info(obj)
+            if self._online_paid(obj) > 0 or (group and group["prepaid"] > 0):
                 return "paid"
             if obj.status == Booking.Statuses.CANCELLED:
                 return "expired"
@@ -924,7 +994,25 @@ class BookingSerializer(serializers.ModelSerializer):
             "awaiting": "Ожидается предоплата" if russian else "Esperando prepago",
             "optional": "Предоплата не запрашивалась" if russian else "Prepago no solicitado",
         }
-        return labels[self.get_prepayment_state(obj)]
+        state = self.get_prepayment_state(obj)
+        label = labels[state]
+        if state == "paid":
+            group = self._group_info(obj)
+            if group and group["size"] > 1:
+                amount = group["prepaid"]
+                if russian:
+                    scope = "общая на все услуги" if group["is_holder"] else "общая, внесена по первой записи"
+                    label = f"{label} · {amount:.2f} € ({scope}, услуг: {group['size']})"
+                else:
+                    scope = (
+                        "total del grupo"
+                        if group["is_holder"]
+                        else "total del grupo, incluido en la primera reserva"
+                    )
+                    label = f"{label} · {amount:.2f} € ({scope}, {group['size']} servicios)"
+            else:
+                label = f"{label} · {self._online_paid(obj):.2f} €"
+        return label
 
     def get_prepayment_checkout_url(self, obj):
         payment = next(

@@ -132,6 +132,25 @@ def _mobile_can_access_client(user, client):
     return can_access_client(user, client)
 
 
+def _unique_service_ids(data):
+    """Distinct service ids of a booking request (primary service first)."""
+    getter = data.getlist if hasattr(data, "getlist") else None
+    raw = getter("services") if getter else data.get("services")
+    if raw is None:
+        raw = []
+    if not isinstance(raw, (list, tuple)):
+        raw = [raw]
+    ids = []
+    primary = data.get("service")
+    for value in ([primary] if primary not in (None, "") else []) + list(raw):
+        if value in (None, ""):
+            continue
+        text = str(value)
+        if text not in ids:
+            ids.append(text)
+    return ids
+
+
 def _normalize_id_aliases(data):
     normalized = data.copy()
     for alias, field in (
@@ -397,7 +416,7 @@ def _serialize_client_photo(photo):
 
 
 def _visible_photos_for_user(queryset, user):
-    if user.can_manage_staff:
+    if user.can_manage_staff or _is_mobile_employee_user(user):
         return queryset
     return queryset.filter(is_visible_to_client=True)
 
@@ -1521,7 +1540,11 @@ class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
         return Response({"date": selected_date.isoformat(), "results": serializer.data})
 
     def create(self, request, *args, **kwargs):
-        serializer = BookingWriteSerializer(data=_normalize_id_aliases(request.data), context={"request": request})
+        data = _normalize_id_aliases(request.data)
+        service_ids = _unique_service_ids(data)
+        if len(service_ids) > 1:
+            return self._create_group(request, data, service_ids)
+        serializer = BookingWriteSerializer(data=data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         booking = serializer.save()
         if booking.prepayment_policy == Booking.PrepaymentPolicies.REQUIRED:
@@ -1534,6 +1557,51 @@ class BookingListCreateView(MobileApiMixin, generics.ListCreateAPIView):
             message=f"Reserva creada desde API móvil para {booking.client}.",
         )
         return Response(BookingSerializer(booking, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+    def _create_group(self, request, data, service_ids):
+        """Several services for one client become separate back-to-back bookings.
+
+        Each service keeps its own time slot (so it can be moved or edited on
+        its own); they share a booking_group_id and ONE prepayment, carried by
+        the first booking.
+        """
+        group_id = uuid.uuid4()
+        bookings = []
+        with transaction.atomic():
+            for index, service_id in enumerate(service_ids):
+                part = data.copy()
+                part.pop("services", None)
+                part["service"] = service_id
+                if index > 0:
+                    part["start_at"] = _format_local_datetime(bookings[-1].end_at)
+                    part.pop("zone", None)
+                    part["extra_duration_minutes"] = 0
+                if index < len(service_ids) - 1:
+                    part["cleanup_duration_minutes"] = 0
+                serializer = BookingWriteSerializer(data=part, context={"request": request})
+                serializer.is_valid(raise_exception=True)
+                booking = serializer.save()
+                booking.booking_group_id = group_id
+                booking.save(update_fields=["booking_group_id", "updated_at"])
+                bookings.append(booking)
+        first = bookings[0]
+        if first.prepayment_policy == Booking.PrepaymentPolicies.REQUIRED:
+            request_booking_prepayment(first, request)
+        for booking in bookings:
+            log_event(
+                actor=request.user,
+                section="booking",
+                action="create",
+                instance=booking,
+                message=f"Reserva creada desde API móvil para {booking.client} (grupo de {len(bookings)} servicios).",
+            )
+        first.refresh_from_db()
+        payload = BookingSerializer(first, context={"request": request}).data
+        payload = dict(payload)
+        payload["group_bookings"] = BookingSerializer(
+            bookings[1:], many=True, context={"request": request}
+        ).data
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class BookingPrepaymentView(MobileApiMixin, APIView):
@@ -2962,8 +3030,8 @@ class BookingPhotoDetailView(MobileApiMixin, APIView):
         return photo
 
     def patch(self, request, pk):
-        if not request.user.can_manage_staff:
-            raise PermissionDenied("Solo administracion puede cambiar la visibilidad de fotos.")
+        if not (request.user.can_manage_staff or _is_mobile_employee_user(request.user)):
+            raise PermissionDenied("Sin permiso para cambiar la visibilidad de fotos.")
         photo = self.get_object(request, pk)
         if "is_visible_to_client" not in request.data:
             return Response({"is_visible_to_client": ["Campo requerido."]}, status=status.HTTP_400_BAD_REQUEST)
@@ -2985,7 +3053,7 @@ class BookingPhotoImageView(MobileApiMixin, APIView):
         photo = generics.get_object_or_404(BookingPhoto.objects.select_related("booking"), pk=pk)
         if not _mobile_can_access_booking(request.user, photo.booking):
             raise PermissionDenied("Sin acceso a esta foto.")
-        if not request.user.can_manage_staff and not photo.is_visible_to_client:
+        if not (request.user.can_manage_staff or _is_mobile_employee_user(request.user)) and not photo.is_visible_to_client:
             raise PermissionDenied("Esta foto no esta visible.")
         return FileResponse(photo.image.open("rb"), content_type="image/jpeg")
 
@@ -3198,7 +3266,7 @@ class CalendarDayView(MobileApiMixin, APIView):
 
 class WaitlistEntryListView(MobileApiMixin, APIView):
     def get(self, request):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         entries = BookingWaitlistEntry.objects.select_related('client', 'service', 'employee')
         selected_date = request.query_params.get('date')
         if selected_date:
@@ -3229,7 +3297,7 @@ class WaitlistEntryListView(MobileApiMixin, APIView):
         return Response(BookingWaitlistEntrySerializer(entries, many=True).data)
 
     def post(self, request):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         serializer = BookingWaitlistEntrySerializer(
             data=request.data,
             context={'request': request},
@@ -3247,7 +3315,7 @@ class WaitlistEntryListView(MobileApiMixin, APIView):
 
 class WaitlistEntryDetailView(MobileApiMixin, APIView):
     def patch(self, request, pk):
-        _mobile_admin_required(request.user)
+        _mobile_staff_required(request.user)
         entry = generics.get_object_or_404(
             BookingWaitlistEntry.objects.select_related('client', 'service', 'employee'),
             pk=pk,

@@ -19,7 +19,7 @@
 {% block content %}
 <section class="lux-section public-booking-section">
   <div class="lux-container public-booking-layout">
-    <form class="public-booking-card" method="post" novalidate data-public-booking-form data-slots-url="{{ slot_endpoint }}" data-multi-slots-url="{{ multi_slot_endpoint }}" data-week-slots-url="{% url 'public_multi_booking_week_slots' %}">
+    <form class="public-booking-card" method="post" novalidate data-public-booking-form {% if logged_client %}data-logged-client="1" {% endif %}data-slots-url="{{ slot_endpoint }}" data-multi-slots-url="{{ multi_slot_endpoint }}" data-week-slots-url="{% url 'public_multi_booking_week_slots' %}">
       {% csrf_token %}
       <div class="booking-alert" data-global-error {% if not booking_non_field_errors %}hidden{% endif %}>{% if booking_non_field_errors %}{{ booking_non_field_errors.0 }}{% endif %}</div>
 
@@ -128,6 +128,9 @@
       <input type="hidden" name="cart_json" value="" data-cart-json-input>
 
       <div class="booking-details-section" data-details-section>
+      {% if logged_client %}
+      <p class="field-help booking-logged-client">{{ logged_client.full_name }}</p>
+      {% else %}
       <div class="booking-account-helper">
         <p><strong>{{ t.public_booking_account_existing_title }}</strong> {{ t.public_booking_account_existing_text }}</p>
         <p><strong>{{ t.public_booking_account_new_title }}</strong> {{ t.public_booking_account_new_text }}</p>
@@ -173,11 +176,13 @@
         </label>
       </div>
 
+      {% endif %}
+
       <div class="booking-submit-row">
         <button class="btn-lux btn-lux-primary btn-lux-large" type="submit" data-submit-button disabled>{{ t.public_booking_submit }}</button>
       </div>
       <p class="field-help" data-submit-hint></p>
-      <p class="field-help">{{ t.public_booking_existing_hint }}</p>
+      {% if not logged_client %}<p class="field-help">{{ t.public_booking_existing_hint }}</p>{% endif %}
       </div>
     </form>
   </div>
@@ -1070,21 +1075,23 @@
     function validateBeforeSubmit() {
       clearErrors();
       const errors = {};
-      const nameInput = form.querySelector('[name="name"]');
-      const passwordInput = form.querySelector('[name="password"]');
       if (!cartJsonInput || !cartJsonInput.value) errors.start_at = [messages.timeRequired];
-      if (!nameInput.value.trim()) errors.name = [messages.nameRequired];
-      else if (looksLikePhoneName(nameInput.value)) {
-        showNameReminder(nameInput);
-        return false;
-      }
-      if (!passwordInput.value || passwordInput.value.length < 6) errors.password = [messages.passwordMin];
-      const primaryType = classifyContactValue(contactInput ? contactInput.value : '');
-      if (!contactInput.value.trim()) errors.contact = [messages.contactRequired];
-      else if (primaryType === 'invalid') errors.contact = [messages.contactInvalid];
-      if (secondaryContactToggle && secondaryContactToggle.checked && secondaryContactInput && secondaryContactInput.value.trim()) {
-        const secondaryType = classifyContactValue(secondaryContactInput.value);
-        if (secondaryType === 'invalid' || secondaryType === primaryType) errors.secondary_contact = [messages.secondaryInvalid];
+      if (!form.hasAttribute('data-logged-client')) {
+        const nameInput = form.querySelector('[name="name"]');
+        const passwordInput = form.querySelector('[name="password"]');
+        if (!nameInput.value.trim()) errors.name = [messages.nameRequired];
+        else if (looksLikePhoneName(nameInput.value)) {
+          showNameReminder(nameInput);
+          return false;
+        }
+        if (!passwordInput.value || passwordInput.value.length < 6) errors.password = [messages.passwordMin];
+        const primaryType = classifyContactValue(contactInput ? contactInput.value : '');
+        if (!contactInput.value.trim()) errors.contact = [messages.contactRequired];
+        else if (primaryType === 'invalid') errors.contact = [messages.contactInvalid];
+        if (secondaryContactToggle && secondaryContactToggle.checked && secondaryContactInput && secondaryContactInput.value.trim()) {
+          const secondaryType = classifyContactValue(secondaryContactInput.value);
+          if (secondaryType === 'invalid' || secondaryType === primaryType) errors.secondary_contact = [messages.secondaryInvalid];
+        }
       }
       if (Object.keys(errors).length) {
         showErrors(errors);

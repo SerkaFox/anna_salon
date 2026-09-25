@@ -78,6 +78,8 @@ class WhatsAppMessage(models.Model):
         PAYMENT_RECEIPT = "payment_receipt", "Payment receipt"
         BIRTHDAY_GREETING = "birthday_greeting", "Birthday greeting"
         REVIEW_REQUEST = "review_request", "Review request"
+        CLIENT_ATTENDING = "client_attending", "Client confirmed attendance"
+        CLIENT_DECLINED = "client_declined", "Client declined the appointment"
         MANUAL = "manual", "Manual"
 
     class Statuses(models.TextChoices):
@@ -143,10 +145,11 @@ TEMPLATE_DEFAULTS = {
         "Ver detalles: {portal_url}"
     ),
     WhatsAppMessage.Kinds.REMINDER_24H: (
-        "Hola {client_name} 👋 Te recordamos tu cita en {salon_name} mañana "
-        "{date} a las {time} para {service_name}.\n\n"
-        "Responde a este mensaje con *Sí* o *No*.\n"
-        "Si no respondes, confirmaremos automáticamente tu asistencia en 30 minutos."
+        "Hola {client_name} 👋 Mañana {date} a las {time} tienes cita en "
+        "{salon_name} ({service_name}).\n\n"
+        "¿Vienes?\n"
+        "*SÍ* – voy\n"
+        "*NO* – no voy"
     ),
     WhatsAppMessage.Kinds.REMINDER_2H: (
         "Hola {client_name} 👋 Te esperamos en {salon_name} en 2 horas, "
@@ -209,6 +212,14 @@ TEMPLATE_DEFAULTS = {
         "💅 {service_name}\n\n"
         "Ver detalles: {portal_url}"
     ),
+    WhatsAppMessage.Kinds.CLIENT_ATTENDING: (
+        "¡Gracias, {client_name}! 💅 Te esperamos el {date} a las {time}."
+    ),
+    WhatsAppMessage.Kinds.CLIENT_DECLINED: (
+        "Hola {client_name}. Hemos cancelado tu cita del {date} a las {time}.{refund_message}\n"
+        "Será un placer verte la próxima vez 💅\n"
+        "Reserva cuando quieras: {portal_url}"
+    ),
 }
 
 TEMPLATE_NAMES = {
@@ -227,6 +238,8 @@ TEMPLATE_NAMES = {
     WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE: 'Hueco libre para lista de espera',
     WhatsAppMessage.Kinds.REVIEW_REQUEST: "Solicitud de resena despues de la cita",
     WhatsAppMessage.Kinds.PAYMENT_RECEIPT: "Confirmación de pago recibido",
+    WhatsAppMessage.Kinds.CLIENT_ATTENDING: "Gracias tras confirmar asistencia (Sí)",
+    WhatsAppMessage.Kinds.CLIENT_DECLINED: "Cancelación por el cliente (No) y devolución",
 }
 
 TEMPLATE_VARIABLES = {
@@ -245,6 +258,8 @@ TEMPLATE_VARIABLES = {
     WhatsAppMessage.Kinds.WAITLIST_SLOT_AVAILABLE: '{client_name} {salon_name} {service_name} {employee_name} {date} {time} {booking_url}',
     WhatsAppMessage.Kinds.REVIEW_REQUEST: "{client_name} {salon_name} {service_name} {employee_name} {date} {review_url} {google_review_url}",
     WhatsAppMessage.Kinds.PAYMENT_RECEIPT: "{client_name} {salon_name} {date} {time} {service_name} {amount} {portal_url}",
+    WhatsAppMessage.Kinds.CLIENT_ATTENDING: "{client_name} {salon_name} {date} {time} {service_name}",
+    WhatsAppMessage.Kinds.CLIENT_DECLINED: "{client_name} {salon_name} {date} {time} {service_name} {refund_message} {portal_url}",
 }
 
 TEMPLATE_DELAYS = {

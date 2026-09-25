@@ -749,15 +749,22 @@ class MobileApiMvpTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 201, response.content)
-        booking = Booking.objects.get(pk=response.json()["id"])
-        self.assertEqual(booking.duration_snapshot, 105)
-        self.assertEqual(booking.end_at, booking.start_at + timedelta(minutes=105))
-        self.assertEqual(booking.client_price_snapshot, Decimal("80.00"))
-        self.assertEqual(
-            [item["name"] for item in booking.service_items_snapshot],
-            ["Color", "Corte"],
+        first = Booking.objects.get(pk=response.json()["id"])
+        self.assertIsNotNone(first.booking_group_id)
+        group = list(
+            Booking.objects.filter(booking_group_id=first.booking_group_id).order_by("pk")
         )
-        self.assertEqual(response.json()["service_name"], "Color + Corte")
+        self.assertEqual(len(group), 2)
+        second = group[1]
+        # Each service is its own booking, back to back.
+        self.assertEqual(first.service_id, self.service.pk)
+        self.assertEqual(second.service_id, self.no_zone_service.pk)
+        self.assertEqual(second.start_at, first.end_at)
+        self.assertEqual(
+            first.client_price_snapshot + second.client_price_snapshot,
+            Decimal("80.00"),
+        )
+        self.assertEqual(len(response.json()["group_bookings"]), 1)
 
     def test_staff_can_add_extra_and_cleanup_time(self):
         self._auth(self.owner_user)
@@ -858,17 +865,20 @@ class MobileApiMvpTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 201, response.content)
-        booking = Booking.objects.get(pk=response.json()["id"])
-        self.assertEqual(booking.original_client_price_snapshot, Decimal("80.00"))
-        self.assertEqual(booking.discount_amount_snapshot, Decimal("80.00"))
-        self.assertEqual(booking.client_price_snapshot, Decimal("0.00"))
-        self.assertEqual(booking.employee_amount_snapshot, Decimal("0.00"))
-        self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.EXEMPT)
-        self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
-        self.assertEqual(
-            [item["client_price"] for item in booking.service_items_snapshot],
-            ["0.00", "0.00"],
+        first = Booking.objects.get(pk=response.json()["id"])
+        group = list(
+            Booking.objects.filter(booking_group_id=first.booking_group_id).order_by("pk")
         )
+        self.assertEqual(len(group), 2)
+        self.assertEqual(
+            sum((b.original_client_price_snapshot for b in group), Decimal("0.00")),
+            Decimal("80.00"),
+        )
+        for booking in group:
+            self.assertEqual(booking.client_price_snapshot, Decimal("0.00"))
+            self.assertEqual(booking.employee_amount_snapshot, Decimal("0.00"))
+            self.assertEqual(booking.prepayment_policy, Booking.PrepaymentPolicies.EXEMPT)
+            self.assertEqual(booking.status, Booking.Statuses.CONFIRMED)
         request_prepayment.assert_not_called()
 
     def test_staff_can_book_outside_employee_shift(self):
@@ -2174,10 +2184,10 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(entry.desired_date_to, date_to)
         self.assertEqual(entry.source, Booking.Sources.MANUAL)
 
-    def test_employee_cannot_access_waitlist(self):
+    def test_employee_can_access_waitlist(self):
         self._auth(self.employee_user)
         response = self.api_client.get(reverse('mobile_api:waitlist'))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
 
     def test_owner_can_configure_review_request_delay(self):
         self._auth(self.owner_user)

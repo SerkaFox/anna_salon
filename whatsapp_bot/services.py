@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from bookings.models import Booking
 from bookings.client_actions import booking_paid_amount
+from bookings.services import group_prepayment_paid, is_booking_group_member
 from bookings.utils import exact_duplicate_bookings
 
 from . import bridge
@@ -62,7 +63,7 @@ def booking_message(booking, *, kind, extra_context=None):
         "salon_name": _salon_name(),
         "date": local_start.strftime("%d/%m/%Y"),
         "time": local_start.strftime("%H:%M"),
-        "service_name": booking.service.name,
+        "service_name": booking.service_names,
         "portal_url": _portal_url(),
         "booking_url": f"{base_url}/panel/clientes/portal/bookings/{booking.pk}/",
         "attend_url": booking_response_url(booking, "attending"),
@@ -512,17 +513,23 @@ def process_expired_prepayment_requests():
                         ]
                     )
                     continue
-                if booking.online_payments.filter(status=Payment.Statuses.PAID).exists():
+                if group_prepayment_paid(booking):
                     booking.status = Booking.Statuses.CONFIRMED
                     booking.save(update_fields=["status", "updated_at"])
                     continue
-                expire_booking_prepayment(booking)
-                if booking.online_payments.filter(status=Payment.Statuses.PAID).exists():
-                    booking.status = Booking.Statuses.CONFIRMED
-                    booking.save(update_fields=["status", "updated_at"])
-                    continue
+                if not is_booking_group_member(booking):
+                    expire_booking_prepayment(booking)
+                    if group_prepayment_paid(booking):
+                        booking.status = Booking.Statuses.CONFIRMED
+                        booking.save(update_fields=["status", "updated_at"])
+                        continue
                 booking.status = Booking.Statuses.CANCELLED
                 booking.save(update_fields=["status", "updated_at"])
+                if is_booking_group_member(booking):
+                    # One cancellation message per group is enough: it goes to
+                    # the group's first booking.
+                    cancelled.append((booking, None))
+                    continue
                 message, _created = queue_booking_message(
                     booking,
                     kind=WhatsAppMessage.Kinds.PREPAYMENT_TIMEOUT_CANCELLED,
@@ -538,21 +545,18 @@ def process_expired_prepayment_requests():
 
 
 def _send_reminder_24h_buttons(message):
-    """Send a reminder that only treats an explicit negative reply as refusal."""
+    """Send the 24h reminder using the app-editable template text.
+
+    The attend/decline ids are only used by the bridge to map a client's
+    reply ("Sí" / "No") back to this booking; the text itself is the template.
+    """
     booking = message.booking
     if not booking:
         return None
-    local_start = timezone.localtime(booking.start_at)
-    body = (
-        f"Hola {booking.client.first_name or booking.client.full_name} 👋\n"
-        f"Te recordamos tu cita en BRIMOON Studio mañana {local_start:%d/%m/%Y} "
-        f"a las {local_start:%H:%M} para {booking.service_names}.\n\n"
-        "Responde a este mensaje con *Sí* o *No*.\n"
-        "Si no respondes, confirmaremos automáticamente tu asistencia en 30 minutos."
-    )
+    body = message.body or booking_message(booking, kind=WhatsAppMessage.Kinds.REMINDER_24H)
     buttons = [
-        {"id": f"attend_{booking.pk}", "body": "Sí, voy"},
-        {"id": f"confirm_decline_{booking.pk}", "body": "No, no voy"},
+        {"id": f"attend_{booking.pk}", "body": "Sí"},
+        {"id": f"confirm_decline_{booking.pk}", "body": "No"},
     ]
     try:
         return bridge.send_poll_message(

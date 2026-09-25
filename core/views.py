@@ -469,11 +469,20 @@ def _public_booking_error_response(request, values, errors):
     return render(request, "core/public_booking.html", _public_booking_context(request, values, errors), status=400)
 
 
+def _logged_in_client(request):
+    """The client profile of an authenticated client user, else None."""
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated or user.role != User.ROLE_CLIENT:
+        return None
+    return get_client_profile(user)
+
+
 def _public_booking_context(request, values=None, errors=None):
     booking_service_categories, booking_service_catalog = _public_booking_service_catalog()
     context = _base_context(request, reverse("public_booking"))
     context.update(
         {
+            "logged_client": _logged_in_client(request),
             "booking_services": _public_booking_services(),
             "booking_service_categories": booking_service_categories,
             "booking_service_catalog": booking_service_catalog,
@@ -519,25 +528,30 @@ def _public_booking_post_multi(request, post, t):
         "secondary_contact": post.get("secondary_contact", "").strip(),
     }
     errors = {}
+    logged_client = _logged_in_client(request)
 
-    if not values["name"]:
-        errors["name"] = [t["public_booking_error_name"]]
-    elif _looks_like_phone_name(values["name"]):
-        errors["name"] = [t["public_booking_error_name_is_phone"]]
-    if not values["password"]:
-        errors["password"] = [t["public_booking_error_password_required"]]
-    elif len(values["password"]) < 6:
-        errors["password"] = [t["public_booking_error_password_min"]]
+    if logged_client is None:
+        if not values["name"]:
+            errors["name"] = [t["public_booking_error_name"]]
+        elif _looks_like_phone_name(values["name"]):
+            errors["name"] = [t["public_booking_error_name_is_phone"]]
+        if not values["password"]:
+            errors["password"] = [t["public_booking_error_password_required"]]
+        elif len(values["password"]) < 6:
+            errors["password"] = [t["public_booking_error_password_min"]]
 
-    contact_values, contact_errors = _resolve_client_contact_values(
-        values["contact"],
-        values["secondary_contact"] if values["secondary_contact_enabled"] else "",
-    )
-    if contact_errors:
-        errors.update(contact_errors)
-        contact_values = {"phone": "", "email": ""}
-    values["phone"] = contact_values["phone"]
-    values["email"] = contact_values["email"]
+        contact_values, contact_errors = _resolve_client_contact_values(
+            values["contact"],
+            values["secondary_contact"] if values["secondary_contact_enabled"] else "",
+        )
+        if contact_errors:
+            errors.update(contact_errors)
+            contact_values = {"phone": "", "email": ""}
+        values["phone"] = contact_values["phone"]
+        values["email"] = contact_values["email"]
+    else:
+        values["phone"] = logged_client.phone
+        values["email"] = logged_client.email
 
     try:
         cart_items = json.loads(post.get("cart_json", "[]"))
@@ -552,11 +566,13 @@ def _public_booking_post_multi(request, post, t):
         )
 
     # Resolve / create client
-    candidate = resolve_user_by_identity(values["contact"])
-    if candidate and candidate.role != User.ROLE_CLIENT:
-        candidate = None
+    candidate = None
+    if logged_client is None:
+        candidate = resolve_user_by_identity(values["contact"])
+        if candidate and candidate.role != User.ROLE_CLIENT:
+            candidate = None
 
-    if not candidate:
+    if logged_client is None and not candidate:
         existing_contact_type = _client_contact_exists(email=values["email"], phone=values["phone"])
         if existing_contact_type == "email":
             key = "contact" if values["email"] == (classify_contact(values["contact"]) or {}).get("value") else "secondary_contact"
@@ -607,7 +623,15 @@ def _public_booking_post_multi(request, post, t):
                 bookings_created.append(booking)
         return bookings_created
 
-    if candidate:
+    if logged_client is not None:
+        if logged_client.is_blacklisted:
+            return JsonResponse({"ok": False, "errors": {"__all__": ["Este cliente no puede crear reservas online."]}}, status=400)
+        try:
+            bookings = _make_booking(logged_client)
+        except PublicBookingError as exc:
+            return JsonResponse({"ok": False, "errors": exc.errors}, status=400)
+        user = request.user
+    elif candidate:
         authenticated_user = authenticate(request, username=candidate.username, password=values["password"])
         if authenticated_user is None:
             return JsonResponse({"ok": False, "errors": {"password": [t["public_booking_error_wrong_password"]]}}, status=400) if _public_wants_json(request) else render(
@@ -656,10 +680,11 @@ def _public_booking_post_multi(request, post, t):
         else request_booking_prepayment(bookings[0], request)
     )
 
-    login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-    language = detect_public_language(request)
-    request.session[PUBLIC_LANGUAGE_SESSION_KEY] = language
-    request.session[CLIENT_LANGUAGE_SESSION_KEY] = language
+    if logged_client is None:
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        language = detect_public_language(request)
+        request.session[PUBLIC_LANGUAGE_SESSION_KEY] = language
+        request.session[CLIENT_LANGUAGE_SESSION_KEY] = language
 
     redirect_url = reverse("clients:portal")
     if _public_wants_json(request):
@@ -888,6 +913,16 @@ def public_booking(request):
 
     _language, t, _services, _articles = _localized_context(request)
     post = request.POST
+
+    # A logged-in client's single-service submission is handled as a one-item cart.
+    if not post.get("cart_json") and post.get("service") and _logged_in_client(request):
+        post = post.copy()
+        post["cart_json"] = json.dumps([{
+            "service": post.get("service"),
+            "employee": post.get("employee"),
+            "zone": post.get("zone") or None,
+            "start_at": post.get("start_at"),
+        }])
 
     # Multi-service cart submission (cart_json present)
     if post.get("cart_json"):

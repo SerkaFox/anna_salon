@@ -202,6 +202,8 @@ def demo_pay(request, pk):
             booking.status = Booking.Statuses.CONFIRMED
             booking.save(update_fields=["status", "updated_at"])
         create_booking_prepayment(booking, payment)
+        from bookings.services import confirm_booking_group
+        confirm_booking_group(booking)
 
     try:
         from notifications.services import notify_payment_receipt

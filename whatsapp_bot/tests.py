@@ -160,8 +160,7 @@ class WhatsAppBotTests(TestCase):
         message = WhatsAppMessage.objects.get(kind=WhatsAppMessage.Kinds.REMINDER_24H)
         self.assertEqual(message.status, WhatsAppMessage.Statuses.SENT)
         self.assertEqual(message.provider_message_id, "dry-run")
-        self.assertIn("No voy", message.body)
-        self.assertIn("No puedo", message.body)
+        self.assertIn("*NO*", message.body)
         self.assertNotIn("http", message.body)
 
         send_whatsapp_message(message)
@@ -200,8 +199,7 @@ class WhatsAppBotTests(TestCase):
         self.assertEqual(buttons[0]["id"], f"attend_{booking.pk}")
         self.assertEqual(buttons[1]["id"], f"confirm_decline_{booking.pk}")
         body = send_poll.call_args.kwargs["body"]
-        self.assertIn("No quiero", body)
-        self.assertIn("30 minutos", body)
+        self.assertIn("*NO*", body)
         self.assertNotIn("http", body)
 
     @override_settings(WHATSAPP_DRY_RUN=False)
@@ -214,9 +212,9 @@ class WhatsAppBotTests(TestCase):
 
         self.assertEqual(result["message_id"], "confirmation-poll-1")
         buttons = send_poll.call_args.kwargs["buttons"]
-        self.assertEqual(buttons[0], {"id": f"attend_{booking.pk}", "body": "Mantener cita"})
-        self.assertEqual(buttons[1], {"id": f"confirm_decline_{booking.pk}", "body": "No asistiré"})
-        self.assertIn("No puedo", send_poll.call_args.kwargs["body"])
+        self.assertEqual(buttons[0], {"id": f"attend_{booking.pk}", "body": "Sí, mantengo la cita"})
+        self.assertEqual(buttons[1], {"id": f"confirm_decline_{booking.pk}", "body": "No, cancelo"})
+        self.assertIn("*No*", send_poll.call_args.kwargs["body"])
 
     @patch("bookings.client_actions.create_refund")
     def test_written_decline_cancels_immediately(self, create_refund):
@@ -450,8 +448,7 @@ class WhatsAppBotTests(TestCase):
         reminder_body = TEMPLATE_DEFAULTS[WhatsAppMessage.Kinds.REMINDER_24H]
         self.assertIn("{date}", reminder_body)
         self.assertIn("{time}", reminder_body)
-        self.assertIn("No quiero", reminder_body)
-        self.assertIn("30 minutos", reminder_body)
+        self.assertIn("*NO*", reminder_body)
         self.assertNotIn("{attend_url}", reminder_body)
 
     def test_done_booking_queues_delayed_review_request(self):
