@@ -1,0 +1,49 @@
+{% load static client_i18n %}
+{% site_chrome as site %}
+<header class="lux-page-header lux-page-header--portal">
+  <nav class="lux-nav" aria-label="Navegación principal">
+    <a class="lux-brand" href="{% url 'home' %}" aria-label="{{ salon_name }} inicio">
+      <img src="{% static salon_logo %}" alt="{{ salon_name }}" class="lux-brand__logo">
+      <span>{{ salon_name }}</span>
+    </a>
+    <button class="lux-menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false" data-menu-toggle>
+      <span></span><span></span><span></span>
+    </button>
+    <div class="lux-nav__links" data-menu-panel>
+      <a href="{% url 'service_index' %}">{{ site.t.nav_services }}</a>
+      <a href="{% url 'advice_index' %}">{{ site.t.nav_tips }}</a>
+      <a href="{% url 'public_gallery' %}">{{ site.t.nav_gallery }}</a>
+      <a href="{% url 'reviews:list' %}">Opiniones</a>
+      <a href="{% url 'home' %}#contacto">{{ site.t.nav_contact }}</a>
+      <form method="post" action="{% url 'set_public_language' %}" class="lux-language-switcher">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <label class="sr-only" for="public-language">Language</label>
+        <select id="public-language" name="language" onchange="this.form.submit()">
+          {% for code, label in site.languages %}
+            <option value="{{ code }}" {% if code == site.language %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% if request.user.is_authenticated %}
+        <a href="{% url 'clients:portal' %}" aria-current="page">{{ site.t.nav_account }}</a>
+        <a href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
+      {% else %}
+        <a href="{% url 'accounts:login' %}">{{ site.t.nav_account }}</a>
+      {% endif %}
+      <a class="btn-lux btn-lux-primary btn-lux-small" href="{% url 'public_booking' %}">{{ site.t.nav_book }}</a>
+    </div>
+  </nav>
+</header>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var toggle = document.querySelector('[data-menu-toggle]');
+    var panel = document.querySelector('[data-menu-panel]');
+    if (!toggle || !panel) return;
+    toggle.addEventListener('click', function () {
+      var expanded = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      panel.classList.toggle('is-open', !expanded);
+    });
+  });
+</script>

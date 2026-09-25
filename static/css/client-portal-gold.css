@@ -1,0 +1,91 @@
+/* Client portal: same black/gold look as the public site (replaces the old green theme). */
+body.client-lux-body {
+  --bg: #061018;
+  --bg-soft: rgba(8, 14, 22, 0.94);
+  --bg-card: rgba(10, 17, 28, 0.72);
+  --panel: rgba(10, 17, 28, 0.72);
+  --gold: #d6a75c;
+  --gold-light: #f0d091;
+  --gold-dim: rgba(214, 167, 92, 0.14);
+  --line: rgba(240, 208, 145, 0.18);
+  --line-strong: rgba(240, 208, 145, 0.42);
+  --text: #f7efe3;
+  --muted: #c6baaa;
+  --text-muted: #c6baaa;
+  --accent: #d6a75c;
+  --accent-2: #f0d091;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(214, 167, 92, 0.16), transparent 34%),
+    radial-gradient(circle at 88% 70%, rgba(25, 168, 118, 0.08), transparent 32%),
+    linear-gradient(180deg, #050b11, #08121a);
+  background-attachment: fixed;
+}
+
+body.client-lux-body .panel-header h1,
+body.client-lux-body .panel-card h2 {
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 700;
+}
+
+body.client-lux-body .stat-card,
+body.client-lux-body .panel-card,
+body.client-lux-body .booking-list-card {
+  background: linear-gradient(145deg, rgba(240, 208, 145, 0.07), rgba(8, 14, 22, 0.82));
+  border-color: var(--line);
+}
+
+body.client-lux-body .btn:not(.btn-light):not(.btn-danger) {
+  color: #201206;
+  background: linear-gradient(135deg, #f7dda1, #d6a75c 52%, #9f6f29);
+  box-shadow: 0 10px 28px rgba(214, 167, 92, 0.26);
+}
+
+body.client-lux-body .client-app-nav {
+  border-color: rgba(240, 208, 145, 0.34);
+  background: rgba(6, 12, 18, 0.96);
+}
+
+body.client-lux-body .client-app-nav__item.is-active {
+  color: #201206;
+  background: linear-gradient(145deg, #f7dda1, #d6a75c);
+  box-shadow: 0 7px 20px rgba(214, 167, 92, 0.3);
+}
+
+body.client-lux-body .client-theme-choice .is-selected,
+body.client-lux-body .is-selected {
+  color: #201206;
+  border-color: #f0d091;
+  background: #f0d091;
+}
+
+body.client-lux-body .client-settings-icon,
+body.client-lux-body .client-settings-row__icon {
+  background: rgba(214, 167, 92, 0.14);
+  border-color: rgba(240, 208, 145, 0.25);
+}
+
+body.client-lux-body a.dashboard-link,
+body.client-lux-body a.client-link-pill {
+  color: #201206 !important;
+  background: linear-gradient(135deg, #f7dda1, #d6a75c) !important;
+  border: 1px solid #f0d091 !important;
+}
+
+body.client-lux-body .employee-booking-section,
+body.client-lux-body .employee-booking-history {
+  background: rgba(8, 14, 22, 0.72);
+}
+
+/* The header comes from the public site: keep it compact inside the portal. */
+.lux-page-header--portal { min-height: 0; padding-bottom: 6px; }
+.lux-page-header--portal::before { display: none; }
+body.client-lux-body .client-lux-panel {
+  width: min(1180px, calc(100% - 36px));
+  margin: 0 auto;
+  padding: 26px 0 110px;
+}
+body.client-lux-body .mobile-topbar { display: none; }
+.lux-brand { color: var(--text); }
+.lux-brand:hover { color: var(--gold-light); }
+body.client-lux-body .lux-footer { padding-bottom: 104px; }
+body.client-lux-body .client-lux-panel { padding-bottom: 40px; }

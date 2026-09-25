@@ -1,19 +1,15 @@
 {% extends "layout.html" %}
 {% load static client_i18n %}
 
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/site-chrome.css' %}?v=20260925-portal2">
+  <link rel="stylesheet" href="{% static 'css/client-portal-gold.css' %}?v=20260925-portal2">
+{% endblock %}
+
 {% block body_class %}client-lux-body{% endblock %}
 
 {% block body %}
-<div class="mobile-topbar">
-  <div class="mobile-topbar__brand">
-    <div class="logo"><img src="{% static salon_logo %}" alt="{{ salon_name }}"></div>
-    <div>
-      <strong>{{ salon_name }}</strong>
-      <span>{% ct "portal_client" %}</span>
-    </div>
-  </div>
-  <button class="mobile-menu-btn" type="button" id="clientMenuToggle" aria-label="Abrir menú" aria-controls="clientPanelActions" aria-expanded="false">☰</button>
-</div>
+{% include "includes/site_header.html" %}
 
 <main class="main-panel client-lux-panel">
   <header class="panel-header">
@@ -21,23 +17,6 @@
       <h1>{% block portal_title %}{% endblock %}</h1>
       <p>{% block portal_subtitle %}{% endblock %}</p>
       {% block portal_header_action %}{% endblock %}
-    </div>
-    <div class="panel-actions" id="clientPanelActions">
-      {% client_lang as current_client_lang %}
-      {% client_languages as available_client_languages %}
-      <form method="post" action="{% url 'clients:set_language' %}" class="language-switcher">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <label class="sr-only" for="client-language">Language</label>
-        <select id="client-language" name="language" class="input" onchange="this.form.submit()">
-          {% for code, label in available_client_languages %}
-            <option value="{{ code }}" {% if code == current_client_lang %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </form>
-      <a class="btn btn-light" href="{% url 'home' %}">{% ct "site_home" %}</a>
-      <a class="btn btn-light" href="{% url 'clients:portal' %}">{% ct "my_portal" %}</a>
-      <a class="btn btn-light" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
     </div>
   </header>
 
@@ -70,19 +49,10 @@
   {% endblock %}
 </main>
 
+{% include "includes/site_footer.html" %}
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-  const clientTheme = localStorage.getItem("brimoon-client-theme") || "dark";
-  document.body.classList.toggle("client-theme-light", clientTheme === "light");
-  const menuToggle = document.getElementById("clientMenuToggle");
-  const panelActions = document.getElementById("clientPanelActions");
-  if (menuToggle && panelActions) {
-    menuToggle.addEventListener("click", function () {
-      const isOpen = document.body.classList.toggle("client-menu-open");
-      menuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-    });
-  }
-
   document.querySelectorAll("[data-cancel-form]").forEach(function (cancelForm) {
     cancelForm.addEventListener("submit", function (event) {
       const refundable = cancelForm.dataset.refundable === "1";

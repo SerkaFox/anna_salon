@@ -326,32 +326,6 @@
           </div>
         </div>
       </article>
-
-      <article class="panel-card client-settings-card">
-        <h2>{% if current_client_lang == "ru" %}Внешний вид и язык{% else %}Apariencia e idioma{% endif %}</h2>
-        <div class="client-theme-choice" role="group" aria-label="Tema">
-          <button class="btn btn-light" type="button" data-client-theme="dark">{% if current_client_lang == "ru" %}Тёмная{% else %}Oscuro{% endif %}</button>
-          <button class="btn btn-light" type="button" data-client-theme="light">{% if current_client_lang == "ru" %}Светлая{% else %}Claro{% endif %}</button>
-        </div>
-        <form method="post" action="{% url 'clients:set_language' %}" class="client-settings-language">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{% url 'clients:portal' %}#settings">
-          <label for="client-settings-language">{% if current_client_lang == "ru" %}Язык{% else %}Idioma{% endif %}</label>
-          <select id="client-settings-language" name="language" class="input" onchange="this.form.submit()">
-            {% for code, label in available_client_languages %}
-              <option value="{{ code }}" {% if code == current_client_lang %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </form>
-      </article>
-
-      <article class="panel-card client-settings-card">
-        <h2>{% if current_client_lang == "ru" %}Действия{% else %}Acciones{% endif %}</h2>
-        <div class="client-settings-actions">
-          <a class="btn btn-light" href="{% url 'home' %}">{% ct "site_home" %}</a>
-          <a class="btn btn-danger" href="{% url 'accounts:logout' %}">{% ct "logout" %}</a>
-        </div>
-      </article>
     </div>
   </section>
 
@@ -403,20 +377,6 @@ document.addEventListener("DOMContentLoaded", function () {
     button.addEventListener("click", function (event) {
       event.preventDefault();
       window.setClientPortalTab(button.dataset.clientTab || "home");
-    });
-  });
-
-  const savedTheme = localStorage.getItem("brimoon-client-theme") || "dark";
-  document.body.classList.toggle("client-theme-light", savedTheme === "light");
-  document.querySelectorAll("[data-client-theme]").forEach(function (button) {
-    const theme = button.dataset.clientTheme || "dark";
-    button.classList.toggle("is-selected", theme === savedTheme);
-    button.addEventListener("click", function () {
-      localStorage.setItem("brimoon-client-theme", theme);
-      document.body.classList.toggle("client-theme-light", theme === "light");
-      document.querySelectorAll("[data-client-theme]").forEach(function (item) {
-        item.classList.toggle("is-selected", item === button);
-      });
     });
   });
 
