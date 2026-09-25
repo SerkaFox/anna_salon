@@ -89,3 +89,5 @@ body.client-lux-body .mobile-topbar { display: none; }
 .lux-brand:hover { color: var(--gold-light); }
 body.client-lux-body .lux-footer { padding-bottom: 104px; }
 body.client-lux-body .client-lux-panel { padding-bottom: 40px; }
+/* No "install app" button inside the portal: it overlapped the tab bar. */
+body.client-lux-body .pwa-install { display: none !important; }

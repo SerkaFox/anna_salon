@@ -1,0 +1,16 @@
+{% load client_i18n %}
+{% client_lang as portal_nav_lang %}
+<nav class="client-app-nav" aria-label="Navegación del portal">
+  <a class="client-app-nav__item" href="{% url 'clients:portal' %}#home">
+    <span class="client-app-nav__icon" aria-hidden="true">&#128100;</span>
+    <span>{% if portal_nav_lang == "ru" %}Моя страница{% else %}Mi ficha{% endif %}</span>
+  </a>
+  <a class="client-app-nav__item is-active" href="{% url 'public_booking' %}" aria-current="page">
+    <span class="client-app-nav__icon" aria-hidden="true">&#128197;</span>
+    <span>{% if portal_nav_lang == "ru" %}Записаться{% else %}Reservar{% endif %}</span>
+  </a>
+  <a class="client-app-nav__item" href="{% url 'clients:portal' %}#settings">
+    <span class="client-app-nav__icon" aria-hidden="true">&#9881;</span>
+    <span>{% if portal_nav_lang == "ru" %}Настройки{% else %}Ajustes{% endif %}</span>
+  </a>
+</nav>

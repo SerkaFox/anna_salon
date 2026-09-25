@@ -1,0 +1,42 @@
+/* Portal tab bar (Mi ficha / Reservar / Ajustes) shown on the booking page for logged-in clients. */
+.client-app-nav {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  width: min(520px, calc(100% - 28px));
+  min-height: 70px;
+  padding: 7px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  border: 1px solid rgba(240, 208, 145, 0.34);
+  border-radius: 24px;
+  background: rgba(6, 12, 18, 0.96);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(20px);
+  transform: translateX(-50%);
+}
+.client-app-nav__item {
+  min-width: 0;
+  padding: 7px 5px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  border-radius: 18px;
+  color: var(--muted);
+  font-size: 0.73rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+.client-app-nav__item.is-active {
+  color: #201206;
+  background: linear-gradient(145deg, #f7dda1, #d6a75c);
+  box-shadow: 0 7px 20px rgba(214, 167, 92, 0.3);
+}
+.client-app-nav__icon { font-size: 1.28rem; line-height: 1.2; }
+body.has-client-nav .lux-footer { padding-bottom: 104px; }
+body.has-client-nav .pwa-install { display: none !important; }
+@media (max-width: 760px) {
+  .client-app-nav { bottom: max(8px, env(safe-area-inset-bottom)); width: calc(100% - 16px); min-height: 66px; border-radius: 22px; }
+}

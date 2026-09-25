@@ -20,10 +20,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=20260905-hide-selected-slot-picker">
+  {% block extra_head %}{% endblock %}
   {% include "includes/pwa_head.html" %}
   {% if schema_json %}<script type="application/ld+json">{{ schema_json|safe }}</script>{% endif %}
 </head>
-<body class="landing-body" style="--page-image: url('{% static salon_hero %}');">
+<body class="landing-body{% if logged_client %} has-client-nav{% endif %}" style="--page-image: url('{% static salon_hero %}');">
   <header class="lux-page-header">
     <nav class="lux-nav" aria-label="Navegación principal">
       <a class="lux-brand" href="{% url 'home' %}" aria-label="{{ salon_name }} inicio">
@@ -114,6 +115,7 @@
   </script>
   {% endif %}
   {% block extra_js %}{% endblock %}
+  {% if logged_client %}{% include "includes/client_app_nav.html" %}{% endif %}
   {% include "includes/pwa_install.html" %}
   {% include "includes/password_visibility.html" %}
 </body>

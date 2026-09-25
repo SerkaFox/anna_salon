@@ -16,6 +16,8 @@
   </section>
 {% endblock %}
 
+{% block extra_head %}{% if logged_client %}<link rel="stylesheet" href="{% static 'css/client-app-nav.css' %}?v=1">{% endif %}{% endblock %}
+
 {% block content %}
 <section class="lux-section public-booking-section">
   <div class="lux-container public-booking-layout">
