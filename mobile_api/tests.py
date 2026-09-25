@@ -736,6 +736,20 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(booking.zone_id, self.zone.pk)
         self.assertEqual(booking.end_at, booking.start_at + timedelta(minutes=self.service.duration_minutes))
 
+    def test_booking_labels_are_localized_for_russian_app(self):
+        booking = self._create_booking()
+        self._auth(self.owner_user)
+        url = reverse("mobile_api:booking_detail", args=[booking.pk])
+
+        ru = self.api_client.get(url, HTTP_ACCEPT_LANGUAGE="ru").json()
+        es = self.api_client.get(url, HTTP_ACCEPT_LANGUAGE="es").json()
+
+        self.assertEqual(ru["status_label"], "Подтверждена")
+        self.assertEqual(es["status_label"], "Confirmada")
+        self.assertEqual(ru["source_label"], "Вручную")
+        self.assertNotIn("Sin pagar", ru["payment_state_label"])
+        self.assertIn("Не оплачено", ru["payment_state_label"])
+
     def test_booking_creation_supports_multiple_services_as_one_order(self):
         self._auth(self.owner_user)
 

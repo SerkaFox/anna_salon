@@ -36,6 +36,49 @@ def _mobile_language(serializer):
     return "ru" if language.lower().startswith("ru") else "es"
 
 
+_RU_BOOKING_LABELS = {
+    # statuses
+    "Pendiente": "Ожидает",
+    "Confirmada": "Подтверждена",
+    "En curso": "В процессе",
+    "Hecha": "Выполнена",
+    "Cancelada": "Отменена",
+    "No asistió": "Не пришёл",
+    # sources
+    "Manual": "Вручную",
+    "Sitio web": "Сайт",
+    "Teléfono": "Телефон",
+    "En el salón": "В салоне",
+    "Cliente recurrente": "Повторный клиент",
+    "Recomendación": "Рекомендация",
+    "Empleado": "Сотрудник",
+}
+
+_RU_PAYMENT_PARTS = (
+    ("Pagado completo", "Оплачено полностью"),
+    ("Pagado con señal", "Оплачено предоплатой"),
+    ("Pago parcial", "Частичная оплата"),
+    ("Sin pagar", "Не оплачено"),
+    ("Devuelto", "Возвращено"),
+    ("tarjeta online", "карта онлайн"),
+    ("efectivo", "наличные"),
+    ("tarjeta", "карта"),
+    ("transferencia", "перевод"),
+    (" pendiente", " к оплате"),
+    ("quedan", "осталось"),
+)
+
+
+def _localized_booking_label(serializer, text):
+    if not text or _mobile_language(serializer) != "ru":
+        return text
+    if text in _RU_BOOKING_LABELS:
+        return _RU_BOOKING_LABELS[text]
+    for spanish, russian in _RU_PAYMENT_PARTS:
+        text = text.replace(spanish, russian)
+    return text
+
+
 def _schedule_day_label(serializer, attrs, *, override=False):
     language = _mobile_language(serializer)
     if override:
@@ -742,8 +785,8 @@ class BookingSerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source="service_names", read_only=True)
     service_items = serializers.ListField(source="service_items_snapshot", read_only=True)
     zone_name = serializers.CharField(source="zone.name", read_only=True, allow_null=True)
-    status_label = serializers.CharField(source="get_status_display", read_only=True)
-    source_label = serializers.CharField(source="get_source_display", read_only=True)
+    status_label = serializers.SerializerMethodField()
+    source_label = serializers.SerializerMethodField()
     start_at = serializers.SerializerMethodField()
     end_at = serializers.SerializerMethodField()
     reward_rule_name = serializers.CharField(source="reward_rule.name", read_only=True, allow_null=True)
@@ -896,8 +939,14 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_payment_state(self, obj):
         return self._payment_info(obj)["state"]
 
+    def get_status_label(self, obj):
+        return _localized_booking_label(self, obj.get_status_display())
+
+    def get_source_label(self, obj):
+        return _localized_booking_label(self, obj.get_source_display())
+
     def get_payment_state_label(self, obj):
-        return self._payment_info(obj)["state_label"]
+        return _localized_booking_label(self, self._payment_info(obj)["state_label"])
 
     def get_payment_total_amount(self, obj):
         return str(self._payment_info(obj)["total_amount"])
