@@ -1846,6 +1846,7 @@ class TimeBlockSerializer(serializers.Serializer):
     start_at = serializers.CharField(read_only=True)
     end_at = serializers.CharField(read_only=True)
     label = serializers.CharField(read_only=True)
+    note = serializers.CharField(read_only=True)
     reason = serializers.CharField(read_only=True)
     color = serializers.CharField(read_only=True)
     is_recurring = serializers.BooleanField(read_only=True)
@@ -1870,6 +1871,7 @@ class TimeBlockSerializer(serializers.Serializer):
                 "start_at": timezone.localtime(start_at, timezone.get_default_timezone()).isoformat(),
                 "end_at": timezone.localtime(end_at, timezone.get_default_timezone()).isoformat(),
                 "label": label,
+                "note": data.get("note") or "",
                 "reason": label,
                 "color": data.get("color") or "#111111",
                 "is_recurring": data.get("is_recurring", False),
@@ -1889,6 +1891,7 @@ class TimeBlockSerializer(serializers.Serializer):
             "start_at": timezone.localtime(start_at, timezone.get_default_timezone()).isoformat(),
             "end_at": timezone.localtime(end_at, timezone.get_default_timezone()).isoformat(),
             "label": label,
+            "note": instance.note or "",
             "reason": label,
             "color": instance.color or "#111111",
             "is_recurring": False,
@@ -1903,6 +1906,7 @@ class TimeBlockWriteSerializer(serializers.Serializer):
     end_at = SalonDateTimeField(required=False)
     reason = serializers.CharField(required=False, allow_blank=True)
     label = serializers.CharField(required=False, allow_blank=True)
+    note = serializers.CharField(required=False, allow_blank=True, max_length=300)
     color = serializers.CharField(required=False, allow_blank=True)
     force = serializers.BooleanField(required=False, default=False)
     recurring = serializers.BooleanField(required=False, default=False)
@@ -1930,9 +1934,17 @@ class TimeBlockWriteSerializer(serializers.Serializer):
         label = (attrs.get("reason") or attrs.get("label") or (instance.label if instance is not None else "") or "Bloqueo").strip()
         color = (attrs.get("color") or (instance.color if instance is not None else "") or "#111111").strip()
 
+        if "note" in attrs:
+            note = (attrs.get("note") or "").strip()
+        else:
+            note = instance.note if instance is not None else ""
+
         if is_recurring:
-            return self._validate_recurring(attrs, employee, label, color)
-        return self._validate_one_time(attrs, employee, label, color)
+            result = self._validate_recurring(attrs, employee, label, color)
+        else:
+            result = self._validate_one_time(attrs, employee, label, color)
+        result["_note"] = note
+        return result
 
     def _validate_one_time(self, attrs, employee, label, color):
         instance = self.instance
@@ -2030,6 +2042,7 @@ class TimeBlockWriteSerializer(serializers.Serializer):
             instance.start_time = self.validated_data["_start_time"]
             instance.end_time = self.validated_data["_end_time"]
             instance.label = self.validated_data["_label"]
+            instance.note = self.validated_data["_note"]
             instance.color = self.validated_data["_color"]
             instance.active = self.validated_data.get("active", instance.active if instance.pk else True)
             instance.date_from = self.validated_data["_date_from"]
@@ -2043,6 +2056,7 @@ class TimeBlockWriteSerializer(serializers.Serializer):
         instance.start_time = self.validated_data["_start_time"]
         instance.end_time = self.validated_data["_end_time"]
         instance.label = self.validated_data["_label"]
+        instance.note = self.validated_data["_note"]
         instance.color = self.validated_data["_color"]
         instance.save()
         return instance

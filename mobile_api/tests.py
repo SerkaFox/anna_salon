@@ -1247,6 +1247,47 @@ class MobileApiMvpTests(TestCase):
         self.assertEqual(delete_response.status_code, 204)
         self.assertFalse(EmployeeTimeBlock.objects.filter(pk=block_id).exists())
 
+    def test_time_block_keeps_free_text_note(self):
+        self._auth(self.owner_user)
+
+        created = self.api_client.post(
+            reverse("mobile_api:time_blocks"),
+            {
+                "employee": self.employee.pk,
+                "start_at": "2026-04-27T14:00:00+02:00",
+                "end_at": "2026-04-27T14:30:00+02:00",
+                "reason": "Reunion",
+                "note": "Proveedor de esmaltes",
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.content)
+        self.assertEqual(created.json()["note"], "Proveedor de esmaltes")
+        block_id = created.json()["id"]
+
+        # Changing only the time keeps the note.
+        patched = self.api_client.patch(
+            reverse("mobile_api:time_block_detail", args=[block_id]),
+            {"end_at": "2026-04-27T14:45:00+02:00"},
+            format="json",
+        )
+        self.assertEqual(patched.status_code, 200)
+        self.assertEqual(patched.json()["note"], "Proveedor de esmaltes")
+
+        # An empty note clears it.
+        cleared = self.api_client.patch(
+            reverse("mobile_api:time_block_detail", args=[block_id]),
+            {"note": ""},
+            format="json",
+        )
+        self.assertEqual(cleared.json()["note"], "")
+
+        listed = self.api_client.get(
+            reverse("mobile_api:time_blocks"),
+            {"date": "2026-04-27", "employee": self.employee.pk},
+        )
+        self.assertIn("note", listed.json()["results"][0])
+
     def test_employee_can_manage_only_own_time_blocks(self):
         other_block = EmployeeTimeBlock.objects.create(
             employee=self.other_employee,

@@ -152,6 +152,7 @@ class EmployeeTimeBlock(models.Model):
     start_time = models.TimeField("Inicio")
     end_time = models.TimeField("Fin")
     label = models.CharField("Motivo", max_length=140, blank=True)
+    note = models.CharField("Nota", max_length=300, blank=True)
     color = models.CharField("Color", max_length=20, default="#111111")
 
     class Meta:
@@ -174,6 +175,7 @@ class EmployeeRecurringTimeBlock(models.Model):
     start_time = models.TimeField("Inicio")
     end_time = models.TimeField("Fin")
     label = models.CharField("Motivo", max_length=140, blank=True)
+    note = models.CharField("Nota", max_length=300, blank=True)
     color = models.CharField("Color", max_length=20, default="#111111")
     active = models.BooleanField("Activo", default=True)
     date_from = models.DateField("Desde")

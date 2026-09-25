@@ -1,16 +1,16 @@
 ANDROID_APP_UPDATE = {
-    "version_code": 57,
-    "version_name": "0.1.56",
-    "apk_url": "https://brimoon.es/media/brimoon-release-0.1.56-57.apk",
-    "sha256": "aac55c6acf55512ec80179195c556813911c38fa172f8bb5918e014001c31365",
-    "size_bytes": 65814415,
+    "version_code": 58,
+    "version_name": "0.1.57",
+    "apk_url": "https://brimoon.es/media/brimoon-release-0.1.57-58.apk",
+    "sha256": "d0a4f0d307618f22d5708b162fb28f77ed2c98ef900334c89940c5b95cadd8bd",
+    "size_bytes": 65945487,
     "required": False,
     "notes_ru": [
-        "Перевод карточки записи: статус, источник, оплата, даты и длительность на русском.",
-        "Срок предоплаты скрывается, когда предоплата уже внесена.",
+        "Пауза в календаре: поле «Заметка» (с кем встреча, что за обед, детали), видно на блоке и в карточке.",
+        "Причины паузы переведены: Встреча, Болезнь, Обед.",
     ],
     "notes_es": [
-        "Ficha de la reserva traducida: estado, origen, pago, fechas y duración.",
-        "El límite de prepago se oculta cuando el prepago ya está realizado.",
+        "Pausa en el calendario: campo «Nota» (con quién, detalles), visible en el bloque y en la ficha.",
+        "Motivos de pausa traducidos.",
     ],
 }
