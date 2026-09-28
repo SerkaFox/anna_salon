@@ -64,35 +64,92 @@
     <article class="panel-card" id="cambiar-cita">
       <h2>Cambiar o cancelar cita</h2>
       {% if can_reschedule %}
-        <form method="post" action="{% url 'clients:booking_reschedule' booking.id %}" class="entity-form">
+        <form method="post" action="{% url 'clients:booking_reschedule' booking.id %}" class="entity-form" id="reschedule-form">
           {% csrf_token %}
-          <div class="form-grid">
-            <div class="field">
-              <label for="reschedule-start">Nueva fecha y hora</label>
-              <input class="input" id="reschedule-start" name="start_at" type="datetime-local" required>
-            </div>
-            <div class="field">
-              <label for="reschedule-employee">Especialista</label>
-              <select class="input" id="reschedule-employee" name="employee">
-                {% for employee in employees %}
-                  <option value="{{ employee.id }}" {% if employee.id == booking.employee_id %}selected{% endif %}>{{ employee.full_name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            {% if zones %}
-              <div class="field">
-                <label for="reschedule-zone">Zona</label>
-                <select class="input" id="reschedule-zone" name="zone">
-                  <option value="">Automática</option>
-                  {% for zone in zones %}
-                    <option value="{{ zone.id }}" {% if booking.zone_id == zone.id %}selected{% endif %}>{{ zone.name }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-            {% endif %}
+          <input type="hidden" name="start_at" id="rescheduled-start-at">
+          <input type="hidden" name="employee" id="rescheduled-employee">
+          <input type="hidden" name="zone" id="rescheduled-zone">
+          <div class="field">
+            <label for="reschedule-date">Elige una fecha</label>
+            <input class="input" id="reschedule-date" type="date"
+                   min="{{ today_iso }}"
+                   max="{{ max_date_iso }}"
+                   style="max-width:180px;">
           </div>
-          <button class="btn btn-light" type="submit">Cambiar fecha/hora</button>
+          <div id="slots-container" style="margin-top:12px;min-height:36px;"></div>
+          <button class="btn btn-light" type="submit" id="reschedule-submit" disabled style="margin-top:16px;">Cambiar fecha/hora</button>
         </form>
+        <script>
+        (function(){
+          var serviceId = "{{ booking.service_id }}";
+          var slotsUrl = "{% url 'clients:portal_slots_api' %}";
+          var dateInput = document.getElementById("reschedule-date");
+          var container = document.getElementById("slots-container");
+          var submitBtn = document.getElementById("reschedule-submit");
+          var hiddenStart = document.getElementById("rescheduled-start-at");
+          var hiddenEmployee = document.getElementById("rescheduled-employee");
+          var hiddenZone = document.getElementById("rescheduled-zone");
+
+          function clearSelection() {
+            hiddenStart.value = "";
+            hiddenEmployee.value = "";
+            hiddenZone.value = "";
+            submitBtn.disabled = true;
+            document.querySelectorAll("#slots-container .slot-btn").forEach(function(b){ b.classList.remove("selected"); });
+          }
+
+          function selectSlot(btn, startAt, employeeId, zoneId) {
+            clearSelection();
+            hiddenStart.value = startAt;
+            hiddenEmployee.value = employeeId;
+            hiddenZone.value = zoneId || "";
+            btn.classList.add("selected");
+            submitBtn.disabled = false;
+          }
+
+          function loadSlots(date) {
+            container.innerHTML = '<span class="muted-text">Buscando huecos…</span>';
+            clearSelection();
+            fetch(slotsUrl + "?service=" + serviceId + "&date=" + date)
+              .then(function(r){ return r.json(); })
+              .then(function(data){
+                if (!data.ok || !data.slots || data.slots.length === 0) {
+                  container.innerHTML = '<span class="muted-text">No hay huecos disponibles para esta fecha.</span>';
+                  return;
+                }
+                var html = '<div class="slot-grid">';
+                data.slots.forEach(function(slot){
+                  slot.employees.forEach(function(emp){
+                    var label = slot.label + " · " + emp.name;
+                    html += '<button type="button" class="btn btn-light slot-btn"'
+                          + ' data-start="' + slot.start_at + '"'
+                          + ' data-employee="' + emp.id + '"'
+                          + ' data-zone="' + (emp.zone || "") + '">'
+                          + label + '</button>';
+                  });
+                });
+                html += '</div>';
+                container.innerHTML = html;
+                container.querySelectorAll(".slot-btn").forEach(function(btn){
+                  btn.addEventListener("click", function(){
+                    selectSlot(btn, btn.dataset.start, btn.dataset.employee, btn.dataset.zone);
+                  });
+                });
+              })
+              .catch(function(){ container.innerHTML = '<span class="muted-text">Error al cargar huecos. Inténtalo de nuevo.</span>'; });
+          }
+
+          dateInput.addEventListener("change", function(){
+            if (dateInput.value) loadSlots(dateInput.value);
+            else container.innerHTML = "";
+          });
+        })();
+        </script>
+        <style>
+          .slot-grid { display:flex; flex-wrap:wrap; gap:8px; }
+          .slot-btn { font-size:.85rem; padding:6px 12px; }
+          .slot-btn.selected { background:var(--accent,#7c5cbf); color:#fff; border-color:var(--accent,#7c5cbf); }
+        </style>
       {% else %}
         <p class="muted-text">No se puede cambiar la fecha con menos de 24 horas de antelación. Contacta con el salón.</p>
       {% endif %}

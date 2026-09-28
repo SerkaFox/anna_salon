@@ -628,6 +628,8 @@ def _client_booking_detail_context(booking, extra=None):
         "can_reschedule": can_client_reschedule(booking),
         "employees": Employee.objects.filter(is_active=True, services=booking.service).order_by("first_name", "last_name").distinct(),
         "zones": booking.service.allowed_zones.filter(is_active=True).order_by("name") if booking.service.requires_zone else Zone.objects.none(),
+        "today_iso": timezone.localdate().isoformat(),
+        "max_date_iso": _portal_last_booking_date().isoformat(),
     }
     if extra:
         context.update(extra)
