@@ -1242,15 +1242,14 @@ def public_booking_month_slots(request):
     last_day_num = _cal.monthrange(year, month)[1]
     d = date(year, month, 1)
     last_day = date(year, month, last_day_num)
-    days = []
+    available_dates = []
     while d <= last_day:
         if _date_within_booking_window(d):
-            blocks = find_multi_service_slots(d, services)
-            if blocks:
-                days.append({"date": d.isoformat(), "blocks": blocks})
+            if find_multi_service_slots(d, services, max_results=1):
+                available_dates.append(d.isoformat())
         d += timedelta(days=1)
 
-    return JsonResponse({"ok": True, "year": year, "month": month, "days": days})
+    return JsonResponse({"ok": True, "year": year, "month": month, "dates": available_dates})
 
 
 @require_POST

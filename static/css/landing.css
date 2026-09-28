@@ -2901,3 +2901,4 @@ html[data-theme="bosque"] .reviews-summary {
 }
 .cal-back-close:hover { background: rgba(240,208,145,0.08); color: var(--gold-light); }
 .booking-cal__back-slots { padding-top: 4px; }
+.cal-loading { display: block; font-size: .78rem; color: var(--muted); text-align: center; padding: 16px 0; }

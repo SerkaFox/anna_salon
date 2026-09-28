@@ -1169,7 +1169,7 @@
       return g;
     }
 
-    function buildCalGrid(gridEl, daysMap, year, month, flipInner) {
+    function buildCalGrid(gridEl, datesSet, year, month, flipInner) {
       const firstDate = new Date(year, month - 1, 1);
       const daysInMonth = new Date(year, month, 0).getDate();
       let startDow = firstDate.getDay() - 1;
@@ -1183,8 +1183,7 @@
         const mm = String(month).padStart(2, '0');
         const dd = String(d).padStart(2, '0');
         const dateStr = year + '-' + mm + '-' + dd;
-        const blocks = daysMap[dateStr] || [];
-        const hasSlots = blocks.length > 0;
+        const hasSlots = datesSet.has(dateStr);
         const cellDate = new Date(year, month - 1, d);
         cellDate.setHours(0,0,0,0);
         const isPast = cellDate < today0;
@@ -1199,29 +1198,46 @@
           const dot = document.createElement('span');
           dot.className = 'cal-day__dot';
           cell.appendChild(dot);
-          (function (ds, bl) {
+          (function (ds) {
             cell.addEventListener('click', function () {
               const dateObj = new Date(year, month - 1, parseInt(ds.split('-')[2]));
-              if (flipInner.querySelector('[data-cal-back-label]')) {
+              const backLabel = flipInner.querySelector('[data-cal-back-label]');
+              if (backLabel) {
                 const rawLabel = calDayFmt.format(dateObj);
-                flipInner.querySelector('[data-cal-back-label]').textContent = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
+                backLabel.textContent = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
               }
               const backSlots = flipInner.querySelector('[data-cal-back-slots]');
-              if (backSlots) { backSlots.innerHTML = ''; backSlots.appendChild(_buildCalSlotsGrid(bl, { date: ds, blocks: bl })); }
+              if (backSlots) {
+                backSlots.innerHTML = '<span class="cal-loading">' + calCopy.loading + '</span>';
+              }
               const flip = flipInner.parentElement;
               const frontH = flipInner.querySelector('.booking-cal__front').offsetHeight;
               flip.style.height = frontH + 'px';
               flipInner.classList.add('is-flipped');
+              // Fetch full slots for this day on demand
+              const params = new URLSearchParams({ services: cart.map(function (i) { return i.id; }).join(','), date: ds });
+              fetch(form.dataset.multiSlotsUrl + '?' + params.toString(), { headers: { Accept: 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                  if (!backSlots) return;
+                  backSlots.innerHTML = '';
+                  if (data.ok && data.blocks && data.blocks.length) {
+                    backSlots.appendChild(_buildCalSlotsGrid(data.blocks, { date: ds, blocks: data.blocks }));
+                  } else {
+                    backSlots.innerHTML = '<span class="cal-loading">' + calCopy.empty + '</span>';
+                  }
+                })
+                .catch(function () {
+                  if (backSlots) backSlots.innerHTML = '<span class="cal-loading">' + messages.error + '</span>';
+                });
             });
-          })(dateStr, blocks);
+          })(dateStr);
         }
         gridEl.appendChild(cell);
       }
     }
 
-    function buildCalPanel(panelDays, year, month, panelKey, empName) {
-      const daysMap = {};
-      panelDays.forEach(function (d) { daysMap[d.date] = d.blocks || []; });
+    function buildCalPanel(datesSet, year, month, panelKey, empName) {
       const panel = document.createElement('div');
       panel.className = 'booking-cal__panel';
       panel.dataset.calPanel = panelKey;
@@ -1256,7 +1272,7 @@
       front.appendChild(wd);
       const gridEl = document.createElement('div');
       gridEl.className = 'booking-cal__grid';
-      buildCalGrid(gridEl, daysMap, year, month, inner);
+      buildCalGrid(gridEl, datesSet, year, month, inner);
       front.appendChild(gridEl);
       inner.appendChild(front);
       // Back
@@ -1303,27 +1319,15 @@
       return panel;
     }
 
-    function renderCalPanels(days, year, month) {
+    function renderCalPanels(dates, year, month) {
       if (!calPanels) return;
       calPanels.innerHTML = '';
-      const employeeMap = {};
-      days.forEach(function (day) {
-        (day.blocks || []).forEach(function (b) {
-          if (b.items && b.items.length === 1) employeeMap[String(b.items[0].employee_id)] = b.items[0].employee_name;
-        });
-      });
-      const empIds = Object.keys(employeeMap);
-      if (empIds.length > 1) {
-        empIds.forEach(function (empId) {
-          const empDays = days.map(function (d) {
-            return { date: d.date, blocks: (d.blocks || []).filter(function (b) { return b.items && b.items[0] && String(b.items[0].employee_id) === empId; }) };
-          }).filter(function (d) { return d.blocks.length > 0; });
-          calPanels.appendChild(buildCalPanel(empDays, year, month, empId, employeeMap[empId]));
-        });
-      } else {
-        calPanels.appendChild(buildCalPanel(days, year, month, 'all', null));
-      }
-      if (calStatusEl) calStatusEl.textContent = days.length ? '' : calCopy.empty;
+      // For single-service, we need employee info to split panels.
+      // We can't know employees without fetching slots. So always render one panel;
+      // employee split happens when user clicks a day (the day-slots endpoint returns employee info).
+      const datesSet = new Set(dates);
+      calPanels.appendChild(buildCalPanel(datesSet, year, month, 'all', null));
+      if (calStatusEl) calStatusEl.textContent = dates.length ? '' : calCopy.empty;
     }
 
     function loadCalMonth(year, month) {
@@ -1338,7 +1342,7 @@
         .then(function (data) {
           if (activeCalRequest !== reqId) return;
           if (!data.ok) throw new Error(data.message || messages.error);
-          renderCalPanels(data.days || [], year, month);
+          renderCalPanels(data.dates || [], year, month);
         })
         .catch(function (err) {
           if (activeCalRequest !== reqId) return;

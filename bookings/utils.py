@@ -624,7 +624,7 @@ def booking_layout_data(booking):
 # Multi-service consecutive slot finder
 # ---------------------------------------------------------------------------
 
-def find_multi_service_slots(date_obj, services, step_minutes=MOBILE_SLOT_STEP_MINUTES):
+def find_multi_service_slots(date_obj, services, step_minutes=MOBILE_SLOT_STEP_MINUTES, max_results=None):
     """
     Return time blocks on date_obj where all services can be scheduled back-to-back.
     Each block is a dict with start_at, label, end_at, total_duration_minutes, items.
@@ -684,6 +684,8 @@ def find_multi_service_slots(date_obj, services, step_minutes=MOBILE_SLOT_STEP_M
                             "zone_id": zone.pk if zone else None,
                         }],
                     })
+                    if max_results and len(results) >= max_results:
+                        return results
             t += step
     else:
         while t + timedelta(minutes=total_minutes) <= work_end:
@@ -710,6 +712,8 @@ def find_multi_service_slots(date_obj, services, step_minutes=MOBILE_SLOT_STEP_M
                             for item in plan
                         ],
                     })
+                    if max_results and len(results) >= max_results:
+                        return results
             t += step
     return results
 
