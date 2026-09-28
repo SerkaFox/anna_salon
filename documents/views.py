@@ -339,6 +339,9 @@ def document_line_create(request, document_pk):
     line.sort_order = document.lines.count() + 1
     line.save()
     document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
+    document.refresh_from_db()
+    from documents.line_items import _sync_booking_snapshots
+    _sync_booking_snapshots(document)
     messages.success(request, "Línea añadida al documento.")
     return redirect("documents:detail", pk=document.pk)
 

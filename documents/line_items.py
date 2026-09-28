@@ -16,7 +16,38 @@ def _refresh_document(document):
         ]
     )
     document.refresh_from_db()
+    _sync_booking_snapshots(document)
     return document
+
+
+def _sync_booking_snapshots(document):
+    """Sync booking commission snapshots when document lines change.
+
+    When staff adds extra charges (e.g. nail art, special top coat) to a
+    document, the document total grows but the booking's price/commission
+    snapshots were frozen at creation time.  This keeps them in sync so
+    that employee earnings analytics reflect the actual billed amount.
+
+    Only runs for standard (non-prepayment) documents that have a booking.
+    """
+    if document.purpose != FiscalDocument.Purposes.STANDARD:
+        return
+    if not document.booking_id:
+        return
+    booking = document.booking
+    new_total = document.total_amount
+    percent = booking.employee_percent_snapshot or Decimal("0.00")
+    employee_amount = (new_total * percent / Decimal("100")).quantize(Decimal("0.01"))
+    salon_amount = (new_total - employee_amount).quantize(Decimal("0.01"))
+    booking.client_price_snapshot = new_total
+    booking.employee_amount_snapshot = employee_amount
+    booking.salon_amount_snapshot = salon_amount
+    booking.save(update_fields=[
+        "client_price_snapshot",
+        "employee_amount_snapshot",
+        "salon_amount_snapshot",
+        "updated_at",
+    ])
 
 
 @transaction.atomic
