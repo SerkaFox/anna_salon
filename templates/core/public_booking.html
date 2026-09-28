@@ -925,7 +925,7 @@
             button.type = 'button';
             button.className = 'week-slot-time';
             if (index >= 8) button.hidden = true;
-            button.textContent = block.label;
+            button.textContent = block.label + (block.items && block.items.length === 1 && block.items[0].employee_name ? ' · ' + block.items[0].employee_name : '');
             button.addEventListener('click', function () { chooseWeekBlock(day, block, button, column); });
             times.appendChild(button);
           });
