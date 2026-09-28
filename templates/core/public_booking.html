@@ -938,7 +938,7 @@
       grid.className = 'week-availability__times' + (extraClass ? ' ' + extraClass : '');
       blocks.forEach(function (block, index) {
         const btn = _makeTimeButton(block, day, colRef);
-        if (index >= 2) btn.hidden = true;
+        if (index >= 3) btn.hidden = true;
         grid.appendChild(btn);
       });
       if (blocks.length === 1) {
@@ -946,15 +946,15 @@
         scarcity.className = 'week-slot-scarcity';
         scarcity.textContent = 'Solo queda este horario';
         grid.appendChild(scarcity);
-      } else if (blocks.length > 2) {
+      } else if (blocks.length > 3) {
         const toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = 'week-availability__more';
-        toggle.textContent = '... +' + (blocks.length - 2);
+        toggle.textContent = '... +' + (blocks.length - 3);
         toggle.addEventListener('click', function () {
           const anyHidden = Array.from(grid.querySelectorAll('.week-slot-time')).some(function (b) { return b.hidden; });
-          grid.querySelectorAll('.week-slot-time').forEach(function (b, i) { b.hidden = !anyHidden && i >= 2; });
-          toggle.textContent = anyHidden ? weekCopy.less : '... +' + (blocks.length - 2);
+          grid.querySelectorAll('.week-slot-time').forEach(function (b, i) { b.hidden = !anyHidden && i >= 3; });
+          toggle.textContent = anyHidden ? weekCopy.less : '... +' + (blocks.length - 3);
         });
         grid.appendChild(toggle);
       }
