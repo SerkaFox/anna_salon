@@ -680,10 +680,13 @@ def get_month_available_dates(year, month, services):
         # No explicit shift defined: default Mon–Sat work
         return d.weekday() != 6  # not Sunday
 
+    today_local = timezone.localdate()
+    max_date = today_local + timedelta(days=PUBLIC_BOOKING_MAX_DAYS_AHEAD)
+
     available = []
     d = first_day
     while d <= last_day:
-        if _date_within_booking_window(d):
+        if today_local <= d <= max_date:
             for service in services:
                 if any(emp_works_on(eid, d) for eid in service_emp_ids.get(service.pk, [])):
                     available.append(d.isoformat())
