@@ -1538,6 +1538,7 @@ img { max-width: 100%; }
 .week-availability__times--grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .week-availability__times--wide { grid-template-columns: repeat(3, 1fr); }
 @media (min-width: 420px) { .week-availability__times--wide { grid-template-columns: repeat(4, 1fr); } }
+.week-slot-scarcity { grid-column: 1 / -1; display: block; font-size: .68rem; font-style: italic; letter-spacing: .04em; color: var(--gold-light); opacity: .9; margin-top: 2px; }
 .selected-slot-summary {
   margin: 20px 0;
   padding: 16px 18px;

@@ -933,6 +933,34 @@
       return btn;
     }
 
+    function _buildSmartTimesGrid(blocks, day, colRef, extraClass) {
+      const grid = document.createElement('div');
+      grid.className = 'week-availability__times' + (extraClass ? ' ' + extraClass : '');
+      blocks.forEach(function (block, index) {
+        const btn = _makeTimeButton(block, day, colRef);
+        if (index >= 2) btn.hidden = true;
+        grid.appendChild(btn);
+      });
+      if (blocks.length === 1) {
+        const scarcity = document.createElement('span');
+        scarcity.className = 'week-slot-scarcity';
+        scarcity.textContent = 'Solo queda este horario';
+        grid.appendChild(scarcity);
+      } else if (blocks.length > 2) {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'week-availability__more';
+        toggle.textContent = '... +' + (blocks.length - 2);
+        toggle.addEventListener('click', function () {
+          const anyHidden = Array.from(grid.querySelectorAll('.week-slot-time')).some(function (b) { return b.hidden; });
+          grid.querySelectorAll('.week-slot-time').forEach(function (b, i) { b.hidden = !anyHidden && i >= 2; });
+          toggle.textContent = anyHidden ? weekCopy.less : '... +' + (blocks.length - 2);
+        });
+        grid.appendChild(toggle);
+      }
+      return grid;
+    }
+
     function _appendDayGroup(container, day, blocks, colRef, formatterWeekday, formatterDate) {
       const date = parseIsoDate(day.date);
       if (!date || !blocks.length) return;
@@ -942,10 +970,7 @@
       label.className = 'week-availability__emp-day-label';
       label.textContent = formatterWeekday.format(date) + ' ' + formatterDate.format(date);
       group.appendChild(label);
-      const grid = document.createElement('div');
-      grid.className = 'week-availability__times week-availability__times--grid';
-      blocks.forEach(function (block) { grid.appendChild(_makeTimeButton(block, day, colRef)); });
-      group.appendChild(grid);
+      group.appendChild(_buildSmartTimesGrid(blocks, day, colRef, 'week-availability__times--grid'));
       container.appendChild(group);
     }
 
@@ -1004,10 +1029,7 @@
           column.appendChild(head);
           const visibleBlocks = filteredBlocks(day.blocks || []);
           if (visibleBlocks.length) {
-            const grid = document.createElement('div');
-            grid.className = 'week-availability__times week-availability__times--grid week-availability__times--wide';
-            visibleBlocks.forEach(function (block) { grid.appendChild(_makeTimeButton(block, day, column)); });
-            column.appendChild(grid);
+            column.appendChild(_buildSmartTimesGrid(visibleBlocks, day, column, 'week-availability__times--grid week-availability__times--wide'));
           }
           weekGrid.appendChild(column);
         });

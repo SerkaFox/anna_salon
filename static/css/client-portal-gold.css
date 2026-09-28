@@ -91,3 +91,11 @@ body.client-lux-body .lux-footer { padding-bottom: 104px; }
 body.client-lux-body .client-lux-panel { padding-bottom: 40px; }
 /* No "install app" button inside the portal: it overlapped the tab bar. */
 body.client-lux-body .pwa-install { display: none !important; }
+
+/* Habitual services chips */
+.portal-habitual-services { margin-bottom: 14px; }
+.portal-habitual-label { display: block; font-size: .72rem; color: var(--gold-light); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 8px; opacity: .85; }
+.portal-habitual-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.portal-habitual-chip { background: rgba(240,208,145,0.08); border: 1px solid rgba(240,208,145,0.3); color: var(--text); border-radius: 20px; padding: 6px 14px; font-size: .82rem; cursor: pointer; transition: background .15s, border-color .15s; }
+.portal-habitual-chip:hover { background: rgba(240,208,145,0.16); border-color: rgba(240,208,145,0.55); }
+.portal-habitual-chip.is-active { background: rgba(240,208,145,0.22); border-color: var(--gold-light); color: var(--gold-light); font-weight: 600; }

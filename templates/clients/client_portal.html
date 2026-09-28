@@ -154,6 +154,17 @@
         </div>
       {% endif %}
 
+      {% if habitual_services %}
+      <div class="portal-habitual-services" id="portal-habitual">
+        <span class="portal-habitual-label">{% ct "habitual_services" %}</span>
+        <div class="portal-habitual-chips">
+          {% for svc in habitual_services %}
+          <button type="button" class="portal-habitual-chip" data-service-id="{{ svc.pk }}">{{ svc.name }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
       <div class="form-grid portal-booking-choice-grid">
         <div class="field">
           <label for="{{ booking_form.service.id_for_label }}">{% ct "service" %}</label>
@@ -656,6 +667,21 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // "Repetir reserva" — pre-selects the service and scrolls to the booking form.
+document.querySelectorAll(".portal-habitual-chip").forEach(function (chip) {
+  chip.addEventListener("click", function () {
+    const serviceId = chip.dataset.serviceId;
+    const sel = document.getElementById("id_service");
+    const section = document.getElementById("nueva-reserva");
+    if (!sel || !serviceId) return;
+    if (window.setClientPortalTab) window.setClientPortalTab("booking");
+    sel.value = serviceId;
+    sel.dispatchEvent(new Event("change"));
+    document.querySelectorAll(".portal-habitual-chip").forEach(function (c) { c.classList.remove("is-active"); });
+    chip.classList.add("is-active");
+    if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+
 document.querySelectorAll("[data-repeat-service]").forEach(function (btn) {
   btn.addEventListener("click", function () {
     const serviceId = btn.getAttribute("data-repeat-service");

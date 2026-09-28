@@ -1182,6 +1182,18 @@ def _client_portal_context(request, client, booking_form=None):
         .order_by("-completed_at", "-end_at")[:5]
     )
 
+    from django.db.models import Count as _Count
+    habitual_service_ids = set(
+        done_bookings.values("service_id")
+        .annotate(_cnt=_Count("id"))
+        .filter(_cnt__gte=2)
+        .values_list("service_id", flat=True)
+    )
+    habitual_services = list(
+        Service.objects.filter(pk__in=habitual_service_ids, is_active=True)
+        .order_by("name")
+    ) if habitual_service_ids else []
+
     if booking_form is None:
         booking_form = BookingForm(
             initial={
@@ -1228,6 +1240,7 @@ def _client_portal_context(request, client, booking_form=None):
         "booking_last_date": _portal_last_booking_date().isoformat(),
         "booking_search_days": PUBLIC_BOOKING_MAX_DAYS_AHEAD,
         "deposit_percent": get_deposit_percent(),
+        "habitual_services": habitual_services,
     }
 
 
