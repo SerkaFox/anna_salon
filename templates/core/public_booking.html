@@ -924,11 +924,35 @@
       return times;
     }
 
+    function _makeTimeButton(block, day, colRef) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'week-slot-time';
+      btn.textContent = block.label;
+      btn.addEventListener('click', function () { chooseWeekBlock(day, block, btn, colRef); });
+      return btn;
+    }
+
+    function _appendDayGroup(container, day, blocks, colRef, formatterWeekday, formatterDate) {
+      const date = parseIsoDate(day.date);
+      if (!date || !blocks.length) return;
+      const group = document.createElement('div');
+      group.className = 'week-availability__emp-day';
+      const label = document.createElement('div');
+      label.className = 'week-availability__emp-day-label';
+      label.textContent = formatterWeekday.format(date) + ' ' + formatterDate.format(date);
+      group.appendChild(label);
+      const grid = document.createElement('div');
+      grid.className = 'week-availability__times week-availability__times--grid';
+      blocks.forEach(function (block) { grid.appendChild(_makeTimeButton(block, day, colRef)); });
+      group.appendChild(grid);
+      container.appendChild(group);
+    }
+
     function renderWeekAvailability(days, append) {
       if (!weekGrid) return;
       if (!append) weekGrid.innerHTML = '';
 
-      // Collect distinct employees across all returned blocks
       const employeeMap = {};
       days.forEach(function (day) {
         (day.blocks || []).forEach(function (b) {
@@ -938,12 +962,13 @@
         });
       });
       const empIds = Object.keys(employeeMap);
-      const formatterWeekday = new Intl.DateTimeFormat(currentLanguage, { weekday: 'short' });
-      const formatterDate = new Intl.DateTimeFormat(currentLanguage, { day: 'numeric', month: 'short' });
+      const fw = new Intl.DateTimeFormat(currentLanguage, { weekday: 'short' });
+      const fd = new Intl.DateTimeFormat(currentLanguage, { day: 'numeric', month: 'short' });
 
       if (empIds.length > 1) {
-        // Employee-column layout
+        // Two employee columns, date sub-groups with 2-col time grid inside each
         weekGrid.classList.add('week-availability__grid--by-employee');
+        weekGrid.classList.remove('week-availability__grid--flat');
         empIds.forEach(function (empId) {
           let col = weekGrid.querySelector('[data-employee-col="' + empId + '"]');
           if (!col) {
@@ -957,45 +982,51 @@
             weekGrid.appendChild(col);
           }
           days.forEach(function (day) {
-            const date = parseIsoDate(day.date);
-            if (!date) return;
             const empBlocks = filteredBlocks((day.blocks || []).filter(function (b) {
               return b.items && b.items[0] && String(b.items[0].employee_id) === empId;
             }));
-            if (!empBlocks.length) return;
-            const dayGroup = document.createElement('div');
-            dayGroup.className = 'week-availability__emp-day';
-            const dateLabel = document.createElement('div');
-            dateLabel.className = 'week-availability__emp-day-label';
-            dateLabel.textContent = formatterWeekday.format(date) + ', ' + formatterDate.format(date);
-            dayGroup.appendChild(dateLabel);
-            dayGroup.appendChild(_buildTimesBlock(empBlocks, day, col));
-            col.appendChild(dayGroup);
+            _appendDayGroup(col, day, empBlocks, col, fw, fd);
           });
         });
-      } else {
-        // Day-column layout (multi-service or single employee)
+      } else if (empIds.length === 1) {
+        // Single employee: day cards with 3-col time grid inside each
+        weekGrid.classList.add('week-availability__grid--flat');
         weekGrid.classList.remove('week-availability__grid--by-employee');
         days.forEach(function (day) {
           const date = parseIsoDate(day.date);
-          if (!date) return;
-          if (!(day.blocks || []).length) return;
+          if (!date || !(day.blocks || []).length) return;
           const column = document.createElement('article');
           column.className = 'week-availability__day';
           const head = document.createElement('button');
           head.type = 'button';
           head.className = 'week-availability__day-head';
-          head.innerHTML = '<strong>' + formatterWeekday.format(date) + '</strong><span>' + formatterDate.format(date) + '</span>';
+          head.innerHTML = '<strong>' + fw.format(date) + '</strong><span>' + fd.format(date) + '</span>';
           column.appendChild(head);
           const visibleBlocks = filteredBlocks(day.blocks || []);
-          if (!visibleBlocks.length) {
-            const empty = document.createElement('span');
-            empty.className = 'week-availability__empty';
-            empty.textContent = weekCopy.empty;
-            column.appendChild(empty);
-          } else {
-            column.appendChild(_buildTimesBlock(visibleBlocks, day, column));
+          if (visibleBlocks.length) {
+            const grid = document.createElement('div');
+            grid.className = 'week-availability__times week-availability__times--grid week-availability__times--wide';
+            visibleBlocks.forEach(function (block) { grid.appendChild(_makeTimeButton(block, day, column)); });
+            column.appendChild(grid);
           }
+          weekGrid.appendChild(column);
+        });
+      } else {
+        // Multi-service: original day-column layout
+        weekGrid.classList.remove('week-availability__grid--by-employee');
+        weekGrid.classList.remove('week-availability__grid--flat');
+        days.forEach(function (day) {
+          const date = parseIsoDate(day.date);
+          if (!date || !(day.blocks || []).length) return;
+          const column = document.createElement('article');
+          column.className = 'week-availability__day';
+          const head = document.createElement('button');
+          head.type = 'button';
+          head.className = 'week-availability__day-head';
+          head.innerHTML = '<strong>' + fw.format(date) + '</strong><span>' + fd.format(date) + '</span>';
+          column.appendChild(head);
+          const visibleBlocks = filteredBlocks(day.blocks || []);
+          if (visibleBlocks.length) column.appendChild(_buildTimesBlock(visibleBlocks, day, column));
           weekGrid.appendChild(column);
         });
       }

@@ -1525,11 +1525,19 @@ img { max-width: 100%; }
 .week-slot-time:focus-visible { border-color: rgba(240,208,145,0.72); background: rgba(214,167,92,0.2); box-shadow: var(--gold-glow); }
 .week-availability__more { border-style: dashed; color: var(--gold-light); background: transparent; font-size: .75rem; }
 .week-availability__empty { padding: 12px 3px; color: var(--muted); font-size: .78rem; line-height: 1.35; }
+/* Single-employee: day cards laid out in auto-fill grid */
+.week-availability__grid--flat { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+/* Two-employee side-by-side columns */
 .week-availability__grid--by-employee { grid-template-columns: repeat(2, 1fr); align-items: start; }
-.week-availability__employee-col { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px 10px; }
-.week-availability__employee-head { font-weight: 600; color: var(--gold-light); font-size: .95rem; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-.week-availability__emp-day { margin-bottom: 14px; }
-.week-availability__emp-day-label { font-size: .75rem; color: var(--muted); text-transform: capitalize; margin-bottom: 6px; }
+.week-availability__employee-col { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px 8px; }
+.week-availability__employee-head { font-weight: 600; color: var(--gold-light); font-size: .9rem; margin-bottom: 8px; padding-bottom: 7px; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center; }
+/* Date sub-header inside employee column */
+.week-availability__emp-day { margin-bottom: 12px; }
+.week-availability__emp-day-label { font-size: .72rem; color: var(--muted); text-transform: capitalize; margin-bottom: 5px; }
+/* 2-col time grid inside employee column, 3-col inside day card */
+.week-availability__times--grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.week-availability__times--wide { grid-template-columns: repeat(3, 1fr); }
+@media (min-width: 420px) { .week-availability__times--wide { grid-template-columns: repeat(4, 1fr); } }
 .selected-slot-summary {
   margin: 20px 0;
   padding: 16px 18px;
