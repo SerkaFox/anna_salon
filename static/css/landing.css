@@ -1525,6 +1525,11 @@ img { max-width: 100%; }
 .week-slot-time:focus-visible { border-color: rgba(240,208,145,0.72); background: rgba(214,167,92,0.2); box-shadow: var(--gold-glow); }
 .week-availability__more { border-style: dashed; color: var(--gold-light); background: transparent; font-size: .75rem; }
 .week-availability__empty { padding: 12px 3px; color: var(--muted); font-size: .78rem; line-height: 1.35; }
+.week-availability__grid--by-employee { grid-template-columns: repeat(2, 1fr); align-items: start; }
+.week-availability__employee-col { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px 10px; }
+.week-availability__employee-head { font-weight: 600; color: var(--gold-light); font-size: .95rem; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.week-availability__emp-day { margin-bottom: 14px; }
+.week-availability__emp-day-label { font-size: .75rem; color: var(--muted); text-transform: capitalize; margin-bottom: 6px; }
 .selected-slot-summary {
   margin: 20px 0;
   padding: 16px 18px;

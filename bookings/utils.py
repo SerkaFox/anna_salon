@@ -649,31 +649,68 @@ def find_multi_service_slots(date_obj, services, step_minutes=MOBILE_SLOT_STEP_M
     step = timedelta(minutes=step_minutes)
     now = timezone.now()
 
-    while t + timedelta(minutes=total_minutes) <= work_end:
-        if t > now:
-            plan = _try_schedule_block(services, service_employees, t)
-            if plan:
-                local_t = timezone.localtime(t)
-                results.append({
-                    "start_at": t.isoformat(),
-                    "label": local_t.strftime("%H:%M"),
-                    "end_at": (t + timedelta(minutes=total_minutes)).isoformat(),
-                    "total_duration_minutes": total_minutes,
-                    "items": [
-                        {
-                            "service_id": item["service"].pk,
-                            "service_name": item["service"].name,
-                            "start_at": item["start_at"].isoformat(),
-                            "end_at": item["end_at"].isoformat(),
-                            "duration_minutes": item["service"].duration_minutes,
-                            "employee_id": item["employee"].pk,
-                            "employee_name": item["employee"].full_name,
-                            "zone_id": item["zone"].pk if item["zone"] else None,
-                        }
-                        for item in plan
-                    ],
-                })
-        t += step
+    if len(services) == 1:
+        # Single service: return one block per available employee per slot so
+        # the frontend can display employee columns side-by-side.
+        service = services[0]
+        duration = timedelta(minutes=service.duration_minutes)
+        while t + duration <= work_end:
+            if t > now:
+                for employee in service_employees[service.pk]:
+                    end_t = t + duration
+                    if not is_slot_available(employee, service, None, t, end_t):
+                        continue
+                    zone = (
+                        find_available_zone(service, t, end_t, employee=employee)
+                        if service.requires_zone
+                        else None
+                    )
+                    if service.requires_zone and zone is None:
+                        continue
+                    local_t = timezone.localtime(t)
+                    results.append({
+                        "start_at": t.isoformat(),
+                        "label": local_t.strftime("%H:%M"),
+                        "end_at": end_t.isoformat(),
+                        "total_duration_minutes": service.duration_minutes,
+                        "items": [{
+                            "service_id": service.pk,
+                            "service_name": service.name,
+                            "start_at": t.isoformat(),
+                            "end_at": end_t.isoformat(),
+                            "duration_minutes": service.duration_minutes,
+                            "employee_id": employee.pk,
+                            "employee_name": employee.full_name,
+                            "zone_id": zone.pk if zone else None,
+                        }],
+                    })
+            t += step
+    else:
+        while t + timedelta(minutes=total_minutes) <= work_end:
+            if t > now:
+                plan = _try_schedule_block(services, service_employees, t)
+                if plan:
+                    local_t = timezone.localtime(t)
+                    results.append({
+                        "start_at": t.isoformat(),
+                        "label": local_t.strftime("%H:%M"),
+                        "end_at": (t + timedelta(minutes=total_minutes)).isoformat(),
+                        "total_duration_minutes": total_minutes,
+                        "items": [
+                            {
+                                "service_id": item["service"].pk,
+                                "service_name": item["service"].name,
+                                "start_at": item["start_at"].isoformat(),
+                                "end_at": item["end_at"].isoformat(),
+                                "duration_minutes": item["service"].duration_minutes,
+                                "employee_id": item["employee"].pk,
+                                "employee_name": item["employee"].full_name,
+                                "zone_id": item["zone"].pk if item["zone"] else None,
+                            }
+                            for item in plan
+                        ],
+                    })
+            t += step
     return results
 
 

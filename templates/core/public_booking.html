@@ -857,6 +857,7 @@
         const card = document.createElement('div');
         card.className = 'block-slot-card';
         card.dataset.startAt = block.start_at;
+        card.dataset.employeeId = block.items && block.items[0] ? String(block.items[0].employee_id) : '';
         const timeRow = document.createElement('div');
         timeRow.className = 'block-slot-card__time';
         timeRow.innerHTML = '<strong>' + block.label + '</strong><span>' + formatDuration(block.total_duration_minutes) + '</span>';
@@ -889,62 +890,115 @@
       }
       if (buttonEl) buttonEl.classList.add('is-selected');
       if (columnEl) columnEl.classList.add('is-active');
+      const blockEmpId = block.items && block.items[0] ? String(block.items[0].employee_id) : '';
       const card = Array.from(grid.querySelectorAll('.block-slot-card')).find(function (item) {
-        return item.dataset.startAt === block.start_at;
+        return item.dataset.startAt === block.start_at && (!blockEmpId || item.dataset.employeeId === blockEmpId);
       });
       if (card) selectBlock(block, card);
+    }
+
+    function _buildTimesBlock(blocks, day, parentCol) {
+      const times = document.createElement('div');
+      times.className = 'week-availability__times';
+      blocks.forEach(function (block, index) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'week-slot-time';
+        if (index >= 8) button.hidden = true;
+        button.textContent = block.label;
+        button.addEventListener('click', function () { chooseWeekBlock(day, block, button, parentCol); });
+        times.appendChild(button);
+      });
+      if (blocks.length > 8) {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'week-availability__more';
+        toggle.textContent = weekCopy.more + ' +' + (blocks.length - 8);
+        toggle.addEventListener('click', function () {
+          const expanding = Array.from(times.querySelectorAll('.week-slot-time')).some(function (b) { return b.hidden; });
+          times.querySelectorAll('.week-slot-time').forEach(function (b, i) { b.hidden = !expanding && i >= 8; });
+          toggle.textContent = expanding ? weekCopy.less : weekCopy.more + ' +' + (blocks.length - 8);
+        });
+        times.appendChild(toggle);
+      }
+      return times;
     }
 
     function renderWeekAvailability(days, append) {
       if (!weekGrid) return;
       if (!append) weekGrid.innerHTML = '';
+
+      // Collect distinct employees across all returned blocks
+      const employeeMap = {};
+      days.forEach(function (day) {
+        (day.blocks || []).forEach(function (b) {
+          if (b.items && b.items.length === 1) {
+            employeeMap[String(b.items[0].employee_id)] = b.items[0].employee_name;
+          }
+        });
+      });
+      const empIds = Object.keys(employeeMap);
       const formatterWeekday = new Intl.DateTimeFormat(currentLanguage, { weekday: 'short' });
       const formatterDate = new Intl.DateTimeFormat(currentLanguage, { day: 'numeric', month: 'short' });
-      days.forEach(function (day) {
-        const date = parseIsoDate(day.date);
-        if (!date) return;
-        if (!(day.blocks || []).length) return;
-        const column = document.createElement('article');
-        column.className = 'week-availability__day';
-        const head = document.createElement('button');
-        head.type = 'button';
-        head.className = 'week-availability__day-head';
-        head.innerHTML = '<strong>' + formatterWeekday.format(date) + '</strong><span>' + formatterDate.format(date) + '</span>';
-        column.appendChild(head);
-        const times = document.createElement('div');
-        times.className = 'week-availability__times';
-        const visibleBlocks = filteredBlocks(day.blocks || []);
-        if (!visibleBlocks.length) {
-          const empty = document.createElement('span');
-          empty.className = 'week-availability__empty';
-          empty.textContent = weekCopy.empty;
-          times.appendChild(empty);
-        } else {
-          visibleBlocks.forEach(function (block, index) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'week-slot-time';
-            if (index >= 8) button.hidden = true;
-            button.textContent = block.label + (block.items && block.items.length === 1 && block.items[0].employee_name ? ' · ' + block.items[0].employee_name : '');
-            button.addEventListener('click', function () { chooseWeekBlock(day, block, button, column); });
-            times.appendChild(button);
-          });
-          if (visibleBlocks.length > 8) {
-            const toggle = document.createElement('button');
-            toggle.type = 'button';
-            toggle.className = 'week-availability__more';
-            toggle.textContent = weekCopy.more + ' +' + (visibleBlocks.length - 8);
-            toggle.addEventListener('click', function () {
-              const expanding = Array.from(times.querySelectorAll('.week-slot-time')).some(function (item) { return item.hidden; });
-              times.querySelectorAll('.week-slot-time').forEach(function (item, index) { item.hidden = !expanding && index >= 8; });
-              toggle.textContent = expanding ? weekCopy.less : weekCopy.more + ' +' + (visibleBlocks.length - 8);
-            });
-            times.appendChild(toggle);
+
+      if (empIds.length > 1) {
+        // Employee-column layout
+        weekGrid.classList.add('week-availability__grid--by-employee');
+        empIds.forEach(function (empId) {
+          let col = weekGrid.querySelector('[data-employee-col="' + empId + '"]');
+          if (!col) {
+            col = document.createElement('article');
+            col.className = 'week-availability__employee-col';
+            col.dataset.employeeCol = empId;
+            const head = document.createElement('div');
+            head.className = 'week-availability__employee-head';
+            head.textContent = employeeMap[empId];
+            col.appendChild(head);
+            weekGrid.appendChild(col);
           }
-        }
-        column.appendChild(times);
-        weekGrid.appendChild(column);
-      });
+          days.forEach(function (day) {
+            const date = parseIsoDate(day.date);
+            if (!date) return;
+            const empBlocks = filteredBlocks((day.blocks || []).filter(function (b) {
+              return b.items && b.items[0] && String(b.items[0].employee_id) === empId;
+            }));
+            if (!empBlocks.length) return;
+            const dayGroup = document.createElement('div');
+            dayGroup.className = 'week-availability__emp-day';
+            const dateLabel = document.createElement('div');
+            dateLabel.className = 'week-availability__emp-day-label';
+            dateLabel.textContent = formatterWeekday.format(date) + ', ' + formatterDate.format(date);
+            dayGroup.appendChild(dateLabel);
+            dayGroup.appendChild(_buildTimesBlock(empBlocks, day, col));
+            col.appendChild(dayGroup);
+          });
+        });
+      } else {
+        // Day-column layout (multi-service or single employee)
+        weekGrid.classList.remove('week-availability__grid--by-employee');
+        days.forEach(function (day) {
+          const date = parseIsoDate(day.date);
+          if (!date) return;
+          if (!(day.blocks || []).length) return;
+          const column = document.createElement('article');
+          column.className = 'week-availability__day';
+          const head = document.createElement('button');
+          head.type = 'button';
+          head.className = 'week-availability__day-head';
+          head.innerHTML = '<strong>' + formatterWeekday.format(date) + '</strong><span>' + formatterDate.format(date) + '</span>';
+          column.appendChild(head);
+          const visibleBlocks = filteredBlocks(day.blocks || []);
+          if (!visibleBlocks.length) {
+            const empty = document.createElement('span');
+            empty.className = 'week-availability__empty';
+            empty.textContent = weekCopy.empty;
+            column.appendChild(empty);
+          } else {
+            column.appendChild(_buildTimesBlock(visibleBlocks, day, column));
+          }
+          weekGrid.appendChild(column);
+        });
+      }
       if (weekStatus) weekStatus.textContent = weekGrid.children.length ? '' : weekCopy.empty;
     }
 
