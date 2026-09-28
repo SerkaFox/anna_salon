@@ -1210,6 +1210,49 @@ def public_multi_booking_week_slots(request):
     )
 
 
+def public_booking_month_slots(request):
+    """GET /reservar/month-slots/?services=1,2&year=2026&month=10"""
+    import calendar as _cal
+
+    service_ids_raw = request.GET.get("services", "")
+    year_text = request.GET.get("year")
+    month_text = request.GET.get("month")
+    if not service_ids_raw or not year_text or not month_text:
+        return JsonResponse({"ok": False, "message": "Faltan parámetros."}, status=400)
+    try:
+        service_ids = [int(v) for v in service_ids_raw.split(",") if v.strip()]
+        year = int(year_text)
+        month = int(month_text)
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "message": "Datos invalidos."}, status=400)
+    if not service_ids or not (1 <= month <= 12) or not (2020 <= year <= 2035):
+        return JsonResponse({"ok": False, "message": "Datos invalidos."}, status=400)
+    if len(service_ids) > 6:
+        return JsonResponse({"ok": False, "message": "Maximo 6 servicios."}, status=400)
+    try:
+        services_by_id = {
+            s.pk: s
+            for s in Service.objects.filter(pk__in=service_ids, is_active=True)
+            .prefetch_related("allowed_zones", "employees")
+        }
+        services = [services_by_id[sid] for sid in service_ids]
+    except KeyError:
+        return JsonResponse({"ok": False, "message": "Servicio no encontrado."}, status=400)
+
+    last_day_num = _cal.monthrange(year, month)[1]
+    d = date(year, month, 1)
+    last_day = date(year, month, last_day_num)
+    days = []
+    while d <= last_day:
+        if _date_within_booking_window(d):
+            blocks = find_multi_service_slots(d, services)
+            if blocks:
+                days.append({"date": d.isoformat(), "blocks": blocks})
+        d += timedelta(days=1)
+
+    return JsonResponse({"ok": True, "year": year, "month": month, "days": days})
+
+
 @require_POST
 def public_waitlist(request):
     language = detect_public_language(request)

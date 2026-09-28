@@ -21,7 +21,7 @@
 {% block content %}
 <section class="lux-section public-booking-section">
   <div class="lux-container public-booking-layout">
-    <form class="public-booking-card" method="post" novalidate data-public-booking-form {% if logged_client %}data-logged-client="1" {% endif %}data-slots-url="{{ slot_endpoint }}" data-multi-slots-url="{{ multi_slot_endpoint }}" data-week-slots-url="{% url 'public_multi_booking_week_slots' %}">
+    <form class="public-booking-card" method="post" novalidate data-public-booking-form {% if logged_client %}data-logged-client="1" {% endif %}data-slots-url="{{ slot_endpoint }}" data-multi-slots-url="{{ multi_slot_endpoint }}" data-week-slots-url="{% url 'public_multi_booking_week_slots' %}" data-month-slots-url="{% url 'public_booking_month_slots' %}">
       {% csrf_token %}
       <div class="booking-alert" data-global-error {% if not booking_non_field_errors %}hidden{% endif %}>{% if booking_non_field_errors %}{{ booking_non_field_errors.0 }}{% endif %}</div>
 
@@ -77,7 +77,12 @@
         <input type="hidden" name="date" value="{{ booking_values.date|default:today }}" min="{{ today }}" max="{{ booking_last_date }}" data-date-input>
       </div>
 
-      <section class="week-availability" data-week-availability hidden>
+      <section class="booking-cal" data-booking-cal hidden>
+        <div class="booking-cal__status" data-cal-status></div>
+        <div class="booking-cal__panels" data-cal-panels></div>
+      </section>
+
+      <section class="week-availability" data-week-availability hidden style="display:none!important">
         <div class="week-availability__head">
           <div>
             <strong data-week-title>Próximas horas libres</strong>
@@ -299,6 +304,15 @@
     const weekTitle = form.querySelector('[data-week-title]');
     const weekStatus = form.querySelector('[data-week-status]');
     const weekGrid = form.querySelector('[data-week-grid]');
+    const bookingCal = form.querySelector('[data-booking-cal]');
+    const calPanels = form.querySelector('[data-cal-panels]');
+    const calStatusEl = form.querySelector('[data-cal-status]');
+    const today0 = new Date(); today0.setHours(0,0,0,0);
+    let calCurrentYear = today0.getFullYear();
+    let calCurrentMonth = today0.getMonth() + 1;
+    let activeCalRequest = 0;
+    const calMonthFmt = new Intl.DateTimeFormat(currentLanguage, { month: 'long', year: 'numeric' });
+    const calDayFmt = new Intl.DateTimeFormat(currentLanguage, { weekday: 'long', day: 'numeric', month: 'long' });
     const status = form.querySelector('[data-slot-status]');
     const slotPicker = form.querySelector('[data-slot-picker]');
     const cartJsonInput = form.querySelector('[data-cart-json-input]');
@@ -410,6 +424,13 @@
       de: { title: 'Nächste freie Zeiten', loading: 'Freie Zeiten werden gesucht…', empty: 'An diesen Tagen sind keine Zeiten frei.', more: 'Alle anzeigen', less: 'Weniger anzeigen', otherDate: 'Anderes Datum', moreDates: 'Weitere Termine anzeigen' },
       fr: { title: 'Prochains horaires libres', loading: 'Recherche des horaires libres…', empty: 'Aucun horaire libre à ces dates.', more: 'Tout afficher', less: 'Réduire', otherDate: 'Autre date', moreDates: 'Voir plus de dates' }
     }[currentLanguage] || { title: 'Próximas horas libres', loading: 'Buscando horas libres…', empty: 'No hay horas libres en estas fechas.', more: 'Ver todas', less: 'Ocultar', otherDate: 'Otra fecha', moreDates: 'Ver más fechas' };
+    const calCopy = {
+      es: { loading: 'Buscando disponibilidad…', empty: 'Sin huecos este mes.', back: '← Otra fecha' },
+      ru: { loading: 'Ищем свободное время…', empty: 'В этом месяце нет мест.', back: '← Другая дата' },
+      en: { loading: 'Looking for availability…', empty: 'No slots this month.', back: '← Other date' },
+      de: { loading: 'Suche läuft…', empty: 'Keine Termine diesen Monat.', back: '← Anderes Datum' },
+      fr: { loading: 'Recherche en cours…', empty: 'Aucun créneau ce mois.', back: '← Autre date' }
+    }[currentLanguage] || { loading: 'Buscando disponibilidad…', empty: 'Sin huecos este mes.', back: '← Otra fecha' };
     if (otherDateLabel) otherDateLabel.textContent = weekCopy.otherDate;
     if (weekMoreButton) weekMoreButton.textContent = weekCopy.moreDates;
     if (weekTitle) weekTitle.textContent = weekCopy.title;
@@ -502,7 +523,7 @@
       const hasItems = cart.length > 0;
       if (cartPanel) cartPanel.hidden = !hasItems;
       if (dateRangeSection) dateRangeSection.hidden = !hasItems;
-      if (weekAvailability) weekAvailability.hidden = !hasItems;
+      if (bookingCal) bookingCal.hidden = !hasItems;
 
       if (cartList) {
         cartList.innerHTML = '';
@@ -536,10 +557,13 @@
 
       resetBlock();
       if (hasItems) {
-        if (otherDateInput) otherDateInput.value = '';
-        loadWeekAvailability();
-      } else if (weekGrid) {
-        weekGrid.innerHTML = '';
+        const todayNow = new Date();
+        calCurrentYear = todayNow.getFullYear();
+        calCurrentMonth = todayNow.getMonth() + 1;
+        loadCalMonth(calCurrentYear, calCurrentMonth);
+      } else {
+        if (calPanels) calPanels.innerHTML = '';
+        if (calStatusEl) calStatusEl.textContent = '';
       }
     }
 
@@ -1091,6 +1115,239 @@
         });
     }
 
+    // ── Calendar ─────────────────────────────────────────────────────────────
+
+    function selectCalBlock(block, buttonEl) {
+      if (calPanels) calPanels.querySelectorAll('.week-slot-time.is-selected').forEach(function (b) { b.classList.remove('is-selected'); });
+      if (buttonEl) buttonEl.classList.add('is-selected');
+      const planItems = block.items.map(function (item) {
+        return { service: item.service_id, employee: item.employee_id, zone: item.zone_id, start_at: item.start_at };
+      });
+      if (cartJsonInput) cartJsonInput.value = JSON.stringify(planItems);
+      if (submitButton) submitButton.disabled = false;
+      if (dateInput) dateInput.value = (block.start_at || '').split('T')[0];
+      const empName = block.items && block.items[0] ? block.items[0].employee_name : '';
+      const summary = block.label + (empName ? ' · ' + empName : '');
+      if (selectedSummaryText) selectedSummaryText.textContent = summary;
+      if (selectedSummary) selectedSummary.hidden = false;
+      form.classList.add('is-time-selected');
+      updateSubmitHint();
+      window.setTimeout(function () {
+        if (detailsSection) detailsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 550);
+    }
+
+    function _buildCalSlotsGrid(blocks, dayObj) {
+      const g = document.createElement('div');
+      g.className = 'week-availability__times week-availability__times--wide';
+      blocks.forEach(function (block, index) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'week-slot-time';
+        btn.textContent = block.label;
+        if (index >= 3) btn.hidden = true;
+        btn.addEventListener('click', function () { selectCalBlock(block, btn); });
+        g.appendChild(btn);
+      });
+      if (blocks.length === 1) {
+        const sc = document.createElement('span');
+        sc.className = 'week-slot-scarcity';
+        sc.textContent = 'Solo queda este horario';
+        g.appendChild(sc);
+      } else if (blocks.length > 3) {
+        const tog = document.createElement('button');
+        tog.type = 'button';
+        tog.className = 'week-availability__more';
+        tog.textContent = '... +' + (blocks.length - 3);
+        tog.addEventListener('click', function () {
+          const anyHid = Array.from(g.querySelectorAll('.week-slot-time')).some(function (b) { return b.hidden; });
+          g.querySelectorAll('.week-slot-time').forEach(function (b, i) { b.hidden = !anyHid && i >= 3; });
+          tog.textContent = anyHid ? weekCopy.less : '... +' + (blocks.length - 3);
+        });
+        g.appendChild(tog);
+      }
+      return g;
+    }
+
+    function buildCalGrid(gridEl, daysMap, year, month, flipInner) {
+      const firstDate = new Date(year, month - 1, 1);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      let startDow = firstDate.getDay() - 1;
+      if (startDow < 0) startDow = 6;
+      for (let i = 0; i < startDow; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'cal-day cal-day--outside';
+        gridEl.appendChild(empty);
+      }
+      for (let d = 1; d <= daysInMonth; d++) {
+        const mm = String(month).padStart(2, '0');
+        const dd = String(d).padStart(2, '0');
+        const dateStr = year + '-' + mm + '-' + dd;
+        const blocks = daysMap[dateStr] || [];
+        const hasSlots = blocks.length > 0;
+        const cellDate = new Date(year, month - 1, d);
+        cellDate.setHours(0,0,0,0);
+        const isPast = cellDate < today0;
+        const isToday = cellDate.getTime() === today0.getTime();
+        const cell = document.createElement('div');
+        cell.className = 'cal-day' + (isPast ? ' cal-day--past' : hasSlots ? ' cal-day--available' : ' cal-day--empty') + (isToday ? ' cal-day--today' : '');
+        const num = document.createElement('span');
+        num.className = 'cal-day__num';
+        num.textContent = d;
+        cell.appendChild(num);
+        if (hasSlots) {
+          const dot = document.createElement('span');
+          dot.className = 'cal-day__dot';
+          cell.appendChild(dot);
+          (function (ds, bl) {
+            cell.addEventListener('click', function () {
+              const dateObj = new Date(year, month - 1, parseInt(ds.split('-')[2]));
+              if (flipInner.querySelector('[data-cal-back-label]')) {
+                const rawLabel = calDayFmt.format(dateObj);
+                flipInner.querySelector('[data-cal-back-label]').textContent = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
+              }
+              const backSlots = flipInner.querySelector('[data-cal-back-slots]');
+              if (backSlots) { backSlots.innerHTML = ''; backSlots.appendChild(_buildCalSlotsGrid(bl, { date: ds, blocks: bl })); }
+              const flip = flipInner.parentElement;
+              const frontH = flipInner.querySelector('.booking-cal__front').offsetHeight;
+              flip.style.height = frontH + 'px';
+              flipInner.classList.add('is-flipped');
+            });
+          })(dateStr, blocks);
+        }
+        gridEl.appendChild(cell);
+      }
+    }
+
+    function buildCalPanel(panelDays, year, month, panelKey, empName) {
+      const daysMap = {};
+      panelDays.forEach(function (d) { daysMap[d.date] = d.blocks || []; });
+      const panel = document.createElement('div');
+      panel.className = 'booking-cal__panel';
+      panel.dataset.calPanel = panelKey;
+      if (empName) {
+        const nameEl = document.createElement('div');
+        nameEl.className = 'booking-cal__emp-name';
+        nameEl.textContent = empName;
+        panel.appendChild(nameEl);
+      }
+      const flip = document.createElement('div');
+      flip.className = 'booking-cal__flip';
+      const inner = document.createElement('div');
+      inner.className = 'booking-cal__flip-inner';
+      // Front
+      const front = document.createElement('div');
+      front.className = 'booking-cal__front';
+      const nav = document.createElement('div');
+      nav.className = 'booking-cal__nav';
+      const prevBtn = document.createElement('button');
+      prevBtn.type = 'button'; prevBtn.className = 'cal-nav-btn'; prevBtn.innerHTML = '&#8249;';
+      const monthLabel = document.createElement('span');
+      monthLabel.className = 'cal-month-label';
+      const rawM = calMonthFmt.format(new Date(year, month - 1, 1));
+      monthLabel.textContent = rawM.charAt(0).toUpperCase() + rawM.slice(1);
+      const nextBtn = document.createElement('button');
+      nextBtn.type = 'button'; nextBtn.className = 'cal-nav-btn'; nextBtn.innerHTML = '&#8250;';
+      nav.appendChild(prevBtn); nav.appendChild(monthLabel); nav.appendChild(nextBtn);
+      front.appendChild(nav);
+      const wd = document.createElement('div');
+      wd.className = 'booking-cal__weekdays';
+      ['L','M','X','J','V','S','D'].forEach(function (l) { const s = document.createElement('span'); s.textContent = l; wd.appendChild(s); });
+      front.appendChild(wd);
+      const gridEl = document.createElement('div');
+      gridEl.className = 'booking-cal__grid';
+      buildCalGrid(gridEl, daysMap, year, month, inner);
+      front.appendChild(gridEl);
+      inner.appendChild(front);
+      // Back
+      const back = document.createElement('div');
+      back.className = 'booking-cal__back';
+      const backHead = document.createElement('div');
+      backHead.className = 'booking-cal__back-head';
+      const backLabel = document.createElement('span');
+      backLabel.className = 'booking-cal__back-label';
+      backLabel.dataset.calBackLabel = '';
+      const backClose = document.createElement('button');
+      backClose.type = 'button'; backClose.className = 'cal-back-close';
+      backClose.textContent = calCopy.back;
+      backClose.addEventListener('click', function () {
+        inner.classList.remove('is-flipped');
+        window.setTimeout(function () { flip.style.height = ''; }, 480);
+      });
+      backHead.appendChild(backLabel); backHead.appendChild(backClose);
+      back.appendChild(backHead);
+      const backSlots = document.createElement('div');
+      backSlots.className = 'booking-cal__back-slots';
+      backSlots.dataset.calBackSlots = '';
+      back.appendChild(backSlots);
+      inner.appendChild(back);
+      flip.appendChild(inner);
+      panel.appendChild(flip);
+      // Month nav
+      const todayNow = new Date();
+      if (year < todayNow.getFullYear() || (year === todayNow.getFullYear() && month <= todayNow.getMonth() + 1)) {
+        prevBtn.disabled = true;
+      }
+      prevBtn.addEventListener('click', function () {
+        let y = calCurrentYear, m = calCurrentMonth - 1;
+        if (m < 1) { m = 12; y--; }
+        calCurrentYear = y; calCurrentMonth = m;
+        loadCalMonth(y, m);
+      });
+      nextBtn.addEventListener('click', function () {
+        let y = calCurrentYear, m = calCurrentMonth + 1;
+        if (m > 12) { m = 1; y++; }
+        calCurrentYear = y; calCurrentMonth = m;
+        loadCalMonth(y, m);
+      });
+      return panel;
+    }
+
+    function renderCalPanels(days, year, month) {
+      if (!calPanels) return;
+      calPanels.innerHTML = '';
+      const employeeMap = {};
+      days.forEach(function (day) {
+        (day.blocks || []).forEach(function (b) {
+          if (b.items && b.items.length === 1) employeeMap[String(b.items[0].employee_id)] = b.items[0].employee_name;
+        });
+      });
+      const empIds = Object.keys(employeeMap);
+      if (empIds.length > 1) {
+        empIds.forEach(function (empId) {
+          const empDays = days.map(function (d) {
+            return { date: d.date, blocks: (d.blocks || []).filter(function (b) { return b.items && b.items[0] && String(b.items[0].employee_id) === empId; }) };
+          }).filter(function (d) { return d.blocks.length > 0; });
+          calPanels.appendChild(buildCalPanel(empDays, year, month, empId, employeeMap[empId]));
+        });
+      } else {
+        calPanels.appendChild(buildCalPanel(days, year, month, 'all', null));
+      }
+      if (calStatusEl) calStatusEl.textContent = days.length ? '' : calCopy.empty;
+    }
+
+    function loadCalMonth(year, month) {
+      if (!cart.length || !form.dataset.monthSlotsUrl) return;
+      activeCalRequest += 1;
+      const reqId = activeCalRequest;
+      if (calStatusEl) calStatusEl.textContent = calCopy.loading;
+      if (calPanels) calPanels.innerHTML = '';
+      const params = new URLSearchParams({ services: cart.map(function (i) { return i.id; }).join(','), year: year, month: month });
+      fetch(form.dataset.monthSlotsUrl + '?' + params.toString(), { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (activeCalRequest !== reqId) return;
+          if (!data.ok) throw new Error(data.message || messages.error);
+          renderCalPanels(data.days || [], year, month);
+        })
+        .catch(function (err) {
+          if (activeCalRequest !== reqId) return;
+          if (calStatusEl) calStatusEl.textContent = err.message || messages.error;
+        });
+    }
+
+    // ── End Calendar ──────────────────────────────────────────────────────────
+
     function syncWaitlistForm() {
       if (!waitlistForm) return;
       const serviceInput = waitlistForm.querySelector('[data-waitlist-service]');
@@ -1311,7 +1568,9 @@
       editSlotButton.addEventListener('click', function () {
         form.classList.remove('is-time-selected');
         if (selectedSummary) selectedSummary.hidden = true;
-        if (weekAvailability) weekAvailability.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (cartJsonInput) cartJsonInput.value = '';
+        if (submitButton) submitButton.disabled = true;
+        if (bookingCal) bookingCal.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     }
     syncContactFields();
