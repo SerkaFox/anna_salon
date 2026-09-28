@@ -26,6 +26,7 @@ from bookings.utils import (
     build_available_slots_for_day,
     find_available_zone,
     find_multi_service_slots,
+    get_month_available_dates,
 )
 from clients.models import Client
 from clients.translation import CLIENT_LANGUAGE_SESSION_KEY
@@ -1212,8 +1213,6 @@ def public_multi_booking_week_slots(request):
 
 def public_booking_month_slots(request):
     """GET /reservar/month-slots/?services=1,2&year=2026&month=10"""
-    import calendar as _cal
-
     service_ids_raw = request.GET.get("services", "")
     year_text = request.GET.get("year")
     month_text = request.GET.get("month")
@@ -1239,16 +1238,7 @@ def public_booking_month_slots(request):
     except KeyError:
         return JsonResponse({"ok": False, "message": "Servicio no encontrado."}, status=400)
 
-    last_day_num = _cal.monthrange(year, month)[1]
-    d = date(year, month, 1)
-    last_day = date(year, month, last_day_num)
-    available_dates = []
-    while d <= last_day:
-        if _date_within_booking_window(d):
-            if find_multi_service_slots(d, services, max_results=1):
-                available_dates.append(d.isoformat())
-        d += timedelta(days=1)
-
+    available_dates = get_month_available_dates(year, month, services)
     return JsonResponse({"ok": True, "year": year, "month": month, "dates": available_dates})
 
 

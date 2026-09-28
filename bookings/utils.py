@@ -624,6 +624,74 @@ def booking_layout_data(booking):
 # Multi-service consecutive slot finder
 # ---------------------------------------------------------------------------
 
+def get_month_available_dates(year, month, services):
+    """
+    Return ISO date strings in year/month that have at least one working employee
+    for these services. Uses bulk queries — no per-day DB hits.
+    Booking conflicts are not checked here; they are checked per-day when the user
+    clicks a date and the full slot list is fetched.
+    """
+    import calendar as _cal
+    from datetime import date as _date
+    from employees.models import Employee as _Employee
+    from employees.models import EmployeeScheduleOverride, EmployeeWeeklyShift
+
+    first_day = _date(year, month, 1)
+    last_day_num = _cal.monthrange(year, month)[1]
+    last_day = _date(year, month, last_day_num)
+
+    # All employees for these services (1 query per service, usually 1)
+    emp_ids = set()
+    service_emp_ids = {}
+    for service in services:
+        ids = list(
+            _Employee.objects.filter(is_active=True, services=service)
+            .values_list("pk", flat=True)
+        )
+        service_emp_ids[service.pk] = ids
+        emp_ids.update(ids)
+    emp_ids = list(emp_ids)
+    if not emp_ids:
+        return []
+
+    # Batch load weekly shifts: {emp_id: {weekday: is_day_off}}
+    weekly = {}
+    for s in EmployeeWeeklyShift.objects.filter(employee_id__in=emp_ids).values(
+        "employee_id", "weekday", "is_day_off", "start_time", "end_time"
+    ):
+        weekly.setdefault(s["employee_id"], {})[s["weekday"]] = s
+
+    # Batch load overrides for the month: {(emp_id, date): is_day_off}
+    overrides = {}
+    for ov in EmployeeScheduleOverride.objects.filter(
+        employee_id__in=emp_ids, date__gte=first_day, date__lte=last_day
+    ).values("employee_id", "date", "is_day_off", "start_time", "end_time"):
+        overrides[(ov["employee_id"], ov["date"])] = ov
+
+    def emp_works_on(emp_id, d):
+        key = (emp_id, d)
+        if key in overrides:
+            ov = overrides[key]
+            return not ov["is_day_off"] and ov["start_time"] and ov["end_time"]
+        emp_weekly = weekly.get(emp_id, {})
+        if d.weekday() in emp_weekly:
+            s = emp_weekly[d.weekday()]
+            return not s["is_day_off"] and s["start_time"] and s["end_time"]
+        # No explicit shift defined: default Mon–Sat work
+        return d.weekday() != 6  # not Sunday
+
+    available = []
+    d = first_day
+    while d <= last_day:
+        if _date_within_booking_window(d):
+            for service in services:
+                if any(emp_works_on(eid, d) for eid in service_emp_ids.get(service.pk, [])):
+                    available.append(d.isoformat())
+                    break
+        d += timedelta(days=1)
+    return available
+
+
 def find_multi_service_slots(date_obj, services, step_minutes=MOBILE_SLOT_STEP_MINUTES, max_results=None):
     """
     Return time blocks on date_obj where all services can be scheduled back-to-back.
