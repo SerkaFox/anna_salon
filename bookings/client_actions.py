@@ -14,6 +14,7 @@ from .models import Booking
 from .services import (
     active_group_siblings,
     booking_group_holder,
+    booking_group_total,
     notify_waitlist_for_booking_opening,
 )
 from .utils import find_available_zone, is_slot_available
@@ -50,6 +51,23 @@ def can_client_reschedule(booking):
     return can_client_cancel(booking) and timezone.now() <= booking_refundable_until(booking)
 
 
+def _refund_up_to(holder, amount):
+    """Refund up to `amount` EUR across the holder's refundable Stripe payments."""
+    remaining = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    refunds = []
+    for payment in holder.online_payments.select_for_update().filter(provider=Payment.Providers.STRIPE):
+        if remaining <= Decimal("0.00"):
+            break
+        if not payment.is_refundable:
+            continue
+        chunk = min(remaining, payment.refundable_amount)
+        if chunk <= Decimal("0.00"):
+            continue
+        refunds.append(create_refund(payment, amount=chunk))
+        remaining -= chunk
+    return refunds
+
+
 def cancel_booking(booking, *, force_refund=False):
     if not can_client_cancel(booking):
         raise ValidationError("Esta reserva no se puede cancelar.")
@@ -60,33 +78,63 @@ def cancel_booking(booking, *, force_refund=False):
             raise ValidationError("Esta reserva no se puede cancelar.")
         # A group of bookings created together shares ONE prepayment, held by
         # the group's first booking. While other bookings of the group remain
-        # active the money is left untouched; it is only refunded when the last
-        # active booking of the group is cancelled.
+        # active, only THIS booking's share of that deposit (by its own price
+        # vs. the group's total) is refunded; the rest stays assigned to the
+        # booking(s) still active. The whole deposit is only fully settled
+        # (refunded or forfeited) when the last active booking of the group
+        # is cancelled.
         group_pending = active_group_siblings(booking).exists()
         holder = booking_group_holder(booking)
-        refundable = not group_pending and (
-            force_refund or timezone.now() <= booking_refundable_until(holder)
-        )
+        prepayment = getattr(holder, "prepayment", None)
+        refundable = force_refund or timezone.now() <= booking_refundable_until(booking)
+
         refunds = []
-        if refundable:
+        split_amount = Decimal("0.00")
+
+        if group_pending:
+            group_total = booking_group_total(booking)
+            this_price = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+            if prepayment and group_total > 0:
+                split_amount = min(
+                    (prepayment.amount * this_price / group_total).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    ),
+                    prepayment.amount,
+                )
+            if refundable and split_amount > 0:
+                refunds = _refund_up_to(holder, split_amount)
+            if prepayment and split_amount > 0:
+                prepayment.amount = prepayment.amount - split_amount
+                prepayment.save(update_fields=["amount", "updated_at"])
+        elif refundable:
             for payment in holder.online_payments.select_for_update().filter(provider=Payment.Providers.STRIPE):
                 if payment.is_refundable:
                     refunds.append(create_refund(payment))
 
         booking.status = Booking.Statuses.CANCELLED
         booking.save(update_fields=["status", "updated_at"])
-        prepayment = getattr(holder, "prepayment", None)
-        if prepayment and refundable:
-            prepayment.status = prepayment.Statuses.REFUNDED
-            prepayment.refunded_at = timezone.now()
-            prepayment.save(update_fields=["status", "refunded_at", "updated_at"])
-        elif prepayment and not refundable and not group_pending:
-            prepayment.refresh_forfeit_status()
+
+        if prepayment and not group_pending:
+            if refundable:
+                prepayment.status = prepayment.Statuses.REFUNDED
+                prepayment.refunded_at = timezone.now()
+                prepayment.save(update_fields=["status", "refunded_at", "updated_at"])
+            else:
+                prepayment.refresh_forfeit_status()
         notify_waitlist_for_booking_opening(booking)
+
     if group_pending:
+        if refunds:
+            return (
+                "La reserva se ha cancelado. Se ha devuelto la parte de la señal "
+                "correspondiente a este servicio; el resto de la señal común queda "
+                "para la otra reserva del grupo.",
+                refunds,
+            )
         return (
-            "La reserva se ha cancelado. La señal es común a todas las reservas "
-            "del grupo y no se ha devuelto automáticamente.",
+            "La reserva se ha cancelado. La parte de la señal de este servicio no se "
+            "ha devuelto porque faltan menos de 24 horas; el resto de la señal común "
+            "queda para la otra reserva del grupo.",
             refunds,
         )
     if refundable and refunds:

@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta
+import uuid
 from decimal import Decimal
 from unittest.mock import patch
 from urllib.parse import urlparse
@@ -10,7 +11,7 @@ from django.utils import timezone
 from accounts.models import User
 from bookings.client_actions import cancel_booking, change_booking_service, reschedule_booking
 from bookings.forms import BookingForm
-from bookings.models import Booking
+from bookings.models import Booking, BookingPrepayment
 from clients.models import Client
 from employees.models import Employee, EmployeeScheduleOverride, EmployeeWeeklyShift
 from payments.models import Payment, PaymentRefund
@@ -274,6 +275,58 @@ class ClientBookingActionTests(TestCase):
         payment = booking.online_payments.get()
         self.assertEqual(booking.client_response, Booking.ClientResponses.ATTENDING)
         self.assertEqual(payment.amount, Decimal("10.00"))
+
+    @patch("payments.stripe_service.stripe.Refund.create")
+    def test_group_cancellation_splits_shared_deposit_by_price(self, mocked_refund):
+        mocked_refund.return_value = {"id": "re_split", "status": "succeeded"}
+        group_id = uuid.uuid4()
+        start_at = timezone.now() + timedelta(days=3)
+        cheap = self._booking(start_at=start_at, service=self.service)  # 50.00
+        expensive = self._booking(
+            start_at=start_at + timedelta(hours=1), service=self.expensive_service
+        )  # 80.00
+        cheap.booking_group_id = group_id
+        expensive.booking_group_id = group_id
+        cheap.save(update_fields=["booking_group_id"])
+        expensive.save(update_fields=["booking_group_id"])
+        holder = min([cheap, expensive], key=lambda b: b.pk)
+        other = expensive if holder.pk == cheap.pk else cheap
+        payment = self._paid_payment(holder, amount=Decimal("26.00"))
+        prepayment = BookingPrepayment.objects.create(
+            booking=holder,
+            payment=payment,
+            amount=Decimal("26.00"),
+            status=BookingPrepayment.Statuses.PAID,
+            refundable_until=start_at - timedelta(hours=24),
+        )
+
+        # Cancel the holder's own booking while its group sibling stays active:
+        # only the holder's share of the deposit (its own price / group total)
+        # is refunded, the rest stays assigned to the still-active sibling.
+        message, refunds = cancel_booking(holder)
+
+        holder.refresh_from_db()
+        other.refresh_from_db()
+        payment.refresh_from_db()
+        prepayment.refresh_from_db()
+        self.assertEqual(holder.status, Booking.Statuses.CANCELLED)
+        self.assertEqual(other.status, Booking.Statuses.CONFIRMED)
+        self.assertEqual(len(refunds), 1)
+        expected_share = (Decimal("26.00") * holder.client_price_snapshot / Decimal("130.00")).quantize(Decimal("0.01"))
+        self.assertEqual(payment.amount_refunded, expected_share)
+        self.assertEqual(payment.status, Payment.Statuses.PARTIALLY_REFUNDED)
+        self.assertEqual(prepayment.amount, Decimal("26.00") - expected_share)
+        self.assertEqual(prepayment.status, BookingPrepayment.Statuses.PAID)
+        self.assertIn("el resto", message)
+
+        # Cancelling the last active sibling settles whatever remains of the deposit.
+        message2, refunds2 = cancel_booking(other)
+        payment.refresh_from_db()
+        prepayment.refresh_from_db()
+        self.assertEqual(len(refunds2), 1)
+        self.assertEqual(payment.amount_refunded, Decimal("26.00"))
+        self.assertEqual(payment.status, Payment.Statuses.REFUNDED)
+        self.assertEqual(prepayment.status, BookingPrepayment.Statuses.REFUNDED)
 
     def test_unpaid_booking_cancellation_works(self):
         booking = self._booking()
