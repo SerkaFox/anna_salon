@@ -626,21 +626,24 @@ def booking_layout_data(booking):
 
 def get_month_available_dates(year, month, services):
     """
-    Return ISO date strings in year/month that have at least one working employee
-    for these services. Uses bulk queries — no per-day DB hits.
-    Booking conflicts are not checked here; they are checked per-day when the user
-    clicks a date and the full slot list is fetched.
+    Return ISO date strings in year/month that have at least one genuinely bookable
+    slot for these services. Uses bulk queries (≤7 total) + in-memory conflict check
+    including employee bookings and zone conflicts.
     """
     import calendar as _cal
     from datetime import date as _date
     from employees.models import Employee as _Employee
-    from employees.models import EmployeeScheduleOverride, EmployeeWeeklyShift
+    from employees.models import (
+        EmployeeScheduleOverride,
+        EmployeeWeeklyShift,
+        EmployeeTimeBlock,
+        EmployeeRecurringTimeBlock,
+    )
 
     first_day = _date(year, month, 1)
     last_day_num = _cal.monthrange(year, month)[1]
     last_day = _date(year, month, last_day_num)
 
-    # All employees for these services (1 query per service, usually 1)
     emp_ids = set()
     service_emp_ids = {}
     for service in services:
@@ -654,41 +657,155 @@ def get_month_available_dates(year, month, services):
     if not emp_ids:
         return []
 
-    # Batch load weekly shifts: {emp_id: {weekday: is_day_off}}
     weekly = {}
     for s in EmployeeWeeklyShift.objects.filter(employee_id__in=emp_ids).values(
-        "employee_id", "weekday", "is_day_off", "start_time", "end_time"
+        "employee_id", "weekday", "is_day_off", "start_time", "end_time", "break_start", "break_end"
     ):
         weekly.setdefault(s["employee_id"], {})[s["weekday"]] = s
 
-    # Batch load overrides for the month: {(emp_id, date): is_day_off}
     overrides = {}
     for ov in EmployeeScheduleOverride.objects.filter(
         employee_id__in=emp_ids, date__gte=first_day, date__lte=last_day
-    ).values("employee_id", "date", "is_day_off", "start_time", "end_time"):
+    ).values("employee_id", "date", "is_day_off", "start_time", "end_time", "break_start", "break_end"):
         overrides[(ov["employee_id"], ov["date"])] = ov
 
-    def emp_works_on(emp_id, d):
+    # Bulk load employee booking conflicts: {(emp_id, date): [(start, end), …]}
+    emp_day_bookings = {}
+    for b in Booking.objects.filter(
+        employee_id__in=emp_ids,
+        start_at__date__gte=first_day,
+        start_at__date__lte=last_day,
+    ).exclude(status=Booking.Statuses.CANCELLED).values("employee_id", "start_at", "end_at"):
+        d_key = timezone.localtime(b["start_at"]).date()
+        emp_day_bookings.setdefault((b["employee_id"], d_key), []).append(
+            (b["start_at"], b["end_at"])
+        )
+
+    # Bulk load zone booking conflicts for services that require a zone
+    zone_day_bookings = {}
+    all_zone_ids = set()
+    service_zone_ids = {}  # {service_pk: [zone_pk, …]}
+    for service in services:
+        if service.requires_zone:
+            zids = [z.pk for z in service.allowed_zones.all()]
+            service_zone_ids[service.pk] = zids
+            all_zone_ids.update(zids)
+    if all_zone_ids:
+        for b in Booking.objects.filter(
+            zone_id__in=all_zone_ids,
+            start_at__date__gte=first_day,
+            start_at__date__lte=last_day,
+        ).exclude(status=Booking.Statuses.CANCELLED).values("zone_id", "start_at", "end_at"):
+            d_key = timezone.localtime(b["start_at"]).date()
+            zone_day_bookings.setdefault((b["zone_id"], d_key), []).append(
+                (b["start_at"], b["end_at"])
+            )
+
+    # Employee → allowed zone ids (empty set = all zones allowed)
+    emp_zone_ids = {}
+    for row in _Employee.objects.filter(pk__in=emp_ids).prefetch_related("zones"):
+        emp_zone_ids[row.pk] = set(z.pk for z in row.zones.all())
+
+    # Bulk load one-off time blocks: {(emp_id, date): [(start_time, end_time), …]}
+    emp_time_blocks = {}
+    for tb in EmployeeTimeBlock.objects.filter(
+        employee_id__in=emp_ids, date__gte=first_day, date__lte=last_day
+    ).values("employee_id", "date", "start_time", "end_time"):
+        emp_time_blocks.setdefault((tb["employee_id"], tb["date"]), []).append(
+            (tb["start_time"], tb["end_time"])
+        )
+
+    # Bulk load recurring time blocks: {emp_id: [(weekday, start_time, end_time, date_from, date_to), …]}
+    emp_recurring_blocks = {}
+    for rb in EmployeeRecurringTimeBlock.objects.filter(
+        employee_id__in=emp_ids, active=True
+    ).values("employee_id", "weekday", "start_time", "end_time", "date_from", "date_to"):
+        emp_recurring_blocks.setdefault(rb["employee_id"], []).append(rb)
+
+    today_local = timezone.localdate()
+    now_aware = timezone.now()
+    min_duration = timedelta(minutes=min(s.duration_minutes for s in services))
+    step = timedelta(minutes=MOBILE_SLOT_STEP_MINUTES)
+    max_date = today_local + timedelta(days=PUBLIC_BOOKING_MAX_DAYS_AHEAD)
+
+    def _get_shift(emp_id, d):
+        """Return (start_time, end_time, break_start, break_end) or None."""
         key = (emp_id, d)
         if key in overrides:
             ov = overrides[key]
-            return not ov["is_day_off"] and ov["start_time"] and ov["end_time"]
+            if ov["is_day_off"] or not ov["start_time"] or not ov["end_time"]:
+                return None
+            return ov["start_time"], ov["end_time"], ov["break_start"], ov["break_end"]
         emp_weekly = weekly.get(emp_id, {})
         if d.weekday() in emp_weekly:
             s = emp_weekly[d.weekday()]
-            return not s["is_day_off"] and s["start_time"] and s["end_time"]
-        # No explicit shift defined: default Mon–Sat work
-        return d.weekday() != 6  # not Sunday
+            if s["is_day_off"] or not s["start_time"] or not s["end_time"]:
+                return None
+            return s["start_time"], s["end_time"], s["break_start"], s["break_end"]
+        if d.weekday() == 6:
+            return None
+        return time(hour=DEFAULT_WORK_START_HOUR), time(hour=DEFAULT_WORK_END_HOUR), None, None
 
-    today_local = timezone.localdate()
-    max_date = today_local + timedelta(days=PUBLIC_BOOKING_MAX_DAYS_AHEAD)
+    def _zone_free(zone_id, d, t, t_end):
+        return not any(s < t_end and e > t for s, e in zone_day_bookings.get((zone_id, d), []))
+
+    def _time_block_conflicts(emp_id, d, t, t_end):
+        # One-off blocks
+        for tb_start, tb_end in emp_time_blocks.get((emp_id, d), []):
+            bs = combine_local(d, tb_start)
+            be = combine_local(d, tb_end)
+            if bs < t_end and be > t:
+                return True
+        # Recurring blocks
+        for rb in emp_recurring_blocks.get(emp_id, []):
+            if rb["weekday"] != d.weekday():
+                continue
+            if d < rb["date_from"]:
+                continue
+            if rb["date_to"] and d > rb["date_to"]:
+                continue
+            bs = combine_local(d, rb["start_time"])
+            be = combine_local(d, rb["end_time"])
+            if bs < t_end and be > t:
+                return True
+        return False
+
+    def emp_has_free_slot(emp_id, d, service):
+        shift = _get_shift(emp_id, d)
+        if shift is None:
+            return False
+        shift_start = combine_local(d, shift[0])
+        shift_end = combine_local(d, shift[1])
+        break_start = combine_local(d, shift[2]) if shift[2] else None
+        break_end = combine_local(d, shift[3]) if shift[3] else None
+        t = max(shift_start, now_aware) if d == today_local else shift_start
+        duration = timedelta(minutes=service.duration_minutes)
+        if shift_end - t < duration:
+            return False
+        day_bookings = emp_day_bookings.get((emp_id, d), [])
+        requires_zone = service.requires_zone
+        if requires_zone:
+            svc_zones = service_zone_ids.get(service.pk, [])
+            emp_zones = emp_zone_ids.get(emp_id, set())
+            usable_zones = [z for z in svc_zones if not emp_zones or z in emp_zones]
+            if not usable_zones:
+                return False
+        while t + duration <= shift_end:
+            t_end = t + duration
+            emp_conflict = any(s < t_end and e > t for s, e in day_bookings)
+            break_conflict = bool(break_start and break_end and break_start < t_end and break_end > t)
+            if not emp_conflict and not break_conflict and not _time_block_conflicts(emp_id, d, t, t_end):
+                if not requires_zone or any(_zone_free(z, d, t, t_end) for z in usable_zones):
+                    return True
+            t += step
+        return False
 
     available = []
     d = first_day
     while d <= last_day:
         if today_local <= d <= max_date:
             for service in services:
-                if any(emp_works_on(eid, d) for eid in service_emp_ids.get(service.pk, [])):
+                if any(emp_has_free_slot(eid, d, service) for eid in service_emp_ids.get(service.pk, [])):
                     available.append(d.isoformat())
                     break
         d += timedelta(days=1)

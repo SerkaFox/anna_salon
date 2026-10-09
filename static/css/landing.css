@@ -2845,12 +2845,15 @@ html[data-theme="bosque"] .reviews-summary {
 }
 
 /* Weekday headers */
+.booking-cal__panels { align-items: center; }
+.booking-cal__panel { width: 100%; max-width: 420px; }
+
 .booking-cal__weekdays {
   display: grid; grid-template-columns: repeat(7, 1fr);
   margin-bottom: 4px;
 }
 .booking-cal__weekdays span {
-  text-align: center; font-size: .6rem; color: var(--muted);
+  text-align: center; font-size: clamp(.6rem, 1.8vw, .72rem); color: var(--muted);
   text-transform: uppercase; letter-spacing: .06em; padding: 3px 0;
 }
 
@@ -2875,9 +2878,9 @@ html[data-theme="bosque"] .reviews-summary {
 .cal-day--empty, .cal-day--past, .cal-day--outside { opacity: .22; }
 .cal-day--today .cal-day__num {
   background: rgba(240,208,145,0.2); border-radius: 50%;
-  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
 }
-.cal-day__num { font-size: .78rem; color: var(--text); line-height: 1; }
+.cal-day__num { font-size: clamp(.78rem, 3.5vw, 1rem); color: var(--text); line-height: 1; }
 .cal-day--available .cal-day__num { color: var(--gold-light); font-weight: 700; }
 .cal-day__dot {
   width: 4px; height: 4px; border-radius: 50%;
@@ -2902,3 +2905,11 @@ html[data-theme="bosque"] .reviews-summary {
 .cal-back-close:hover { background: rgba(240,208,145,0.08); color: var(--gold-light); }
 .booking-cal__back-slots { padding-top: 4px; }
 .cal-loading { display: block; font-size: .78rem; color: var(--muted); text-align: center; padding: 16px 0; }
+.cal-emp-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.cal-emp-grid .cal-emp-col { flex: 1; min-width: 0; }
+.cal-emp-col__name {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--gold-light); opacity: .85;
+  text-align: center; margin-bottom: 7px;
+}
+.cal-emp-col .week-availability__times { justify-content: center; }
