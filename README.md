@@ -2,6 +2,16 @@
 
 Django application for salon management: clients, employees, services, zones, bookings, and the internal dashboard.
 
+<!-- readme-screenshots -->
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/anna-desktop.jpg" alt="Public site brimoon.es" width="72%">
+  <img src="docs/screenshots/anna-mobile.jpg" alt="Mobile" width="24%">
+</p>
+<p align="center"><em>Public site brimoon.es · Mobile</em></p>
+<!-- readme-screenshots -->
+
 ## Stack
 
 - Python 3.12
