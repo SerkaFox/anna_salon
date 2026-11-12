@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from documents.models import FiscalDocument
 from payments.models import Payment
 from payments.stripe_service import create_checkout_session, create_pending_stripe_payment, create_refund
 from services_app.models import Service
@@ -14,6 +15,7 @@ from .models import Booking
 from .services import (
     active_group_siblings,
     booking_group_holder,
+    booking_group_total,
     notify_waitlist_for_booking_opening,
 )
 from .utils import find_available_zone, is_slot_available
@@ -37,9 +39,44 @@ def booking_paid_amount(booking):
     return max(paid - refunded, Decimal("0.00"))
 
 
+def _active_standard_fiscal_document(booking):
+    """The live checkout ticket for this booking, if staff has opened one.
+
+    Its ``total_amount`` already includes any extra service lines added
+    during checkout (e.g. an add-on charged on the spot), so it is the
+    authoritative total once it exists — the booking's price snapshot is
+    only a fallback for bookings nobody has started checking out yet.
+    """
+    documents = getattr(booking, "_prefetched_objects_cache", {}).get("fiscal_documents")
+    documents = documents if documents is not None else booking.fiscal_documents.all()
+    return next(
+        (
+            document
+            for document in documents
+            if document.status in {FiscalDocument.Statuses.DRAFT, FiscalDocument.Statuses.ISSUED}
+            and document.document_type == FiscalDocument.DocumentTypes.RECEIPT
+            and document.purpose == FiscalDocument.Purposes.STANDARD
+        ),
+        None,
+    )
+
+
+def _document_manual_paid_amount(document):
+    if document is None:
+        return Decimal("0.00")
+    manual_payments = getattr(document, "_prefetched_objects_cache", {}).get("payments")
+    manual_payments = manual_payments if manual_payments is not None else document.payments.all()
+    return sum((payment.signed_amount for payment in manual_payments), Decimal("0.00"))
+
+
 def booking_amount_due(booking):
-    total = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
-    return max(total - booking_paid_amount(booking), Decimal("0.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    document = _active_standard_fiscal_document(booking)
+    if document is not None:
+        total = document.total_amount
+    else:
+        total = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+    paid = booking_paid_amount(booking) + _document_manual_paid_amount(document)
+    return max(total - paid, Decimal("0.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def can_client_cancel(booking):
@@ -48,6 +85,23 @@ def can_client_cancel(booking):
 
 def can_client_reschedule(booking):
     return can_client_cancel(booking) and timezone.now() <= booking_refundable_until(booking)
+
+
+def _refund_up_to(holder, amount):
+    """Refund up to `amount` EUR across the holder's refundable Stripe payments."""
+    remaining = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    refunds = []
+    for payment in holder.online_payments.select_for_update().filter(provider=Payment.Providers.STRIPE):
+        if remaining <= Decimal("0.00"):
+            break
+        if not payment.is_refundable:
+            continue
+        chunk = min(remaining, payment.refundable_amount)
+        if chunk <= Decimal("0.00"):
+            continue
+        refunds.append(create_refund(payment, amount=chunk))
+        remaining -= chunk
+    return refunds
 
 
 def cancel_booking(booking, *, force_refund=False):
@@ -60,33 +114,63 @@ def cancel_booking(booking, *, force_refund=False):
             raise ValidationError("Esta reserva no se puede cancelar.")
         # A group of bookings created together shares ONE prepayment, held by
         # the group's first booking. While other bookings of the group remain
-        # active the money is left untouched; it is only refunded when the last
-        # active booking of the group is cancelled.
+        # active, only THIS booking's share of that deposit (by its own price
+        # vs. the group's total) is refunded; the rest stays assigned to the
+        # booking(s) still active. The whole deposit is only fully settled
+        # (refunded or forfeited) when the last active booking of the group
+        # is cancelled.
         group_pending = active_group_siblings(booking).exists()
         holder = booking_group_holder(booking)
-        refundable = not group_pending and (
-            force_refund or timezone.now() <= booking_refundable_until(holder)
-        )
+        prepayment = getattr(holder, "prepayment", None)
+        refundable = force_refund or timezone.now() <= booking_refundable_until(booking)
+
         refunds = []
-        if refundable:
+        split_amount = Decimal("0.00")
+
+        if group_pending:
+            group_total = booking_group_total(booking)
+            this_price = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
+            if prepayment and group_total > 0:
+                split_amount = min(
+                    (prepayment.amount * this_price / group_total).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    ),
+                    prepayment.amount,
+                )
+            if refundable and split_amount > 0:
+                refunds = _refund_up_to(holder, split_amount)
+            if prepayment and split_amount > 0:
+                prepayment.amount = prepayment.amount - split_amount
+                prepayment.save(update_fields=["amount", "updated_at"])
+        elif refundable:
             for payment in holder.online_payments.select_for_update().filter(provider=Payment.Providers.STRIPE):
                 if payment.is_refundable:
                     refunds.append(create_refund(payment))
 
         booking.status = Booking.Statuses.CANCELLED
         booking.save(update_fields=["status", "updated_at"])
-        prepayment = getattr(holder, "prepayment", None)
-        if prepayment and refundable:
-            prepayment.status = prepayment.Statuses.REFUNDED
-            prepayment.refunded_at = timezone.now()
-            prepayment.save(update_fields=["status", "refunded_at", "updated_at"])
-        elif prepayment and not refundable and not group_pending:
-            prepayment.refresh_forfeit_status()
+
+        if prepayment and not group_pending:
+            if refundable:
+                prepayment.status = prepayment.Statuses.REFUNDED
+                prepayment.refunded_at = timezone.now()
+                prepayment.save(update_fields=["status", "refunded_at", "updated_at"])
+            else:
+                prepayment.refresh_forfeit_status()
         notify_waitlist_for_booking_opening(booking)
+
     if group_pending:
+        if refunds:
+            return (
+                "La reserva se ha cancelado. Se ha devuelto la parte de la señal "
+                "correspondiente a este servicio; el resto de la señal común queda "
+                "para la otra reserva del grupo.",
+                refunds,
+            )
         return (
-            "La reserva se ha cancelado. La señal es común a todas las reservas "
-            "del grupo y no se ha devuelto automáticamente.",
+            "La reserva se ha cancelado. La parte de la señal de este servicio no se "
+            "ha devuelto porque faltan menos de 24 horas; el resto de la señal común "
+            "queda para la otra reserva del grupo.",
             refunds,
         )
     if refundable and refunds:
@@ -96,7 +180,7 @@ def cancel_booking(booking, *, force_refund=False):
     return "La reserva se ha cancelado. La señal no es reembolsable porque faltan menos de 24 horas para la cita.", refunds
 
 
-def reschedule_booking(booking, *, start_at, employee=None, zone=None, allow_late=False):
+def reschedule_booking(booking, *, start_at, employee=None, zone=None, allow_late=False, by_client=False):
     if not allow_late and not can_client_reschedule(booking):
         raise ValidationError("No se puede cambiar la cita con menos de 24 horas de antelación. Contacta con el salón.")
     employee = employee or booking.employee
@@ -124,6 +208,10 @@ def reschedule_booking(booking, *, start_at, employee=None, zone=None, allow_lat
     booking.zone = zone
     booking.start_at = start_at
     booking.end_at = end_at
+    # Read by the post_save signal in bookings/signals.py to tell the push
+    # notification apart: a client moving their own booking from the portal
+    # is worth flagging differently than staff rescheduling it themselves.
+    booking._rescheduled_by_client = by_client
     booking.save(update_fields=["employee", "zone", "start_at", "end_at", "updated_at"])
     return booking
 

@@ -94,7 +94,7 @@ def get_booking_full_amount(booking):
 
 
 def create_pending_stripe_payment(booking, amount=None, *, status=None, reason="booking_payment"):
-    amount = amount if amount is not None else get_booking_checkout_amount(booking)
+    amount = amount if amount is not None else get_booking_deposit_amount(booking)
     amount = Decimal(amount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if amount <= Decimal("0.00"):
         raise ValidationError("La reserva no tiene importe para pagar.")

@@ -28,7 +28,7 @@ from services_app.models import Service
 
 from .forms import BookingForm, BookingPhotoForm
 from .models import Booking, BookingPhoto
-from .client_actions import booking_amount_due, booking_paid_amount, cancel_booking
+from .client_actions import booking_amount_due, booking_paid_amount, can_client_cancel, cancel_booking
 from .services import notify_waitlist_for_booking_opening
 from whatsapp_bot.services import queue_and_send, send_cancellation_confirmation
 from whatsapp_bot.models import WhatsAppMessage
@@ -1030,6 +1030,7 @@ def booking_calendar_day(request):
                 "client": card["client"],
                 "service": card["service"],
                 "service_color": card["service_color"],
+                "source_color": card["source_color"],
                 "status": card["status"],
                 "status_label": card["status_label"],
             })
@@ -1369,10 +1370,20 @@ def booking_status_api(request, pk):
         return JsonResponse({"ok": False, "message": "Estado inválido."}, status=400)
 
     old_status = booking.status
-    booking.status = status_value
-    booking.save(update_fields=["status", "updated_at"])
-    if old_status != Booking.Statuses.CANCELLED and booking.status == Booking.Statuses.CANCELLED:
-        notify_waitlist_for_booking_opening(booking)
+    # Pasar a Cancelada desde aqui tiene que devolver el prepago igual que el
+    # boton "Cancelar": cambiar solo el campo dejaba el dinero cobrado.
+    message = "Estado actualizado."
+    if status_value == Booking.Statuses.CANCELLED and can_client_cancel(booking):
+        try:
+            message, _refunds = cancel_booking(booking)
+        except ValidationError as exc:
+            return JsonResponse({"ok": False, "message": "; ".join(exc.messages)}, status=400)
+        booking.refresh_from_db()
+    else:
+        booking.status = status_value
+        booking.save(update_fields=["status", "updated_at"])
+        if old_status != Booking.Statuses.CANCELLED and booking.status == Booking.Statuses.CANCELLED:
+            notify_waitlist_for_booking_opening(booking)
     log_event(
         actor=request.user,
         section="booking",
@@ -1384,7 +1395,7 @@ def booking_status_api(request, pk):
 
     return JsonResponse({
         "ok": True,
-        "message": "Estado actualizado.",
+        "message": message,
         "status": booking.status,
         "status_label": booking.get_status_display(),
     })

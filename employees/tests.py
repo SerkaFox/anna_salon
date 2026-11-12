@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from bookings.models import Booking
+from documents.models import FiscalDocument, Payment as ManualPayment
 from clients.models import Client
 from employees.models import Employee
 from employees.forms import EmployeeForm
@@ -102,8 +103,9 @@ class EmployeeListAnalyticsTests(TestCase):
         employee_amount,
         salon_amount,
         status=Booking.Statuses.DONE,
+        collected=None,
     ):
-        return Booking.objects.create(
+        booking = Booking.objects.create(
             employee=employee,
             client=client,
             service=service,
@@ -119,6 +121,24 @@ class EmployeeListAnalyticsTests(TestCase):
             employee_amount_snapshot=employee_amount,
             salon_amount_snapshot=salon_amount,
         )
+        # Las estadisticas cuentan lo cobrado, no el precio de la reserva, asi
+        # que una reserva hecha necesita su recibo para sumar.
+        if status == Booking.Statuses.DONE:
+            amount = client_price if collected is None else collected
+            if amount > Decimal("0.00"):
+                document = FiscalDocument.objects.create(
+                    booking=booking,
+                    document_type=FiscalDocument.DocumentTypes.RECEIPT,
+                    status=FiscalDocument.Statuses.ISSUED,
+                    issue_date=timezone.localdate(),
+                )
+                ManualPayment.objects.create(
+                    fiscal_document=document,
+                    booking=booking,
+                    amount=amount,
+                    method=ManualPayment.Methods.CARD,
+                )
+        return booking
 
     def test_employee_list_includes_money_client_and_service_analytics(self):
         response = self.client.get(reverse("employees:list"))
@@ -139,7 +159,9 @@ class EmployeeListAnalyticsTests(TestCase):
         self.assertEqual(anna.top_services[0]["name"], self.service_color.name)
         self.assertEqual(anna.top_services[0]["count"], 2)
 
-        self.assertEqual(lia.employee_earnings, Decimal("15.00"))
+        # 40% de los 50 EUR cobrados: la comision sale del % de la reserva
+        # aplicado al dinero que entro, no del importe guardado al crearla.
+        self.assertEqual(lia.employee_earnings, Decimal("20.00"))
         self.assertEqual(lia.bookings_count, 1)
         self.assertEqual(lia.clients_count, 1)
 

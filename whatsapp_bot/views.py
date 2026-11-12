@@ -363,7 +363,7 @@ def button_reply_webhook(request):
         logger.exception("Could not send attendance thanks for booking %s.", booking.pk)
 
     # Check if deposit is due — send payment link via WhatsApp
-    from bookings.services import get_booking_deposit_amount
+    from payments.stripe_service import get_booking_deposit_amount
     deposit_due = min(
         max(get_booking_deposit_amount(booking) - booking_paid_amount(booking), 0),
         booking_amount_due(booking),

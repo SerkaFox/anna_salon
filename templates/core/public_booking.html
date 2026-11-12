@@ -311,8 +311,6 @@
     let calCurrentYear = today0.getFullYear();
     let calCurrentMonth = today0.getMonth() + 1;
     let activeCalRequest = 0;
-    const calMonthFmt = new Intl.DateTimeFormat(currentLanguage, { month: 'long', year: 'numeric' });
-    const calDayFmt = new Intl.DateTimeFormat(currentLanguage, { weekday: 'long', day: 'numeric', month: 'long' });
     const status = form.querySelector('[data-slot-status]');
     const slotPicker = form.querySelector('[data-slot-picker]');
     const cartJsonInput = form.querySelector('[data-cart-json-input]');
@@ -361,6 +359,8 @@
     let activeWeekRequest = 0;
     let weekDays = [];
     const currentLanguage = '{{ public_language|default:"es"|escapejs }}';
+    const calMonthFmt = new Intl.DateTimeFormat(currentLanguage, { month: 'long', year: 'numeric' });
+    const calDayFmt = new Intl.DateTimeFormat(currentLanguage, { weekday: 'long', day: 'numeric', month: 'long' });
     const prepaymentCopy = {
       es: {
         title: 'Tu reserva todavía no está confirmada',
@@ -1138,34 +1138,80 @@
     }
 
     function _buildCalSlotsGrid(blocks, dayObj) {
-      const g = document.createElement('div');
-      g.className = 'week-availability__times week-availability__times--wide';
-      blocks.forEach(function (block, index) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'week-slot-time';
-        btn.textContent = block.label;
-        if (index >= 3) btn.hidden = true;
-        btn.addEventListener('click', function () { selectCalBlock(block, btn); });
-        g.appendChild(btn);
-      });
-      if (blocks.length === 1) {
-        const sc = document.createElement('span');
-        sc.className = 'week-slot-scarcity';
-        sc.textContent = 'Solo queda este horario';
-        g.appendChild(sc);
-      } else if (blocks.length > 3) {
-        const tog = document.createElement('button');
-        tog.type = 'button';
-        tog.className = 'week-availability__more';
-        tog.textContent = '... +' + (blocks.length - 3);
-        tog.addEventListener('click', function () {
-          const anyHid = Array.from(g.querySelectorAll('.week-slot-time')).some(function (b) { return b.hidden; });
-          g.querySelectorAll('.week-slot-time').forEach(function (b, i) { b.hidden = !anyHid && i >= 3; });
-          tog.textContent = anyHid ? weekCopy.less : '... +' + (blocks.length - 3);
+      // Group by employee (single-service) vs flat (multi-service)
+      const isMulti = blocks.length > 0 && blocks[0].items && blocks[0].items.length > 1;
+      const empMap = {};
+      const empOrder = [];
+      if (!isMulti) {
+        blocks.forEach(function (block) {
+          const name = (block.items && block.items[0]) ? block.items[0].employee_name : '';
+          if (!empMap[name]) { empMap[name] = []; empOrder.push(name); }
+          empMap[name].push(block);
         });
-        g.appendChild(tog);
       }
+
+      function _makeSlotsList(slotBlocks, container) {
+        slotBlocks.forEach(function (block, index) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'week-slot-time';
+          btn.textContent = block.label;
+          if (index >= 3) btn.hidden = true;
+          btn.addEventListener('click', function () { selectCalBlock(block, btn); });
+          container.appendChild(btn);
+        });
+        if (slotBlocks.length === 1) {
+          const sc = document.createElement('span');
+          sc.className = 'week-slot-scarcity';
+          sc.textContent = 'Solo queda este horario';
+          container.appendChild(sc);
+        } else if (slotBlocks.length > 3) {
+          const tog = document.createElement('button');
+          tog.type = 'button';
+          tog.className = 'week-availability__more';
+          tog.textContent = '... +' + (slotBlocks.length - 3);
+          tog.addEventListener('click', function () {
+            const anyHid = Array.from(container.querySelectorAll('.week-slot-time')).some(function (b) { return b.hidden; });
+            container.querySelectorAll('.week-slot-time').forEach(function (b, i) { b.hidden = !anyHid && i >= 3; });
+            tog.textContent = anyHid ? weekCopy.less : '... +' + (slotBlocks.length - 3);
+          });
+          container.appendChild(tog);
+        }
+      }
+
+      const g = document.createElement('div');
+
+      if (isMulti || empOrder.length <= 1) {
+        // Single employee or multi-service: flat grid with optional name header
+        g.className = 'cal-emp-col';
+        if (!isMulti && empOrder.length === 1) {
+          const nameEl = document.createElement('div');
+          nameEl.className = 'cal-emp-col__name';
+          nameEl.textContent = empOrder[0].split(' ')[0];
+          g.appendChild(nameEl);
+        }
+        const slotsEl = document.createElement('div');
+        slotsEl.className = 'week-availability__times week-availability__times--wide';
+        _makeSlotsList(isMulti ? blocks : (empMap[empOrder[0]] || []), slotsEl);
+        g.appendChild(slotsEl);
+      } else {
+        // Multiple employees: side-by-side columns
+        g.className = 'cal-emp-grid';
+        empOrder.forEach(function (empName) {
+          const col = document.createElement('div');
+          col.className = 'cal-emp-col';
+          const nameEl = document.createElement('div');
+          nameEl.className = 'cal-emp-col__name';
+          nameEl.textContent = empName.split(' ')[0];
+          col.appendChild(nameEl);
+          const slotsEl = document.createElement('div');
+          slotsEl.className = 'week-availability__times week-availability__times--wide';
+          _makeSlotsList(empMap[empName], slotsEl);
+          col.appendChild(slotsEl);
+          g.appendChild(col);
+        });
+      }
+
       return g;
     }
 

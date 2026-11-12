@@ -114,16 +114,32 @@ def create_booking_prepayment(booking, payment):
 
 
 def refund_booking_prepayment(prepayment):
+    # Importacion diferida: payments.stripe_service importa este modulo.
+    from payments.stripe_service import create_refund
+
     if not prepayment.is_refundable:
         return False, "La devolucion solo esta disponible hasta 24 horas antes de la cita."
+
+    # El dinero tiene que salir de Stripe ANTES de marcar nada como devuelto:
+    # si la devolucion falla, el prepago sigue cobrado y el cliente no recibe
+    # un mensaje de exito que no se corresponde con la realidad.
+    payment = prepayment.payment
+    if payment is None:
+        return False, "El prepago no tiene pago online asociado. Devuelvelo manualmente."
+    if payment.provider != OnlinePayment.Providers.STRIPE:
+        return False, "Este prepago no es de Stripe. Devuelvelo manualmente desde el TPV."
+    if not payment.is_refundable:
+        return False, "Este pago ya no admite devolucion automatica."
+
+    try:
+        create_refund(payment)
+    except Exception as exc:
+        logger.exception("Fallo al devolver el prepago %s", prepayment.pk)
+        return False, f"No se ha podido devolver el prepago: {exc}"
 
     prepayment.status = BookingPrepayment.Statuses.REFUNDED
     prepayment.refunded_at = timezone.now()
     prepayment.save(update_fields=["status", "refunded_at", "updated_at"])
-
-    if prepayment.payment_id:
-        prepayment.payment.status = OnlinePayment.Statuses.REFUNDED
-        prepayment.payment.save(update_fields=["status", "updated_at"])
 
     booking = prepayment.booking
     if booking.status not in {Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW, Booking.Statuses.DONE}:

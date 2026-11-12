@@ -112,8 +112,10 @@ def _booking_online_payment_info(booking):
     payments = list(getattr(booking, "_prefetched_objects_cache", {}).get("online_payments", booking.online_payments.all()))
     paid_total = sum((payment.amount for payment in payments if payment.status == OnlinePayment.Statuses.PAID), Decimal("0.00"))
     pending_total = sum((payment.amount for payment in payments if payment.status == OnlinePayment.Statuses.PENDING), Decimal("0.00"))
-    total_amount = booking.client_price_snapshot or booking.price_snapshot or Decimal("0.00")
-    remaining_amount = max(total_amount - paid_total, Decimal("0.00"))
+    # Sourced from booking_amount_due() so it reflects any extra line added
+    # to the booking's live checkout ticket, not just the fixed price snapshot.
+    remaining_amount = booking_amount_due(booking)
+    total_amount = paid_total + remaining_amount
     latest_payment = payments[0] if payments else None
     return {
         "paid_total": paid_total,
@@ -519,7 +521,9 @@ def client_booking_payment(request, pk):
         raise PermissionDenied
 
     booking = get_object_or_404(
-        Booking.objects.select_related("client", "employee", "service").prefetch_related("online_payments"),
+        Booking.objects.select_related("client", "employee", "service").prefetch_related(
+            "online_payments", "fiscal_documents", "fiscal_documents__payments"
+        ),
         pk=pk,
         client=client,
     )
@@ -569,7 +573,10 @@ def client_booking_pay_all(request):
     bookings = (
         Booking.objects
         .select_related("client", "employee", "service")
-        .prefetch_related("online_payments", "online_payments__refunds")
+        .prefetch_related(
+            "online_payments", "online_payments__refunds",
+            "fiscal_documents", "fiscal_documents__payments",
+        )
         .filter(client=client)
         .exclude(status__in=[Booking.Statuses.CANCELLED, Booking.Statuses.NO_SHOW])
     )
@@ -603,7 +610,10 @@ def _client_booking_queryset(client):
     return (
         Booking.objects
         .select_related("client", "employee", "service", "zone", "prepayment")
-        .prefetch_related("online_payments", "online_payments__refunds")
+        .prefetch_related(
+            "online_payments", "online_payments__refunds",
+            "fiscal_documents", "fiscal_documents__payments",
+        )
         .filter(client=client)
     )
 
@@ -706,15 +716,20 @@ def client_booking_reschedule(request, pk):
         messages.error(request, "Selecciona una fecha y hora válida.")
         return redirect("clients:booking_detail", pk=booking.pk)
     employee = booking.employee
+    employee_changed = False
     employee_id = request.POST.get("employee")
     if employee_id:
-        employee = get_object_or_404(Employee, pk=employee_id, is_active=True)
+        new_employee = get_object_or_404(Employee, pk=employee_id, is_active=True)
+        employee_changed = new_employee.pk != employee.pk
+        employee = new_employee
     zone = booking.zone
     zone_id = request.POST.get("zone")
     if zone_id:
         zone = get_object_or_404(Zone, pk=zone_id, is_active=True)
+    elif employee_changed:
+        zone = None
     try:
-        reschedule_booking(booking, start_at=start_at, employee=employee, zone=zone)
+        reschedule_booking(booking, start_at=start_at, employee=employee, zone=zone, by_client=True)
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
         return redirect("clients:booking_detail", pk=booking.pk)
@@ -1123,7 +1138,7 @@ def _client_portal_context(request, client, booking_form=None):
     bookings = (
         Booking.objects
         .select_related("employee", "service", "zone")
-        .prefetch_related("photos", "fiscal_documents")
+        .prefetch_related("photos", "fiscal_documents", "fiscal_documents__payments")
         .filter(client=client)
         .order_by("-start_at")
     )
@@ -1317,6 +1332,61 @@ def client_delete_own_account(request):
         return redirect("home")
 
     return render(request, "clients/client_delete_account.html", {"active_section": "profile"})
+
+
+@login_required
+@require_POST
+def notification_preferences(request):
+    """Guarda las preferencias de aviso que el propio cliente marca en el portal.
+
+    Las casillas vienen marcadas de inicio y el cliente las desmarca si no las
+    quiere. Eso no sustituye a un consentimiento expreso, pero deja una baja
+    que funciona y, sobre todo, guarda la fecha en que el cliente la uso: es lo
+    unico que permite demostrar despues que la decision fue suya.
+    """
+    client = get_client_profile(request.user)
+    if not client:
+        raise PermissionDenied
+
+    wants_whatsapp = bool(client.phone) and "whatsapp" in request.POST
+    wants_email = bool(client.email) and "email" in request.POST
+    wants_reviews = "reviews" in request.POST
+
+    # Los avisos de cita son parte del servicio: sin ningun canal el cliente se
+    # quedaria sin confirmaciones ni recordatorios.
+    if not wants_whatsapp and not wants_email:
+        messages.error(
+            request, "Debes mantener al menos un canal de notificaciones activo."
+        )
+        return redirect("accounts:profile")
+
+    client.notify_whatsapp = wants_whatsapp
+    client.notify_email = wants_email
+    client.notify_reviews = wants_reviews
+    client.notification_prefs_updated_at = timezone.now()
+    client.save(
+        update_fields=[
+            "notify_whatsapp",
+            "notify_email",
+            "notify_reviews",
+            "notification_prefs_updated_at",
+            "updated_at",
+        ]
+    )
+    log_event(
+        actor=request.user,
+        section="account",
+        action="notification_prefs",
+        instance=client,
+        message=f"Preferencias de aviso actualizadas por el cliente {client}.",
+        metadata={
+            "whatsapp": wants_whatsapp,
+            "email": wants_email,
+            "reviews": wants_reviews,
+        },
+    )
+    messages.success(request, "Preferencias de notificaciones guardadas.")
+    return redirect("accounts:profile")
 
 
 @login_required

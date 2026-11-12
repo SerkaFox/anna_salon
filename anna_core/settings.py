@@ -215,6 +215,15 @@ STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
 STRIPE_CURRENCY = os.getenv('STRIPE_CURRENCY', 'eur').lower()
 BOOKING_DEPOSIT_AMOUNT_EUR = os.getenv('BOOKING_DEPOSIT_AMOUNT_EUR', '')
 BOOKING_FREE_CANCEL_HOURS = int(os.getenv('BOOKING_FREE_CANCEL_HOURS', '24'))
+
+# Peticiones de reseña por WhatsApp (ver whatsapp_bot.services).
+# Se sueltan pocas al dia y solo en horario diurno: una rafaga de mensajes a
+# numeros que no han escrito al salon es la via rapida a que bloqueen la linea.
+REVIEW_REQUEST_MAX_AGE_DAYS = int(os.getenv('REVIEW_REQUEST_MAX_AGE_DAYS', '75'))
+REVIEW_REQUEST_DAILY_LIMIT = int(os.getenv('REVIEW_REQUEST_DAILY_LIMIT', '3'))
+REVIEW_REQUEST_FRESH_DAYS = int(os.getenv('REVIEW_REQUEST_FRESH_DAYS', '7'))
+REVIEW_REQUEST_HOUR_START = int(os.getenv('REVIEW_REQUEST_HOUR_START', '10'))
+REVIEW_REQUEST_HOUR_END = int(os.getenv('REVIEW_REQUEST_HOUR_END', '20'))
 BOOKING_DEPOSIT_PERCENT = os.getenv('BOOKING_DEPOSIT_PERCENT', '10')
 
 WHATSAPP_BRIDGE_URL = os.getenv('WHATSAPP_BRIDGE_URL', '')

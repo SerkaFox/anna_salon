@@ -1,5 +1,6 @@
 from datetime import datetime, time, timedelta
-from decimal import Decimal, InvalidOperation
+from collections import defaultdict
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import re
 import secrets
 import uuid
@@ -26,7 +27,8 @@ from accounts.permissions import can_access_booking, can_access_client, can_acce
 from accounts.password_recovery import request_client_password_recovery
 from auditlog.services import log_event
 from bookings.models import Booking, BookingPhoto, BookingWaitlistEntry
-from bookings.client_actions import cancel_booking, change_booking_service, reschedule_booking
+from bookings.client_actions import can_client_cancel, cancel_booking, change_booking_service, reschedule_booking
+from bookings.earnings import collected_by_booking, expected_amount, split_booking_amount
 from bookings.utils import (
     MOBILE_SLOT_STEP_MINUTES,
     build_available_slots_for_day,
@@ -40,7 +42,7 @@ from clients.models import Client
 from clients.models import ClientRewardRule
 from clients.rewards import client_reward_progress
 from documents.models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment as ManualPayment
-from documents.line_items import delete_document_line, update_document_line_price
+from documents.line_items import delete_document_line, refresh_document, update_document_line_price
 from employees.models import (
     Employee,
     EmployeeRecurringTimeBlock,
@@ -243,7 +245,7 @@ def _ensure_document_default_line(document):
             ),
             sort_order=index,
         )
-    document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
+    refresh_document(document)
 
 
 def _is_cashbox_closed(target_date):
@@ -453,16 +455,22 @@ def _employee_detail_payload(employee, request):
         done_bookings = done_bookings.filter(start_at__date__gte=date_from)
     if date_to:
         done_bookings = done_bookings.filter(start_at__date__lte=date_to)
+    collected = collected_by_booking(done_bookings.values_list("id", flat=True))
+
     employee_earnings = Decimal("0.00")
     client_revenue = Decimal("0.00")
     salon_revenue = Decimal("0.00")
+    uncollected_amount = Decimal("0.00")
+    uncollected_count = 0
     clients = {}
     services = {}
 
     for booking in done_bookings:
-        client_amount = booking.client_price_snapshot or Decimal("0.00")
-        employee_amount = booking.employee_amount_snapshot or Decimal("0.00")
-        salon_amount = booking.salon_amount_snapshot or Decimal("0.00")
+        client_amount = collected.get(booking.pk, Decimal("0.00"))
+        if client_amount <= Decimal("0.00"):
+            uncollected_amount += expected_amount(booking)
+            uncollected_count += 1
+        employee_amount, salon_amount = split_booking_amount(booking, client_amount)
         client_revenue += client_amount
         employee_earnings += employee_amount
         salon_revenue += salon_amount
@@ -495,6 +503,8 @@ def _employee_detail_payload(employee, request):
         "bookings_count": bookings_count,
         "clients_count": len(clients),
         "repeat_clients_count": sum(1 for item in clients.values() if item["count"] > 1),
+        "uncollected_amount": str(uncollected_amount),
+        "uncollected_count": uncollected_count,
     }
     if request.user.can_manage_staff:
         stats.update(
@@ -1802,11 +1812,19 @@ class BookingClientRescheduleView(MobileApiMixin, APIView):
         if timezone.is_naive(start_at):
             start_at = timezone.make_aware(start_at, timezone.get_default_timezone())
         employee = booking.employee
+        employee_changed = False
         if request.data.get("employee"):
-            employee = generics.get_object_or_404(Employee, pk=request.data["employee"], is_active=True)
+            new_employee = generics.get_object_or_404(Employee, pk=request.data["employee"], is_active=True)
+            employee_changed = new_employee.pk != employee.pk
+            employee = new_employee
         zone = booking.zone
         if request.data.get("zone"):
             zone = generics.get_object_or_404(Zone, pk=request.data["zone"], is_active=True)
+        elif employee_changed:
+            # Don't keep the previous employee's zone when reassigning to a
+            # different one who may not work in it — let reschedule_booking()
+            # pick a zone this employee actually covers.
+            zone = None
         try:
             booking = reschedule_booking(booking, start_at=start_at, employee=employee, zone=zone)
         except Exception as exc:
@@ -2339,7 +2357,7 @@ class CashDocumentLineCreateView(MobileApiMixin, APIView):
             unit_amount=serializer.validated_data["unit_amount"],
             sort_order=document.lines.count() + 1,
         )
-        document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
+        document = refresh_document(document)
         log_event(
             actor=request.user,
             section="document",
@@ -2347,7 +2365,6 @@ class CashDocumentLineCreateView(MobileApiMixin, APIView):
             instance=line,
             message=f"Línea añadida desde API móvil a {document.number}.",
         )
-        document.refresh_from_db()
         return Response(FiscalDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
 
 
@@ -2965,15 +2982,29 @@ class BookingStatusView(MobileApiMixin, APIView):
 
         serializer = BookingStatusSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        booking.status = serializer.validated_data["status"]
-        booking.save(update_fields=["status", "updated_at"])
+        new_status = serializer.validated_data["status"]
+
+        # Cancelar desde el desplegable de estado tiene que hacer lo mismo que el
+        # boton "Cancelar": cancel_booking() aplica el plazo gratuito y lanza la
+        # devolucion en Stripe. Cambiar solo el campo dejaba el prepago cobrado.
+        refunds = []
+        if new_status == Booking.Statuses.CANCELLED and can_client_cancel(booking):
+            try:
+                _message, refunds = cancel_booking(booking)
+            except Exception as exc:
+                raise serializers.ValidationError({"booking": [str(exc)]}) from exc
+            booking.refresh_from_db()
+        else:
+            booking.status = new_status
+            booking.save(update_fields=["status", "updated_at"])
+
         log_event(
             actor=request.user,
             section="booking",
             action="status",
             instance=booking,
             message=f"Estado cambiado desde API móvil a {booking.get_status_display()} para {booking.client}.",
-            metadata={"status": booking.status},
+            metadata={"status": booking.status, "refunds": [refund.pk for refund in refunds]},
         )
         return Response(BookingSerializer(booking, context={"request": request}).data)
 

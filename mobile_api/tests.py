@@ -349,7 +349,21 @@ class MobileApiMvpTests(TestCase):
             self.assertNotIn(hidden_key, data)
 
     def test_employee_detail_hides_salon_revenue(self):
-        self._create_booking(status=Booking.Statuses.DONE)
+        booking = self._create_booking(status=Booking.Statuses.DONE)
+        # Las ganancias salen del dinero cobrado, asi que la reserva necesita
+        # su recibo para aparecer en las estadisticas.
+        document = FiscalDocument.objects.create(
+            booking=booking,
+            document_type=FiscalDocument.DocumentTypes.RECEIPT,
+            status=FiscalDocument.Statuses.ISSUED,
+            issue_date=timezone.localdate(),
+        )
+        ManualPayment.objects.create(
+            fiscal_document=document,
+            booking=booking,
+            amount=booking.client_price_snapshot,
+            method=ManualPayment.Methods.CARD,
+        )
         self._auth(self.employee_user)
 
         response = self.api_client.get(

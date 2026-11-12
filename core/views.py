@@ -1479,7 +1479,7 @@ def app_start(request):
 
 def service_worker(request):
     script = """
-const CACHE_NAME = 'brimoon-public-v2';
+const CACHE_NAME = 'brimoon-public-v3';
 const PUBLIC_ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -1506,7 +1506,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/panel/') ||
-      url.pathname.startsWith('/payments/') || url.pathname.startsWith('/accounts/')) return;
+      url.pathname.startsWith('/payments/') || url.pathname.startsWith('/accounts/') ||
+      url.pathname.startsWith('/reservar/slots') || url.pathname.startsWith('/reservar/multi-slots') ||
+      url.pathname.startsWith('/reservar/month-slots') || url.pathname.startsWith('/reservar/lista-espera')) return;
 
   event.respondWith(
     fetch(event.request)

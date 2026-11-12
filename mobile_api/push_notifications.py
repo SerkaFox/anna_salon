@@ -66,13 +66,14 @@ def _notification_text(booking, locale, event_type=EVENT_NEW_BOOKING, context=No
         if event_type == EVENT_BOOKING_CANCELLED:
             return "Запись отменена", details
         if event_type == EVENT_BOOKING_RESCHEDULED:
-            old_start = context.get("old_start_at")
+            old_start = context.get("start_at")
             old_text = (
                 timezone.localtime(old_start).strftime("%d.%m в %H:%M")
                 if old_start
                 else "прежнего времени"
             )
-            return "Запись перенесена", f"{client_name} · с {old_text} на {local_start:%d.%m в %H:%M}"
+            title = "Клиент перенёс запись" if context.get("by_client") else "Запись перенесена"
+            return title, f"{client_name} · с {old_text} на {local_start:%d.%m в %H:%M}"
         if event_type == EVENT_EMPLOYEE_CHANGED:
             return "Смена мастера", f"{details} · теперь {booking.employee.full_name}"
         if event_type == EVENT_PREPAYMENT_RECEIVED:
@@ -88,13 +89,14 @@ def _notification_text(booking, locale, event_type=EVENT_NEW_BOOKING, context=No
     if event_type == EVENT_BOOKING_CANCELLED:
         return "Reserva cancelada", details
     if event_type == EVENT_BOOKING_RESCHEDULED:
-        old_start = context.get("old_start_at")
+        old_start = context.get("start_at")
         old_text = (
             timezone.localtime(old_start).strftime("%d/%m a las %H:%M")
             if old_start
             else "la hora anterior"
         )
-        return "Reserva reprogramada", f"{client_name} · de {old_text} a {local_start:%d/%m a las %H:%M}"
+        title = "Cliente reprogramó su cita" if context.get("by_client") else "Reserva reprogramada"
+        return title, f"{client_name} · de {old_text} a {local_start:%d/%m a las %H:%M}"
     if event_type == EVENT_EMPLOYEE_CHANGED:
         return "Cambio de especialista", f"{details} · ahora {booking.employee.full_name}"
     if event_type == EVENT_PREPAYMENT_RECEIVED:

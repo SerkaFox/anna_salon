@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from accounts.permissions import admin_required
 from auditlog.services import log_event
+from bookings.earnings import collected_by_booking, split_booking_amount
 from bookings.models import Booking
 
 from .forms import EmployeeForm, WeeklyShiftFormSet
@@ -80,11 +81,18 @@ def employee_list(request):
             .select_related("client", "service")
         )
 
+        # Igual que en la app: lo que cuenta es lo cobrado, no el precio con el
+        # que nacio la reserva. Ver bookings/earnings.py.
+        collected = collected_by_booking(
+            done_bookings.values_list("id", flat=True)
+        )
+
         for booking in done_bookings:
             employee_stats = stats_by_employee[booking.employee_id]
-            client_revenue = booking.client_price_snapshot or Decimal("0.00")
-            employee_earnings = booking.employee_amount_snapshot or Decimal("0.00")
-            salon_revenue = booking.salon_amount_snapshot or Decimal("0.00")
+            client_revenue = collected.get(booking.pk, Decimal("0.00"))
+            employee_earnings, salon_revenue = split_booking_amount(
+                booking, client_revenue
+            )
 
             employee_stats["employee_earnings"] += employee_earnings
             employee_stats["client_revenue"] += client_revenue

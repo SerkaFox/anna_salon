@@ -6,7 +6,7 @@ from django.db import transaction
 from .models import FiscalDocument, FiscalDocumentLine
 
 
-def _refresh_document(document):
+def refresh_document(document):
     document.save(
         update_fields=[
             "subtotal_amount",
@@ -74,7 +74,7 @@ def update_document_line_price(line_id, unit_amount):
         )
     line.unit_amount = unit_amount
     line.save(update_fields=["unit_amount"])
-    return _refresh_document(document), line
+    return refresh_document(document), line
 
 
 @transaction.atomic
@@ -100,4 +100,4 @@ def delete_document_line(line_id):
             "del importe ya cobrado. Registra primero una devolución."
         )
     line.delete()
-    return _refresh_document(document)
+    return refresh_document(document)

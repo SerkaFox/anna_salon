@@ -22,7 +22,7 @@ from payments.account_service import get_stripe_account_summary, request_stripe_
 from payments.models import StripePayoutRequest
 
 from .forms import FiscalDocumentLineForm, FiscalDocumentLinePriceForm, PaymentForm
-from .line_items import delete_document_line, update_document_line_price
+from .line_items import delete_document_line, refresh_document, update_document_line_price
 from .models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment
 from .public_links import unsign_document_id
 
@@ -42,7 +42,7 @@ def ensure_document_default_line(document):
             ),
             sort_order=index,
         )
-    document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
+    refresh_document(document)
 
 
 def _is_cashbox_closed(target_date):
@@ -338,10 +338,7 @@ def document_line_create(request, document_pk):
     line.fiscal_document = document
     line.sort_order = document.lines.count() + 1
     line.save()
-    document.save(update_fields=["subtotal_amount", "tax_amount", "total_amount", "updated_at"])
-    document.refresh_from_db()
-    from documents.line_items import _sync_booking_snapshots
-    _sync_booking_snapshots(document)
+    refresh_document(document)
     messages.success(request, "Línea añadida al documento.")
     return redirect("documents:detail", pk=document.pk)
 

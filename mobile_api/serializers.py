@@ -11,7 +11,7 @@ from bookings.client_actions import booking_amount_due, booking_refundable_until
 from bookings.forms import BookingForm
 from bookings.models import Booking, BookingWaitlistEntry
 from bookings.services import booking_group_holder, booking_group_members
-from bookings.utils import booking_payment_summary, combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
+from bookings.utils import booking_payment_summary, booking_source_color, combine_local, find_available_zone, fits_employee_schedule, is_slot_available, recurring_time_block_conflicts, time_block_conflicts
 from clients.models import Client, ClientRewardRule
 from clients.rewards import client_reward_progress
 from documents.models import CashClosure, FiscalDocument, FiscalDocumentLine, Payment as ManualPayment
@@ -778,6 +778,7 @@ class ZoneWriteSerializer(serializers.ModelSerializer):
 
 
 class BookingSerializer(serializers.ModelSerializer):
+    source_color = serializers.SerializerMethodField()
     cancellation_recorded_at = serializers.SerializerMethodField()
     cancellation_date_is_estimated = serializers.SerializerMethodField()
     client_name = serializers.CharField(source="client.full_name", read_only=True)
@@ -830,6 +831,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "status",
             "status_label",
             "source",
+            "source_color",
             "source_label",
             "notes",
             "prepayment_policy",
@@ -888,6 +890,10 @@ class BookingSerializer(serializers.ModelSerializer):
                 data.pop("employee_percent_snapshot", None)
                 data.pop("employee_amount_snapshot", None)
         return data
+
+    def get_source_color(self, obj):
+        # Mismo criterio que la agenda web: web publica en rojo, resto en verde.
+        return booking_source_color(obj.source)
 
     def get_cancellation_recorded_at(self, obj):
         if obj.status != Booking.Statuses.CANCELLED:

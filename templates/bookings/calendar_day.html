@@ -121,7 +121,7 @@
                   type="button"
                   class="employee-booking-chip"
                   data-target-id="{{ item.target_id }}"
-                  style="--service-color: {{ item.service_color|default:'#14b8a6' }};"
+                  style="--service-color: {{ item.source_color|default:'#22c55e' }};"
                 >
                   <span class="employee-booking-chip__time-row">
                     <span class="employee-booking-chip__time">{{ item.time_label }}</span>
@@ -214,7 +214,7 @@
                         top: {{ card.top }}px;
                         height: {{ card.height }}px;
                         --employee-color: {{ card.employee_color|default:'#c75c8b' }};
-                        --service-color: {{ card.service_color|default:'#14b8a6' }};
+                        --service-color: {{ card.source_color|default:'#22c55e' }};
                       "
                       data-booking-id="{{ card.id }}"
                       data-employee-id="{{ card.employee_id }}"
@@ -384,7 +384,7 @@
                       top: {{ card.top }}px;
                       height: {{ card.height }}px;
                       --employee-color: {{ card.employee_color|default:'#c75c8b' }};
-                      --service-color: {{ card.service_color|default:'#14b8a6' }};
+                      --service-color: {{ card.source_color|default:'#22c55e' }};
                     "
                     data-booking-id="{{ card.id }}"
                     data-employee-id="{{ card.employee_id }}"

@@ -85,6 +85,15 @@ class Client(models.Model):
     is_active = models.BooleanField("Activo", default=True)
     notify_whatsapp = models.BooleanField("Notif. WhatsApp", default=True)
     notify_email = models.BooleanField("Notif. Email", default=True)
+    # Separado de los canales: un cliente puede querer sus recordatorios de cita
+    # y no la peticion de reseña, que es lo unico que roza el marketing.
+    notify_reviews = models.BooleanField("Peticiones de reseña", default=True)
+    notification_prefs_updated_at = models.DateTimeField(
+        "Preferencias de aviso actualizadas",
+        null=True,
+        blank=True,
+        help_text="Cuando el propio cliente toco sus preferencias en el portal.",
+    )
     prepayment_exempt = models.BooleanField(
         "No requiere prepago; paga en el salon",
         default=False,

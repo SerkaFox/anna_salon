@@ -286,11 +286,18 @@ class Command(BaseCommand):
             "consent_notification_marketing": _bool(
                 row.get("consensusnotificationmarketing")
             ),
+            # La exportacion de Treatwell no trae
+            # should_receive_marketing_*_notifications: leerlos devolvia False
+            # para todo el mundo y en julio de 2026 dejo a 1228 clientes
+            # marcados como si hubieran rechazado los avisos. El dato real de
+            # consentimiento es marketing_communications_accepted_by_venue.
             "notify_email": _bool(
                 row.get("shouldreceivemarketingemailnotifications")
+                or row.get("marketing_communications_accepted_by_venue")
             ),
             "notify_whatsapp": _bool(
                 row.get("shouldreceivemarketingsmsnotifications")
+                or row.get("marketing_communications_accepted_by_venue")
             ),
             "is_blacklisted": full_name_key in blacklist_keys,
             "is_active": True,

@@ -82,6 +82,8 @@ def booking_message(booking, *, kind, extra_context=None):
 
 
 def queue_booking_message(booking, *, kind, scheduled_for=None, extra_context=None):
+    if not WhatsAppTemplate.is_enabled(kind):
+        return None, False
     connection = get_default_connection()
     phone = normalize_whatsapp_phone(booking.client.phone)
     message = WhatsAppMessage(
@@ -114,11 +116,9 @@ def queue_welcome_credentials(booking, *, username, password):
         "password": password,
         "portal_url": _portal_url(),
     }
-    tmpl = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.WELCOME_CREDENTIALS)
-    body = tmpl.format_map(ctx) if tmpl else (
-        f"Hola {ctx['client_name']} 👋 Bienvenida/o a {ctx['salon_name']}.\n\n"
-        f"Usuario: {username}\nContraseña: {password}\n\n{ctx['portal_url']}"
-    )
+    if not WhatsAppTemplate.is_enabled(WhatsAppMessage.Kinds.WELCOME_CREDENTIALS):
+        return None, False
+    body = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.WELCOME_CREDENTIALS).format_map(ctx)
     connection = get_default_connection()
     phone = normalize_whatsapp_phone(client.phone)
     message = WhatsAppMessage(
@@ -150,11 +150,9 @@ def queue_payment_receipt(booking, payment):
         "amount": f"{payment.amount:.2f}",
         "portal_url": _portal_url(),
     }
-    tmpl = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.PAYMENT_RECEIPT)
-    body = tmpl.format_map(ctx) if tmpl else (
-        f"Hola {ctx['client_name']} 👋 Hemos recibido tu pago de {ctx['amount']} EUR y tu cita en "
-        f"{ctx['salon_name']} esta confirmada: {ctx['date']} a las {ctx['time']}, {ctx['service_name']}."
-    )
+    if not WhatsAppTemplate.is_enabled(WhatsAppMessage.Kinds.PAYMENT_RECEIPT):
+        return None, False
+    body = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.PAYMENT_RECEIPT).format_map(ctx)
     connection = get_default_connection()
     phone = normalize_whatsapp_phone(client.phone)
     message = WhatsAppMessage(
@@ -179,6 +177,8 @@ def queue_booking_cancellation(booking):
 
 
 def queue_booking_rescheduled(booking):
+    if not WhatsAppTemplate.is_enabled(WhatsAppMessage.Kinds.BOOKING_RESCHEDULED):
+        return None, False
     # Delete previous reschedule message for this booking so we can send a fresh one.
     WhatsAppMessage.objects.filter(
         booking=booking, kind=WhatsAppMessage.Kinds.BOOKING_RESCHEDULED
@@ -207,6 +207,8 @@ def send_password_reset_credentials(client, *, username, password):
         "password": password,
         "login_url": f"{getattr(settings, 'PUBLIC_BASE_URL', '').rstrip('/')}/login/",
     }
+    if not WhatsAppTemplate.is_enabled(WhatsAppMessage.Kinds.PASSWORD_RESET):
+        return False
     template = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.PASSWORD_RESET)
     body = template.format_map(context)
     # The bridge currently supports plain text only (no native copy button).
@@ -246,12 +248,38 @@ def send_password_reset_credentials(client, *, username, password):
     return password_message.status == WhatsAppMessage.Statuses.SENT
 
 
+def shift_into_review_window(moment):
+    """Mueve `moment` a la franja horaria en la que se puede escribir al cliente.
+
+    Las reservas pasadas se cierran de madrugada (ver close_past_bookings), asi
+    que sin esto la peticion de reseña saldria en mitad de la noche.
+    """
+    start_hour = getattr(settings, "REVIEW_REQUEST_HOUR_START", 10)
+    end_hour = getattr(settings, "REVIEW_REQUEST_HOUR_END", 20)
+    local = timezone.localtime(moment)
+    if local.hour < start_hour:
+        local = local.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    elif local.hour >= end_hour:
+        local = (local + timedelta(days=1)).replace(
+            hour=start_hour, minute=0, second=0, microsecond=0
+        )
+    return local
+
+
 def queue_review_request(booking):
+    # Dos permisos distintos: el canal (notify_whatsapp, que tambien gobierna
+    # recordatorios y recibos) y la categoria (notify_reviews, solo reseñas).
     if (
         booking.status != Booking.Statuses.DONE
         or not booking.completed_at
         or not booking.client.notify_whatsapp
+        or not booking.client.notify_reviews
     ):
+        return None, False
+    # Nunca pedir reseña de una visita demasiado vieja: molesta al cliente y
+    # arriesga el numero de WhatsApp del salon.
+    max_age_days = getattr(settings, "REVIEW_REQUEST_MAX_AGE_DAYS", 75)
+    if timezone.now() - booking.end_at > timedelta(days=max_age_days):
         return None, False
     body_template = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.REVIEW_REQUEST)
     if not body_template:
@@ -286,6 +314,9 @@ def queue_review_request(booking):
     scheduled_for = max(booking.completed_at, booking.end_at) + timedelta(
         minutes=delay_minutes
     )
+    # Para el atrasado la fecha calculada ya pasó: se envia en la proxima
+    # franja valida, no de golpe al minuto siguiente.
+    scheduled_for = shift_into_review_window(max(scheduled_for, timezone.now()))
     try:
         with transaction.atomic():
             message = WhatsAppMessage.objects.create(
@@ -309,14 +340,51 @@ def queue_review_request(booking):
 
 
 def queue_due_review_requests():
-    bookings = (
+    """Encola peticiones de reseña con un tope diario.
+
+    Es el unico sitio que las crea. Hay un atrasado de visitas que se quedaron
+    sin peticion, y mandarlas todas de golpe es la forma mas rapida de que
+    bloqueen el WhatsApp del salon, asi que se sueltan unas pocas al dia: antes
+    las visitas recientes, que es cuando una reseña vale algo, y con lo que
+    sobre de cupo se va vaciando el atrasado de la mas antigua a la mas nueva.
+    """
+    daily_limit = getattr(settings, "REVIEW_REQUEST_DAILY_LIMIT", 3)
+    fresh_days = getattr(settings, "REVIEW_REQUEST_FRESH_DAYS", 7)
+    now = timezone.now()
+
+    sent_today = WhatsAppMessage.objects.filter(
+        kind=WhatsAppMessage.Kinds.REVIEW_REQUEST,
+        created_at__date=timezone.localdate(),
+    ).count()
+    remaining = daily_limit - sent_today
+    if remaining <= 0:
+        return []
+
+    candidates = list(
         Booking.objects.select_related("client", "service", "employee")
         .filter(status=Booking.Statuses.DONE, completed_at__isnull=False)
         .exclude(whatsapp_messages__kind=WhatsAppMessage.Kinds.REVIEW_REQUEST)
-        .order_by("completed_at", "id")
+        .order_by("-completed_at", "-id")[: daily_limit * 20]
     )
+    fresh_cutoff = now - timedelta(days=fresh_days)
+    fresh = [b for b in candidates if b.end_at >= fresh_cutoff]
+    backlog = [b for b in candidates if b.end_at < fresh_cutoff]
+    backlog.reverse()  # el atrasado se vacia por orden de antiguedad
+
+    # Un cliente con dos citas el mismo dia recibiria dos peticiones seguidas.
+    seen_clients = set(
+        WhatsAppMessage.objects.filter(
+            kind=WhatsAppMessage.Kinds.REVIEW_REQUEST,
+            created_at__date=timezone.localdate(),
+        ).values_list("client_id", flat=True)
+    )
+
     queued = []
-    for booking in bookings:
+    for booking in fresh + backlog:
+        if len(queued) >= remaining:
+            break
+        if booking.client_id in seen_clients:
+            continue
         try:
             message, created = queue_review_request(booking)
         except Exception:
@@ -327,6 +395,7 @@ def queue_due_review_requests():
             continue
         if created:
             queued.append(message)
+            seen_clients.add(booking.client_id)
     return queued
 
 
@@ -755,16 +824,14 @@ def notify_waitlist_slot_available(entry, booking):
 
 def queue_birthday_greeting(client):
     from django.utils import timezone as tz
+    if not WhatsAppTemplate.is_enabled(WhatsAppMessage.Kinds.BIRTHDAY_GREETING):
+        return None, False
     ctx = {
         "client_name": client.first_name or client.full_name or "hola",
         "salon_name": _salon_name(),
         "offer": getattr(settings, "WHATSAPP_BIRTHDAY_OFFER", "un descuento especial en tu próxima visita"),
     }
-    tmpl = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.BIRTHDAY_GREETING)
-    body = tmpl.format_map(ctx) if tmpl else (
-        f"Hola {ctx['client_name']} 🎂 ¡Feliz cumpleaños de parte de {ctx['salon_name']}! "
-        f"Como regalo: {ctx['offer']} 🎁"
-    )
+    body = WhatsAppTemplate.get_body(WhatsAppMessage.Kinds.BIRTHDAY_GREETING).format_map(ctx)
     phone = normalize_whatsapp_phone(client.phone)
     if not phone:
         return None, False

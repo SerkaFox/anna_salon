@@ -27,7 +27,9 @@ from .services import (
     queue_booking_message,
     queue_booking_confirmation,
     queue_due_reminders,
+    queue_due_review_requests,
     queue_payment_receipt,
+    shift_into_review_window,
     send_cancellation_confirmation,
     send_password_reset_credentials,
     send_due_messages,
@@ -464,19 +466,31 @@ class WhatsAppBotTests(TestCase):
         booking.save(update_fields=["status"])
         booking.refresh_from_db()
 
+        # La señal solo marca completed_at; el mensaje lo crea el reparto con
+        # tope diario, para que cerrar varias reservas no suelte una rafaga.
+        self.assertIsNotNone(booking.completed_at)
+        self.assertFalse(
+            WhatsAppMessage.objects.filter(
+                booking=booking, kind=WhatsAppMessage.Kinds.REVIEW_REQUEST
+            ).exists()
+        )
+
+        queue_due_review_requests()
         message = WhatsAppMessage.objects.get(
             booking=booking,
             kind=WhatsAppMessage.Kinds.REVIEW_REQUEST,
         )
-        self.assertIsNotNone(booking.completed_at)
+        expected = max(booking.completed_at, booking.end_at) + timedelta(
+            minutes=template.delay_minutes
+        )
         self.assertEqual(
             message.scheduled_for,
-            max(booking.completed_at, booking.end_at)
-            + timedelta(minutes=template.delay_minutes),
+            shift_into_review_window(max(expected, message.created_at)),
         )
         self.assertIn("/review/", message.body)
         self.assertIn("search.google.com", message.body)
 
+        queue_due_review_requests()
         booking.save(update_fields=["notes"])
         self.assertEqual(
             WhatsAppMessage.objects.filter(

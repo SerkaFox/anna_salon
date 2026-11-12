@@ -71,6 +71,7 @@ def schedule_booking_change_push(sender, instance, created, **kwargs):
         return
 
     booking_id = instance.pk
+    by_client = bool(getattr(instance, "_rescheduled_by_client", False))
 
     def send_push():
         try:
@@ -78,6 +79,7 @@ def schedule_booking_change_push(sender, instance, created, **kwargs):
                 booking_id,
                 event_type,
                 previous_state=previous,
+                context={"by_client": by_client},
             )
         except Exception:
             logger.exception(
@@ -135,6 +137,13 @@ def schedule_prepayment_push(sender, instance, created, **kwargs):
 
 @receiver(post_save, sender=Booking)
 def schedule_review_request(sender, instance, **kwargs):
+    """Marca la reserva como completada; la peticion de reseña la encola el cron.
+
+    Antes esta señal creaba el mensaje aqui mismo. Al cerrar varias reservas
+    seguidas eso soltaba una rafaga de WhatsApp, asi que ahora solo deja la
+    reserva lista y es queue_due_review_requests quien reparte con tope diario
+    y dentro del horario permitido.
+    """
     if instance.status != Booking.Statuses.DONE:
         return
     if not instance.completed_at:
@@ -142,9 +151,3 @@ def schedule_review_request(sender, instance, **kwargs):
         Booking.objects.filter(pk=instance.pk, completed_at__isnull=True).update(
             completed_at=instance.completed_at
         )
-    from whatsapp_bot.services import queue_review_request
-
-    try:
-        queue_review_request(instance)
-    except Exception:
-        logger.exception("Could not queue review request for booking %s.", instance.pk)

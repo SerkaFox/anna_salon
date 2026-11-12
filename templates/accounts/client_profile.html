@@ -111,46 +111,48 @@
   <div class="section-heading">
     <div>
       <h2>Notificaciones</h2>
-      <p>Elige por qué canales quieres recibir avisos de tus citas. Debes mantener al menos uno activo.</p>
+      <p>Decide qué avisos quieres recibir. Puedes cambiarlo cuando quieras.</p>
     </div>
   </div>
-  {% with wa_active=client_profile.notify_whatsapp em_active=client_profile.notify_email has_phone=client_profile.phone has_email=client_profile.email %}
-  {% if has_phone %}
-  <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
-    <span>📱 WhatsApp <strong>{{ has_phone }}</strong></span>
-    {% if wa_active %}
-      {% if has_email and em_active %}
-      <form method="post" action="{% url 'clients:notification_unsubscribe' %}" style="display:inline;">
-        {% csrf_token %}
-        <input type="hidden" name="channel" value="whatsapp">
-        <button class="btn btn-light btn-small" type="submit" onclick="return confirm('¿Desactivar WhatsApp?')">Desactivar</button>
-      </form>
-      {% else %}
-        <span class="muted-text" style="font-size:0.82rem;">Canal principal — no se puede desactivar</span>
-      {% endif %}
-    {% else %}
-      <span style="color:#aaa;font-size:0.82rem;">Desactivado</span>
+  {% with has_phone=client_profile.phone has_email=client_profile.email %}
+  <form method="post" action="{% url 'clients:notification_preferences' %}">
+    {% csrf_token %}
+    {% if has_phone %}
+    <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;cursor:pointer;">
+      <input type="checkbox" name="whatsapp" value="1" style="margin-top:3px;"
+             {% if client_profile.notify_whatsapp %}checked{% endif %}>
+      <span>
+        <strong>📱 WhatsApp</strong> — {{ has_phone }}<br>
+        <span class="muted-text" style="font-size:0.82rem;">Confirmaciones, recordatorios de cita y recibos.</span>
+      </span>
+    </label>
     {% endif %}
-  </div>
-  {% endif %}
-  {% if has_email %}
-  <div style="display:flex;align-items:center;gap:14px;">
-    <span>✉️ Email <strong>{{ has_email }}</strong></span>
-    {% if em_active %}
-      {% if has_phone and wa_active %}
-      <form method="post" action="{% url 'clients:notification_unsubscribe' %}" style="display:inline;">
-        {% csrf_token %}
-        <input type="hidden" name="channel" value="email">
-        <button class="btn btn-light btn-small" type="submit" onclick="return confirm('¿Desactivar email?')">Desactivar</button>
-      </form>
-      {% else %}
-        <span class="muted-text" style="font-size:0.82rem;">Canal principal — no se puede desactivar</span>
-      {% endif %}
-    {% else %}
-      <span style="color:#aaa;font-size:0.82rem;">Desactivado</span>
+    {% if has_email %}
+    <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;cursor:pointer;">
+      <input type="checkbox" name="email" value="1" style="margin-top:3px;"
+             {% if client_profile.notify_email %}checked{% endif %}>
+      <span>
+        <strong>✉️ Email</strong> — {{ has_email }}<br>
+        <span class="muted-text" style="font-size:0.82rem;">Los mismos avisos, por correo.</span>
+      </span>
+    </label>
     {% endif %}
-  </div>
-  {% endif %}
+    <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;cursor:pointer;border-top:1px solid rgba(0,0,0,.08);padding-top:12px;">
+      <input type="checkbox" name="reviews" value="1" style="margin-top:3px;"
+             {% if client_profile.notify_reviews %}checked{% endif %}>
+      <span>
+        <strong>⭐ Peticiones de opinión</strong><br>
+        <span class="muted-text" style="font-size:0.82rem;">Un mensaje después de tu visita para que nos cuentes qué tal. Nada más.</span>
+      </span>
+    </label>
+    <p class="muted-text" style="font-size:0.8rem;margin-bottom:12px;">
+      Debes mantener al menos un canal activo para recibir los avisos de tus citas.
+      {% if client_profile.notification_prefs_updated_at %}
+        Última modificación: {{ client_profile.notification_prefs_updated_at|date:"d/m/Y H:i" }}.
+      {% endif %}
+    </p>
+    <button class="btn btn-primary btn-small" type="submit">Guardar preferencias</button>
+  </form>
   {% endwith %}
 </section>
 

@@ -1,16 +1,18 @@
 ANDROID_APP_UPDATE = {
-    "version_code": 58,
-    "version_name": "0.1.57",
-    "apk_url": "https://brimoon.es/media/brimoon-release-0.1.57-58.apk",
-    "sha256": "d0a4f0d307618f22d5708b162fb28f77ed2c98ef900334c89940c5b95cadd8bd",
-    "size_bytes": 65945487,
+    "version_code": 61,
+    "version_name": "0.1.60",
+    "apk_url": "https://brimoon.es/media/brimoon-release-0.1.60-61.apk",
+    "sha256": "8dcc5aa0d679063c1d3d1a76ee7abaa251d922b7a913bc05f3570075666e09e7",
+    "size_bytes": 65961871,
     "required": False,
     "notes_ru": [
-        "Пауза в календаре: поле «Заметка» (с кем встреча, что за обед, детали), видно на блоке и в карточке.",
-        "Причины паузы переведены: Встреча, Болезнь, Обед.",
+        "В карточке записи — кнопка «Сменить услугу»: предоплата переносится на новую услугу, ничего отменять и заводить заново не нужно.",
+        "Если новая услуга дороже — сразу открывается ссылка на доплату; если дешевле — показывается, что разницу нужно вернуть вручную.",
+        "Записи с сайта (без участия салона) теперь выделяются красным цветом в календаре, остальные — зелёным.",
     ],
     "notes_es": [
-        "Pausa en el calendario: campo «Nota» (con quién, detalles), visible en el bloque y en la ficha.",
-        "Motivos de pausa traducidos.",
+        "Nuevo boton \u00abCambiar servicio\u00bb en la ficha de la reserva: el prepago se traslada al nuevo servicio sin cancelar ni crear una reserva nueva.",
+        "Si el nuevo servicio es mas caro se abre el enlace de pago de la diferencia; si es mas barato, se avisa de que hay que devolverla manualmente.",
+        "Las reservas que llegan solas desde la web ahora se ven en rojo en el calendario; el resto, en verde.",
     ],
 }
